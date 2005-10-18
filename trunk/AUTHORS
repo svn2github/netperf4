@@ -1,0 +1,15 @@
+This file is here for people to list their contributions to the
+netperf4 benchmark suite. When you enhance or fix something, put your
+name and a description of the what/where/whey/why/how here. If you
+like, feel free to include an email address.
+
+I would like to apologize in advance to anyone I've forgotten to
+include.
+
+Rick Jones <rick.jones2@hp.com>
+Responsible for initial design and coding, parts of subsequent coding
+and "editorial" continuity for subsequent releases.
+
+Stephen Burger
+Responsible for first working tests and multiple client
+initiailization.

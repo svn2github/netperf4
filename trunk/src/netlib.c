@@ -1,0 +1,1219 @@
+char netlib_id[]="\
+@(#)netlib.c (c) Copyright 2005, Hewlett-Packard Company, Version 4.0.0";
+
+/*
+
+This file is part of netperf4.
+
+Netperf4 is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version.
+
+Netperf4 is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+USA.
+
+In addition, as a special exception, the copyright holders give
+permission to link the code of netperf4 with the OpenSSL project's
+"OpenSSL" library (or with modified versions of it that use the same
+license as the "OpenSSL" library), and distribute the linked
+executables.  You must obey the GNU General Public License in all
+respects for all of the code used other than "OpenSSL".  If you modify
+this file, you may extend this exception to your version of the file,
+but you are not obligated to do so.  If you do not wish to do so,
+delete this exception statement from your version.
+
+*/
+#include <unistd.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <sys/resource.h>
+#include <pthread.h>
+
+#if HAVE_GLIB_H
+#include <glib.h>
+#endif 
+
+/* we need to get the definition of errno */
+#include <errno.h>
+
+#define NETLIB
+
+#include "netperf.h"
+
+#undef NETLIB
+
+#include "netlib.h"
+
+extern int debug;
+extern FILE * where;
+extern test_hash_t test_hash[TEST_HASH_BUCKETS];
+extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
+
+#define HIST  void*
+
+#include "nettest_bsd.h"
+
+/* This routine will return the two arguments to the calling routine. */
+/* If the second argument is not specified, and there is no comma, */
+/* then the value of the second argument will be the same as the */
+/* value of the first. If there is a comma, then the value of the */
+/* second argument will be the value of the second argument ;-) */
+void
+break_args(char *s, char *arg1, char *arg2)
+
+{
+  char *ns;
+  ns = strchr(s,',');
+  if (ns) {
+    /* there was a comma arg2 should be the second arg*/
+    *ns++ = '\0';
+    while ((*arg2++ = *ns++) != '\0');
+  }
+  else {
+    /* there was not a comma, we can use ns as a temp s */
+    /* and arg2 should be the same value as arg1 */
+    ns = s;
+    while ((*arg2++ = *ns++) != '\0');
+  };
+  while ((*arg1++ = *s++) != '\0');
+}
+
+/* break_args_explicit
+
+   this routine is somewhat like break_args in that it will separate a
+   pair of comma-separated values.  however, if there is no comma,
+   this version will not ass-u-me that arg2 should be the same as
+   arg1. raj 2005-02-04 */
+void
+break_args_explicit(char *s, char *arg1, char *arg2)
+
+{
+  char *ns;
+  ns = strchr(s,',');
+  if (ns) {
+    /* there was a comma arg2 should be the second arg*/
+    *ns++ = '\0';
+    while ((*arg2++ = *ns++) != '\0');
+  }
+  else {
+    /* there was not a comma, so we should make sure that arg2 is \0
+       lest something become confused. raj 2005-02-04 */
+    *arg2 = '\0';
+  };
+  while ((*arg1++ = *s++) != '\0');
+
+}
+
+/* given a string with possible values for setting an address family,
+   convert that into one of the AF_mumble values - AF_INET, AF_INET6,
+   AF_UNSPEC as apropriate. the family_string is compared in a
+   case-insensitive manner */
+
+int
+parse_address_family(char family_string[])
+{
+
+  char temp[10];  /* gotta love magic constants :) */
+
+  strncpy(temp,family_string,10);
+
+  if (debug) {
+    fprintf(where,
+	    "Attempting to parse address family from %s derived from %s\n",
+	    temp,
+	    family_string);
+  }
+#if defined(AF_INET6)
+  if (strstr(temp,"6")) {
+    return(AF_INET6);
+  }
+#endif
+  if (strstr(temp,"inet") ||
+      strstr(temp,"4")) {
+    return(AF_INET);
+  }
+  if (strstr(temp,"unspec") ||
+      strstr(temp,"0")) {
+    return(AF_UNSPEC);
+  }
+  fprintf(where,
+	  "WARNING! %s not recognized as an address family, using AF_UNPSEC\n",
+	  family_string);
+  fprintf(where,
+	  "Are you sure netperf was configured for that address family?\n");
+  fflush(where);
+  return(AF_UNSPEC);
+}
+
+void
+report_test_status(server_t *server)
+{
+  test_hash_t *h;
+  bsd_data_t  *my_data;
+  test_t      *test;
+  char        *state;
+  char        *req_st;
+  double       a=-1.0,b=-1.0,c=-1.0,d=-1.0;
+  int          i;
+
+  fprintf(where,"\n\n%3s %15s %7s %7s %8s %8s %8s %8s\n",
+          "tst","test_name","state","req_st",
+          "cnt1","cnt2","cnt3","cnt4");
+  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
+    h = &test_hash[i];
+    pthread_mutex_lock(&h->hash_lock);
+    test = h->test;
+
+    my_data = (bsd_data_t *)test->test_specific_data;
+    a    = my_data->stats.counter[0];
+    b    = my_data->stats.counter[1];
+    c    = my_data->stats.counter[2];
+    d    = my_data->stats.counter[3];
+
+    while (test != NULL) {
+      if (!xmlStrcmp(test->server_id,server->id)) {
+        switch (test->state) {
+        case TEST_PREINIT:
+          state = "PREINIT";
+          break;
+        case TEST_INIT:
+          state = "INIT";
+          break;
+        case TEST_IDLE:
+          state = "IDLE";
+          break;
+        case TEST_MEASURE:
+          state = "MEASURE";
+          break;
+        case TEST_LOADED:
+          state = "LOADED";
+          break;
+        case TEST_ERROR:
+          state = "ERROR";
+          break;
+        case TEST_DEAD:
+          state = "DEAD";
+          break;
+        default:
+          state = "ILLEGAL";
+          break;
+        }
+        switch (test->state_req) {
+        case TEST_PREINIT:
+          req_st = "PREINIT";
+          break;
+        case TEST_INIT:
+          req_st = "INIT";
+          break;
+        case TEST_IDLE:
+          req_st = "IDLE";
+          break;
+        case TEST_MEASURE:
+          req_st = "MEASURE";
+          break;
+        case TEST_LOADED:
+          req_st = "LOADED";
+          break;
+        case TEST_ERROR:
+          req_st = "ERROR";
+          break;
+        case TEST_DEAD:
+          req_st = "DEAD";
+          break;
+        default:
+          req_st = "ILLEGAL";
+          break;
+        }
+
+        fprintf(where,"%3s %15s %7s %7s %8g %8g %8g %8g\n",
+                test->id,test->test_name,state,req_st,a,b,c,d);
+      }
+      test = test->next;
+    }
+    pthread_mutex_unlock(&h->hash_lock);
+  }
+  fflush(where);
+}
+
+void
+display_test_hash()
+{
+  int i;
+  test_t * test;
+  if (debug) {
+    for (i=0;i < TEST_HASH_BUCKETS; i++) {
+      test = test_hash[i].test;
+      fprintf(where,"test_hash[%d]=%lx\n",i,test_hash[i].test);
+      while (test) {
+        fprintf(where,"\ttest->id %s, test->state %d\n",
+                test->id,test->state);
+        test = test->next;
+      }
+      fflush(where);
+    }
+  }
+}
+
+int
+add_test_to_hash(test_t *new_test)
+{
+  int hash_value;
+
+  hash_value = TEST_HASH_VALUE(new_test->id);
+
+  /* don't forget to add error checking one day */
+  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+
+  new_test->next = test_hash[hash_value].test;
+  test_hash[hash_value].test = new_test;
+
+  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+
+  return(NPE_SUCCESS);
+}
+
+test_t *
+find_test_in_hash(const xmlChar *id)
+{
+  /* we presume that the id is of the form [a-zA-Z][0-9]+ and so will
+     call atoi on id and mod that with the TEST_HASH_BUCKETS */
+
+  int hash_value;
+  test_t *test_pointer;
+
+  hash_value = TEST_HASH_VALUE(id);
+
+  /* don't forget to add error checking one day */
+  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+
+  test_pointer = test_hash[hash_value].test;
+  while (test_pointer != NULL) {
+    if (!xmlStrcmp(test_pointer->id,id)) {
+      /* we have a match */
+      break;
+    }
+    test_pointer = test_pointer->next;
+  }
+
+  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  return(test_pointer);
+}
+
+
+void
+dump_addrinfo(FILE *dumploc, struct addrinfo *info,
+              xmlChar *host, xmlChar *port, int family)
+{
+  struct sockaddr *ai_addr;
+  struct addrinfo *temp;
+  temp=info;
+
+  fprintf(dumploc, "getaddrinfo returned the following for host '%s' ", host);
+  fprintf(dumploc, "port '%s' ", port);
+  fprintf(dumploc, "family %d\n", family);
+  while (temp) {
+    fprintf(dumploc,
+            "\tcannonical name: '%s'\n",temp->ai_canonname);
+    fprintf(dumploc,
+            "\tflags: %x family: %d: socktype: %d protocol %d addrlen %d\n",
+            temp->ai_flags,
+            temp->ai_family,
+            temp->ai_socktype,
+            temp->ai_protocol,
+            temp->ai_addrlen);
+    ai_addr = temp->ai_addr;
+    if (ai_addr != NULL) {
+      fprintf(dumploc,
+              "\tsa_family: %d sadata: %d %d %d %d %d %d\n",
+              ai_addr->sa_family,
+              (u_char)ai_addr->sa_data[0],
+              (u_char)ai_addr->sa_data[1],
+              (u_char)ai_addr->sa_data[2],
+              (u_char)ai_addr->sa_data[3],
+              (u_char)ai_addr->sa_data[4],
+              (u_char)ai_addr->sa_data[5]);
+    }
+    temp = temp->ai_next;
+  }
+  fflush(dumploc);
+}
+
+
+GenReport
+get_report_function(xmlNodePtr cmd)
+{
+  xmlChar  *lib_file;
+  void     *lib_handle;
+  xmlChar  *fname;
+  GenReport func;
+
+  lib_file   = xmlGetProp(cmd, (const xmlChar *)"library");
+  if (debug) {
+    fprintf(where,"trying to open library file '%s'\n",(char *)lib_file);
+    fflush(where);
+  }
+  lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
+  if (debug) {
+    fprintf(where,"open of library file '%s' returned %p\n",
+            (char *)lib_file, lib_handle);
+    if (lib_handle == NULL) {
+      fprintf (where,"dlopen error '%s'\n",dlerror());
+    }
+    fflush(where);
+  }
+  fname = xmlGetProp(cmd, (const xmlChar *)"function");
+  func  = (GenReport)dlsym(lib_handle,(char *)fname);
+  if (debug) {
+    fprintf(where,"dlsym of function '%s' returned %p\n",
+            fname, func);
+    if (func == NULL) {
+      fprintf (where,"dlsym error '%s'\n",dlerror());
+    }
+    fflush(where);
+  }
+  return(func);
+}
+
+int
+get_test_function(test_t *test, xmlChar *func)
+{
+  void    *lib_handle = test->library_handle;
+  xmlChar *fname;
+  void    *fptr = NULL;
+  int      fnlen = 0;
+  int      rc = NPE_FUNC_NAME_TOO_LONG;
+  char     func_name[NETPERF_MAX_TEST_FUNCTION_NAME];
+
+  if (lib_handle == NULL) {
+    xmlChar *lib_file;
+    /* load the library for the test */
+    lib_file   = xmlGetProp(test->node,(const xmlChar *)"library");
+    if (debug) {
+      fprintf(where,"trying to open library file '%s'\n",(char *)lib_file);
+      fflush(where);
+    }
+    lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
+    if (debug) {
+      fprintf(where,"open of library file '%s' returned %p\n",
+              (char *)lib_file, lib_handle);
+      if (lib_handle == NULL) {
+        fprintf (where,"dlopen error '%s'\n",dlerror());
+      }
+      fflush(where);
+    }
+    test->library_handle = lib_handle;
+  }
+
+  fname = xmlGetProp(test->node,func);
+  fnlen = strlen((char *)fname);
+  if (debug) {
+    fprintf(where,"func = '%s'  fname = '%s' fname[0] = %c fnlen = %d\n",
+            (char *)func, fname, fname[0], fnlen);
+    fflush(where);
+  }
+
+  if (fnlen < NETPERF_MAX_TEST_FUNCTION_NAME) {
+    if (fnlen) {
+      strcpy(func_name,(char *)fname);
+      rc = NPE_SUCCESS;
+    } else {
+      xmlChar *tname      = test->test_name;
+      int      tnlen = strlen((char *)tname);
+
+      strcpy(func_name,(char *)tname);
+      if (debug) {
+        fprintf(where,"func_name = '%s' tnlen = %d\n",
+                (char *)func_name, tnlen);
+        fflush(where);
+      }
+
+      if (!xmlStrcmp(func,(const xmlChar *)"test_clear")) {
+        if (strlen("_clear_stats") < (NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+          strcat(func_name,"_clear_stats");
+          rc = NPE_SUCCESS;
+        } else {
+          rc = NPE_FUNC_NAME_TOO_LONG;
+        }
+      } else if (!xmlStrcmp(func,(const xmlChar *)"test_stats")) {
+        if (strlen("_get_stats") < (NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+          strcat(func_name,"_get_stats");
+          rc = NPE_SUCCESS;
+        } else {
+          rc = NPE_FUNC_NAME_TOO_LONG;
+        }
+      } else if (!xmlStrcmp(func,(const xmlChar *)"test_decode")) {
+        if (strlen("_decode_stats") < (NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+          strcat(func_name,"_decode_stats");
+          rc = NPE_SUCCESS;
+        } else {
+          rc = NPE_FUNC_NAME_TOO_LONG;
+        }
+      } else {
+        rc = NPE_UNKNOWN_FUNCTION_TYPE;
+      }
+    }
+    if (debug) {
+      fprintf(where,"func_name = '%s'\n", (char *)func_name);
+      fflush(where);
+    }
+    if (rc == NPE_SUCCESS) {
+      fptr = dlsym(lib_handle,func_name);
+      if (debug) {
+        fprintf(where,"dlsym of func_name '%s' returned %p\n",
+                func_name, fptr);
+        if (fptr == NULL) {
+          fprintf (where,"dlsym error '%s'\n",dlerror());
+        }
+        fflush(where);
+      }
+      if (fptr == NULL) {
+        if (lib_handle) {
+          rc = NPE_FUNC_NOT_FOUND;
+        } else {
+          rc = NPE_LIBRARY_NOT_LOADED;
+        }
+      }
+    }
+  } else {
+    rc = NPE_FUNC_NAME_TOO_LONG;
+  }
+
+  if (!xmlStrcmp(func,(const xmlChar *)"test_name")) {
+    test->test_name    = fname;
+    test->test_func    = (TestFunc)fptr;
+  } else if (!xmlStrcmp(func,(const xmlChar *)"test_clear")) {
+    test->test_clear   = (TestClear)fptr;
+    xmlFree(fname);
+  } else if (!xmlStrcmp(func,(const xmlChar *)"test_stats")) {
+    test->test_stats   = (TestStats)fptr;
+    xmlFree(fname);
+  } else if (!xmlStrcmp(func,(const xmlChar *)"test_decode")) {
+    test->test_decode  = (TestDecode)fptr;
+    xmlFree(fname);
+  } else {
+    rc = NPE_UNKNOWN_FUNCTION_TYPE;
+    xmlFree(fname);
+  }
+
+  if (rc != NPE_SUCCESS) {
+    if (debug) {
+      fprintf(where,
+              "get_test_function: error %d occured getting function %s\n",
+              rc,func_name);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+
+int
+launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
+{
+  int rc;
+  pthread_t temp_tid;
+
+  rc = pthread_create(&temp_tid, (pthread_attr_t *)NULL, start_routine, data);
+  if (rc != 0) {
+    if (debug) {
+      fprintf(where,"launch_thread: pthread_create failed with %d\n",rc);
+      fflush(where);
+    }
+    rc = NPE_PTHREAD_CREATE_FAILED;
+  } else {
+    /* pthread_create succeeded detach thread so we don't need to join */
+    *tid = temp_tid;
+    if (debug) {
+      fprintf(where,"launch_thread: pthread_create succeeded id = %d\n",tid);
+      fflush(where);
+    }
+    rc = pthread_detach(temp_tid);
+    if (rc != 0) {
+      if (debug) {
+        fprintf(where,"launch_thread: pthread_detach failed %d\n",rc);
+        fflush(where);
+      }
+      rc = NPE_PTHREAD_DETACH_FAILED;
+    } else {
+      if (debug) {
+        fprintf(where,"launch_thread: pthread_detach succeed %d\n",rc);
+        fflush(where);
+      }
+      rc = NPE_SUCCESS;
+    }
+  }
+}
+
+
+
+int
+strtofam(xmlChar *familystr)
+{
+  if (debug) {
+    fprintf(where, "strtofam called with %s\n", familystr);
+    fflush(where);
+  }
+
+  if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET")) {
+    return(AF_INET);
+  } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_UNSPEC")) {
+    return(AF_UNSPEC);
+#ifdef AF_INET6
+  } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET6")) {
+    return(AF_INET6);
+#endif /* AF_INET6 */
+  } else {
+    /* we should never get here if the validator is doing its thing */
+    fprintf(where, "strtofam: unknown address family %s\n",familystr);
+    fflush(where);
+    return(-1);
+  }
+}
+
+
+/*
+  establish_listen()
+
+Set-up a listen socket for netserver or a test thread so netperf or dependent
+test thread can connect or communicate with it.
+
+*/
+
+int
+establish_listen(char *hostname, char *service, int af, socklen_t *addrlenp)
+{
+  int sockfd;
+  int error;
+  int count;
+  int len = *addrlenp;
+  int one = 1;
+  struct addrinfo hints, *res, *res_temp;
+
+  if (debug) {
+    fprintf(where,
+      "establish_listen: called with host '%s' service '%s' socklen %d\n",
+      hostname,
+      service,
+      len);
+    fflush(where);
+  }
+
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family   = af;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags    = AI_PASSIVE;
+
+  count = 0;
+  do {
+    error = getaddrinfo(hostname,
+                           service,
+                           &hints,
+                           &res);
+    count += 1;
+    if (error == EAI_AGAIN) {
+      if (debug) {
+        fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
+        fflush(where);
+      }
+      sleep(1);
+    }
+  } while ((error == EAI_AGAIN) && (count <= 5));
+
+  if (error) {
+    fprintf(where,
+            "establish_listen: could not resolve host '%s' service '%s'\n",
+            hostname,service);
+    fprintf(where,"\tgetaddrinfo returned %d %s\n",
+            error,gai_strerror(error));
+    fflush(where);
+    return(-1);
+  }
+
+
+  if (debug) {
+    dump_addrinfo(where, res, (xmlChar *)hostname,
+                  (xmlChar *)service, AF_UNSPEC);
+  }
+
+  res_temp = res;
+
+  do {
+
+    sockfd = socket(res_temp->ai_family,
+                    res_temp->ai_socktype,
+                    res_temp->ai_protocol);
+    if (sockfd < 0) {
+      if (debug) {
+        fprintf(where,"establish_listen: socket error try next one\n");
+        fflush(where);
+      }
+      continue;
+    }
+    if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(one)) == -1) {
+      fprintf(where,"establish_listen: SO_REUSEADDR failed\n");
+      fflush(where);
+    }
+    if (bind(sockfd, res_temp->ai_addr, res_temp->ai_addrlen) == 0) {
+      break;
+    }
+    fprintf(where,"establish_listen: bind error close and try next\n");
+    fflush(where);
+    close(sockfd);
+  } while ( (res_temp = res_temp->ai_next) != NULL );
+
+  if (res_temp == NULL) {
+    fprintf(where,"establish_listen: allocate server socket failed\n");
+    fflush(where);
+    sockfd = -1;
+  } else if (listen (sockfd,20) == -1) {
+    fprintf(where,"establish_listen: setting the listen backlog failed\n");
+    fflush(where);
+    close(sockfd);
+    sockfd = -1;
+  } else {
+    if (addrlenp) *addrlenp = res_temp->ai_addrlen;
+  }
+
+  freeaddrinfo(res);
+
+  return (sockfd);
+
+}
+
+
+
+/*
+  establish_control()
+
+set-up the control connection between netperf and the netserver so we
+can actually run some tests. if we cannot establish the control
+connection, that may or may not be a good thing, so we will let the
+caller decide what to do.
+
+to assist with pesky end-to-end-unfriendly things like firewalls, we
+allow the caller to specify both the remote hostname and port, and the
+local addressing info.  i believe that in theory it is possible to
+have an IPv4 endpoint and an IPv6 endpoint communicate with one
+another, but for the time being, we are only going to take-in one
+requested address family parameter. this means that the only way
+(iirc) that we might get a mixed-mode connection would be if the
+address family is specified as AF_UNSPEC, and getaddrinfo() returns
+different families for the local and server names.
+
+the "names" can also be IP addresses in ASCII string form.
+
+raj 2003-02-27 */
+
+int
+establish_control(xmlChar *hostname,
+                  xmlChar *port,
+                  int      remfam,
+                  xmlChar *localhost,
+                  xmlChar *localport,
+                  int      locfam)
+{
+  int not_connected;
+  int control_sock;
+  int count;
+  int error;
+
+  struct addrinfo   hints;
+  struct addrinfo  *local_res;
+  struct addrinfo  *remote_res;
+  struct addrinfo  *local_res_temp;
+  struct addrinfo  *remote_res_temp;
+
+  if (debug) {
+    fprintf(where,
+            "establish_control called with host '%s' port '%s' remfam %d\n",
+            hostname,
+            port,
+            remfam);
+    fprintf(where,
+            "\t\tlocal '%s' port '%s' locfam %d\n",
+            localhost,
+            localport,
+            locfam);
+    fflush(where);
+  }
+
+  /* first, we do the remote */
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = remfam;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+  hints.ai_flags = 0;
+  count = 0;
+  do {
+    error = getaddrinfo((char *)hostname,
+                        (char *)port,
+                        &hints,
+                        &remote_res);
+    count += 1;
+    if (error == EAI_AGAIN) {
+      if (debug) {
+        fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
+        fflush(where);
+      }
+      sleep(1);
+    }
+  } while ((error == EAI_AGAIN) && (count <= 5));
+
+  if (error) {
+    printf("establish control: could not resolve remote '%s' port '%s' af %d",
+           hostname,
+           port,
+           remfam);
+    printf("\n\tgetaddrinfo returned %d %s\n",
+           error,
+           gai_strerror(error));
+    return(-1);
+  }
+
+  if (debug) {
+    dump_addrinfo(where, remote_res, hostname, port, remfam);
+  }
+
+  /* now we do the local */
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = locfam;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+  hints.ai_flags = AI_PASSIVE;
+  count = 0;
+  do {
+    count += 1;
+    error = getaddrinfo((char *)localhost,
+                           (char *)localport,
+                           &hints,
+                           &local_res);
+    if (error == EAI_AGAIN) {
+      if (debug) {
+        fprintf(where,
+                "Sleeping on getaddrinfo(%s,%s) EAI_AGAIN count %d \n",
+                localhost,
+                localport,
+                count);
+        fflush(where);
+      }
+      sleep(1);
+    }
+  } while ((error == EAI_AGAIN) && (count <= 5));
+
+  if (error) {
+    printf("establish control: could not resolve local '%s' port '%s' af %d",
+           localhost,
+           localport,
+           locfam);
+    printf("\n\tgetaddrinfo returned %d %s\n",
+           error,
+           gai_strerror(error));
+    return(-1);
+  }
+
+  if (debug) {
+    dump_addrinfo(where, local_res, localhost, localport, locfam);
+  }
+
+  not_connected = 1;
+  local_res_temp = local_res;
+  remote_res_temp = remote_res;
+  /* we want to loop through all the possibilities. looping on the
+     local addresses will be handled within the while loop.  I suppose
+     these is some more "C-expert" way to code this, but it has not
+     lept to mind just yet :)  raj 2003-02024 */
+
+  while (remote_res_temp != NULL) {
+
+    /* I am guessing that we should use the address family of the
+       local endpoint, and we will not worry about mixed family types
+       - presumeably the stack or other transition mechanisms will be
+       able to deal with that for us. famous last words :)  raj 2003-02-26 */
+    control_sock = socket(local_res_temp->ai_family,
+                          SOCK_STREAM,
+                          0);
+    if (control_sock < 0) {
+      /* at some point we'll need a more generic "display error"
+         message for when/if we use GUIs and the like. unlike a bind
+         or connect failure, failure to allocate a socket is
+         "immediately fatal" and so we return to the caller. raj 2003-02-24 */
+      if (debug) {
+        perror("establish_control: unable to allocate control socket");
+      }
+      return(-1);
+    }
+
+    if (connect(control_sock,
+                remote_res_temp->ai_addr,
+                remote_res_temp->ai_addrlen) == 0) {
+      /* we have successfully connected to the remote netserver */
+      if (debug) {
+        printf("successful connection to remote netserver at %s and %d\n",
+               hostname,
+               port);
+      }
+      not_connected = 0;
+      /* this should get us out of the while loop */
+      break;
+    } else {
+      /* the connect call failed */
+      if (debug) {
+        fprintf(where, "establish_control: connect failed, errno %d\n",errno);
+        fprintf(where, "    trying next address combination\n");
+        fflush(where);
+      }
+    }
+
+    if ((local_res_temp = local_res_temp->ai_next) == NULL) {
+      /* wrap the local and move to the next server, don't forget to
+         close the current control socket. raj 2003-02-24 */
+      local_res_temp = local_res;
+      /* the outer while conditions will deal with the case when we
+         get to the end of all the possible remote addresses. */
+      remote_res_temp = remote_res_temp->ai_next;
+      /* it is simplest here to just close the control sock. since
+         this is not a performance critical section of code, we
+         don't worry about overheads for socket allocation or
+         close. raj 2003-02-24 */
+    }
+    close(control_sock);
+  }
+
+  /* we no longer need the addrinfo stuff */
+  freeaddrinfo(local_res);
+  freeaddrinfo(remote_res);
+
+  /* so, we are either connected or not */
+  if (not_connected) {
+    fprintf(where, "establish control: are you sure there is a netserver listening on %s at port %u?\n",hostname,port);
+    fflush(where);
+    return(-1);
+  }
+  /* at this point, we are connected.  we probably want some sort of
+     version check with the remote at some point. raj 2003-02-24 */
+  return(control_sock);
+}
+
+
+void
+netlib_init()
+{
+}
+
+
+int32_t
+recv_control_message(int control_sock, xmlDocPtr *message)
+{
+  int loc_debug = 0;
+  int tmp;
+  int32_t bytes_recvd = 0,
+          bytes_left,
+          counter;
+
+  uint32_t message_len;
+  char *read_ptr = NULL;
+  char *message_base = NULL;
+
+  struct pollfd fds;
+
+  struct timeval timeout;
+
+  /* one of these days, we probably aught to make sure that what
+     message points to is NULL... but only as a debug assert... raj
+     2003-03-05 */
+
+  /* first, read-in the control header. initially, this is really
+     simple - a four byte message length in network byte order.  if we
+     were really concerned about speed and/or getting multiple
+     messages in a single recv call, we would recv more than four
+     bytes here */
+
+  bytes_left = sizeof(uint32_t);
+  read_ptr = (char *)&message_len;
+  while (bytes_left > 0) {
+    /* precede every recv with a poll() call, so there can be little
+       chance of our ever getting hung-up in this routine. raj
+       2003-02-26 */
+    fds.fd = control_sock;
+    fds.events = POLLIN;
+    fds.revents = 0;
+
+    /* poll had better return one, or there was either a problem or
+       a timeout... */
+
+    if ((counter = poll(&fds, 1, 15000)) != 1) {
+      if (debug) {
+        fprintf(where,
+                "recv_control_message: poll error or timeout. errno %d counter %d\n",
+                errno,
+                counter);
+        fflush(where);
+      }
+      return(NPE_TIMEOUT);
+    }
+
+    bytes_recvd = recv(control_sock,
+                       read_ptr,
+                       bytes_left,
+                       0);
+    if (bytes_recvd < 0) {
+      fprintf(where,
+              "Unexpected byte count on control message of %d errno %d\n",
+              bytes_recvd,
+              errno);
+      fflush(where);
+      return(NPE_NEG_MSG_BYTES);
+    }
+    else if (bytes_recvd == 0) {
+      /* eeew, a goto :) */
+      goto remote_close;
+    }
+    /* we got some data, decrement the bytes remaining and bump our
+       pointer */
+    bytes_left -= bytes_recvd;
+    read_ptr += bytes_recvd;
+  }
+
+  bytes_left = ntohl(message_len);
+
+  /* at some point we probably need to sanity check that we aren't
+     being asked for a massive message size, but for now, we will
+     simply check the return value on the malloc() call :) raj
+     2003-03-06 */
+  if ((message_base = malloc(bytes_left)) == NULL) {
+    fprintf(where,
+            "recv_control_messsage: unable to allocate %u bytes for inbound message\n",
+            bytes_left);
+    fflush(where);
+    return(NPE_MALLOC_FAILED1);
+  }
+
+  read_ptr = message_base;
+
+  while (bytes_left > 0) {
+    /* precede every recv with a poll() call, so there can be little
+       chance of our ever getting hung-up in this routine. raj 2003-02-26 */
+    fds.fd = control_sock;
+    fds.events = POLLIN;
+    fds.revents = 0;
+
+    /* poll had better return one, or there was either a problem or
+       a timeout... */
+
+    if ((counter = poll(&fds, 1, 15000)) != 1) {
+      if (debug) {
+        fprintf(where,
+                "recv_control_message: poll error or timeout. errno %d counter %d\n",
+                errno,
+                counter);
+        fflush(where);
+      }
+      return(NPE_TIMEOUT);
+    }
+    bytes_recvd = recv(control_sock,
+                       read_ptr,
+                       bytes_left,
+                       0);
+    if (bytes_recvd < 0) {
+      if (debug) {
+        fprintf(where,
+                "Unexpected byte count on control message of %d errno %d\n",
+                bytes_recvd,
+                errno);
+        fflush(where);
+      }
+      return(NPE_NEG_MSG_BYTES);
+    }
+    else if (bytes_recvd == 0) {
+      /* eeew, another goto !) */
+      goto remote_close;
+    }
+    /* we got some data, decrement the bytes remaining and bump our
+       pointer */
+    bytes_left -= bytes_recvd;
+    read_ptr += bytes_recvd;
+  }
+
+  if (debug || loc_debug) {
+    fprintf(where,
+            "Just received %d byte message from sock %d\n",
+            ntohl(message_len),
+            control_sock);
+    fprintf(where,"|%*s|\n", ntohl(message_len)+1, message_base);
+    fflush(where);
+  }
+
+  /* now that we have the message, time to parse it. */
+  if ((*message = xmlParseMemory(message_base,message_len)) != NULL) {
+    if (debug) {
+      fprintf(where, "recv_control_message: xmlParseMemory returned %p\n",
+              *message);
+      fflush(where);
+    }
+    return(ntohl(message_len));
+  } else {
+    if (debug) {
+      fprintf(where, "recv_control_message: xmlParseMemory failed\n");
+      fflush(where);
+    }
+    free(message_base);
+    return(NPE_XMLPARSEMEMORY_ERROR);
+  }
+
+remote_close:
+  if (debug) {
+    fprintf(where,
+            "recv_control_message: remote requested shutdown of control\n");
+    fflush(where);
+  }
+
+  if (message_base) {
+    free(message_base);
+  }
+
+  /* just like read/recv, a zero byte return means that the remote
+     closed the connection.  raj 2003-03-05 */
+  return(0);
+
+}
+
+
+/* send_control_message expects to be called with a socket, and an
+   xmlNodePtr containing the element to send in the message. It is also
+   given the netserver nid to which the message is addressed. It will
+   then use these to construct an XML document that encapsulates the message
+   and will send that on its way.  At some point, we may remove the socket
+   parm and have that looked-up to keep things a bit more "abstracted".
+   raj 2003-02-28  sgb 2003-08-22 */
+int
+send_control_message(const int control_sock,
+                     xmlNodePtr body,
+                     xmlChar *nid,
+                     xmlChar *fromnid)
+{
+  int  rc = NPE_SUCCESS;
+
+  int32_t length;
+  struct iovec hdrtrl[2];     /* used for the sendmsg call */
+  struct msghdr message_hdr;  /* used for the sendmsg call */
+
+  xmlDocPtr doc;
+  xmlDtdPtr dtd;
+  xmlNodePtr message_header;
+  xmlNodePtr new_node;
+  char *control_message;
+  int  control_message_len;
+
+  if (debug) {
+    fprintf(where,
+            "send_control_message: called with sock %d and message node at %p",
+            control_sock,
+            body);
+    fprintf(where,
+            " type %s destined for nid %s from nid %s\n",
+            body->name,
+            nid,
+            fromnid);
+    fflush(where);
+  }
+
+  if ((doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
+    /* zippity do dah */
+    doc->standalone = 0;
+    if ((dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",
+                                  NULL,DTD_FILE)) != NULL) {
+      if (((message_header = xmlNewNode(NULL,(xmlChar *)"message")) != NULL) &&
+          (xmlSetProp(message_header,(xmlChar *)"tonid",nid) != NULL) &&
+          (xmlSetProp(message_header,(xmlChar *)"fromnid",fromnid) != NULL)) {
+        /* zippity ay */
+        xmlDocSetRootElement(doc,message_header);
+        /* it certainly would be nice to not have to do this with two
+           calls... raj 2003-02-28 */
+        if (((new_node = xmlDocCopyNode(body,doc,1)) != NULL) &&
+            (xmlAddChild(message_header, new_node) != NULL)) {
+          /* my oh my */
+          xmlDocDumpMemory(doc,
+                           (xmlChar **)&control_message,
+                           &control_message_len);
+          if (control_message_len > 0) {
+            /* what a wonderful day */
+            /* the message length send via the network does not include
+               the length itself... raj 2003-02-27 */
+            length = htonl(strlen(control_message));
+
+            /* offset zero is the message length, offset one is the
+               message itself */
+            hdrtrl[0].iov_len  = sizeof(length);
+            hdrtrl[0].iov_base = (void *)&length;
+            hdrtrl[1].iov_len  = control_message_len;
+            hdrtrl[1].iov_base = control_message;
+
+            /* since we are only interested in the msg_iov, and
+               msg_iovlen, and since we would set all the other fields,
+               regardless of "flavor" to a value of 0 (or NULL, which we
+               ass-u-me to == 0), we will just use a memset and then not
+               have to worry about #ifdef'ing for the various flavors of
+               struct msghdr. raj 2003-02-26 */
+
+            memset(&message_hdr,0,sizeof(struct msghdr));
+            message_hdr.msg_iov = hdrtrl;
+            message_hdr.msg_iovlen = 2;
+
+            rc = sendmsg(control_sock,
+                         &message_hdr,
+                         0);
+            if (debug) {
+              /* first display the header */
+              fprintf(where, "Just sent a %d byte message\n",
+                      control_message_len);
+              fprintf(where, "|%*s|\n",control_message_len,control_message);
+              fflush(where);
+            }
+            if (rc == (control_message_len+sizeof(length))) {
+              rc = NPE_SUCCESS;
+            } else {
+              rc = NPE_SEND_CTL_MSG_FAILURE;
+            }
+          } else {
+            rc = NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED;
+          }
+        } else {
+          rc = NPE_SEND_CTL_MSG_XMLCOPYNODE_FAILED;
+        }
+      } else {
+        rc = NPE_SEND_CTL_MSG_XMLNEWNODE_FAILED;
+      }
+    } else {
+      rc = NPE_SEND_CTL_MSG_XMLNEWDTD_FAILED;
+    }
+  } else {
+    rc = NPE_SEND_CTL_MSG_XMLNEWDOC_FAILED;
+  }
+  return(rc);
+}
+
+
+void
+report_server_error(server_t *server)
+{
+  int i;
+  i = server->err_rc - NPE_MIN_ERROR_NUM;
+  fprintf(where,
+          "server %s entered error state %d from %s error code %d %s\n",
+	  server->id,
+	  server->state_req,
+	  server->err_fn,
+	  server->err_rc,
+          NP_ERROR_NAMES[i]);
+  fflush(where);
+}

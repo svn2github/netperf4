@@ -1,0 +1,909 @@
+char netmsg_id[]="\
+@(#)netmsg.c (c) Copyright 2005, Hewlett-Packard Company, Version 4.0.0";
+
+/*
+
+This file is part of netperf4.
+
+Netperf4 is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version.
+
+Netperf4 is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+USA.
+
+In addition, as a special exception, the copyright holders give
+permission to link the code of netperf4 with the OpenSSL project's
+"OpenSSL" library (or with modified versions of it that use the same
+license as the "OpenSSL" library), and distribute the linked
+executables.  You must obey the GNU General Public License in all
+respects for all of the code used other than "OpenSSL".  If you modify
+this file, you may extend this exception to your version of the file,
+but you are not obligated to do so.  If you do not wish to do so,
+delete this exception statement from your version.
+
+*/
+
+#include <unistd.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <poll.h>
+#include <sys/resource.h>
+#if HAVE_GLIB_H
+#include <glib.h>
+#endif
+
+#include "netperf.h"
+#include "netlib.h"
+
+extern int debug;
+extern xmlChar  * my_nid;
+extern FILE * where;
+
+extern struct msgs *np_msg_handler_base;
+extern test_hash_t test_hash[TEST_HASH_BUCKETS];
+
+int clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int configured_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int dead_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int die_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int error_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int get_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int idled_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int interval_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int kill_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int load_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int loaded_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int measure_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int measuring_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int netserver_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int np_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int ns_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int snap_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int test_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int unexpected_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int unknown_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+
+const struct msgs   NP_Msgs[] = {
+  /* Message name, function,             StateBitMap */
+#ifdef OFF
+  { "cleared",         cleared_message,          0x00000000 },
+  { "configured",      configured_message,       0x00000000 },
+  { "dead",            dead_message,             0x00000000 },
+#endif
+  { "measuring",       measuring_message,        0x00000010 },
+  { "loaded",          loaded_message,           0x00000010 },
+  { "idled",           np_idle_message,          0x00000018 },
+  { "test_stats",      test_stats_message,       0x00000010 },
+  { "sys_stats",       sys_stats_message,        0x00000010 },
+  { "initialized",     initialized_message,      0x00000018 },
+  { "error",           error_message,            0x00000018 },
+  { "version",         np_version_check,         0x00000004 },
+  { NULL,              unknown_message,          0xFFFFFFFF }
+};
+
+const struct msgs   NS_Msgs[] = {
+  /* Message name, function,             StateBitMap */
+#ifdef OFF
+  { "clear",           clear_message,            0x00000000 },
+  { "die",             die_message,              0x00000000 },
+  { "error",           error_message,            0x00000000 },
+  { "interval",        interval_message,         0x00000000 },
+  { "kill",            kill_message,             0x00000000 },
+  { "snap",            snap_message,             0x00000000 },
+#endif
+  { "measure",         measure_message,          0x00000010 },
+  { "load",            load_message,             0x00000010 },
+  { "idle",            idle_message,             0x00000010 },
+  { "get_stats",       get_stats_message,        0x00000010 },
+  { "get_sys_stats",   get_sys_stats_message,    0x00000010 },
+  { "clear_stats",     clear_stats_message,      0x00000010 },
+  { "clear_sys_stats", clear_sys_stats_message,  0x00000010 },
+  { "initialized",     initialized_message,      0x00000010 },
+  { "test",            test_message,             0x00000014 },
+  { "version",         ns_version_check,         0x00000001 },
+  { NULL,              unknown_message,          0xFFFFFFFF }
+};
+
+int
+process_message(server_t *server, xmlDocPtr doc)
+{
+  int loc_debug = 0;
+  int rc = NPE_SUCCESS;
+  int cur_state = 0;
+  xmlChar *fromnid;
+  xmlChar *tonid;
+  xmlNodePtr msg;
+  xmlNodePtr cur;
+  struct msgs *which_msg;
+
+  if (debug) {
+    fprintf(where,"process_message: entered\n");
+    fflush(where);
+  }
+
+  msg = xmlDocGetRootElement(doc);
+  if (msg == NULL) {
+    fprintf(stderr,"empty document\n");
+    xmlFreeDoc(doc);
+    return(rc);
+  }
+  fromnid = xmlGetProp(msg,(const xmlChar *)"fromnid");
+  tonid   = xmlGetProp(msg,(const xmlChar *)"tonid");
+
+  if (server != NULL)  cur_state = 1 << server->state;
+    
+  if (debug) {
+    fprintf(where,"process_message: received '%s' message from server %s\n",
+            msg->xmlChildrenNode->name, fromnid);
+    fprintf(where,"process_message: servers current state is %d\n", cur_state);
+    fflush(where);
+  }
+  for (cur = msg->xmlChildrenNode; cur != NULL; cur = cur->next) {
+    which_msg = np_msg_handler_base;
+    while (which_msg->msg_name != NULL) {
+      if (xmlStrcmp(cur->name,(xmlChar *)which_msg->msg_name)) {
+        which_msg++;
+        continue;
+      }
+      if (which_msg->valid_states & cur_state) {
+        rc = (which_msg->msg_func)(cur,doc,server);
+        if (rc != NPE_SUCCESS) {
+          fprintf(where,"process_message: received %d from %s\n",
+                  rc, which_msg->msg_name);
+          fflush(where);
+          server->state = NSRV_ERROR;
+          if (server->sock != -1) {
+            close(server->sock);
+            /* should we delete the server from the server_hash ? sgb */
+            break;
+          }
+        }
+      } else {
+        if (debug || loc_debug) {
+          fprintf(where,
+                  "process_message:state is %d got unexpected '%s' message.\n",
+                  cur_state,
+                  cur->name);
+          fflush(where);
+        }
+      }
+      which_msg++;
+    }
+  }
+  xmlFreeDoc(doc);
+  return(rc);
+}
+
+
+/*
+   netperf verify the version message from a netserver
+   Valid responses from netperf are a configuration message if versions
+   match or to close the connection if the version does not match.
+*/
+
+int
+np_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int rc;
+  if (!xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"vers"),NETPERF_VERSION) &&
+      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"updt"),NETPERF_UPDATE)  &&
+      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"fix"), NETPERF_FIX))     {
+    /* versions match */
+    if (debug) {
+      fprintf(where,"np_version_check: version check successful\n");
+      fflush(where);
+    } 
+    rc = NPE_SUCCESS;
+  } else {
+    /* versions don't match */
+    if (debug) {
+      fprintf(where,"np_version_check: version check failed\n");
+      fflush(where);
+    }
+    rc = NPE_BAD_VERSION;
+  }
+  return(rc);
+}
+
+/*
+   netserver verify the version message from a netperf
+   Valid responses from a netserver in an error message if version
+   does not match or a version check response if it matches.
+*/
+
+int
+ns_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *netperf)
+{
+  int rc = NPE_SUCCESS;
+  xmlChar  * new_nid;
+  xmlNodePtr message;
+
+  if (!xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"vers"),NETPERF_VERSION) &&
+      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"updt"),NETPERF_UPDATE)  &&
+      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"fix"), NETPERF_FIX))     {
+    /* versions match */
+    netperf->state      =  NSRV_VERS;
+    netperf->state_req  =  NSRV_WORK;
+    rc = send_version_message(netperf,my_nid);
+  } else {
+    /* versions don't match */
+    if (debug) {
+      fprintf(where,"ns_version_chk: version check failed\n");
+      fflush(where);
+    }
+    rc = NPE_BAD_VERSION;
+  }
+  return(rc);
+}
+
+
+/*
+   generate a version message and send it out the control
+   socket.  XML may be the wizziest thing since sliced bits, but it
+   sure does lead to some rather cumbersome coding... raj 2003-02-27
+*/
+int
+send_version_message(server_t *server, xmlChar *fromnid)
+{
+  int rc = NPE_SUCCESS;
+  xmlNodePtr message;
+
+  if ((message = xmlNewNode(NULL,(xmlChar *)"version")) != NULL) {
+    /* set the properties of the version message -
+       the version, update, and fix levels  sgb 2003-02-27 */
+    if ((xmlSetProp(message,(xmlChar *)"vers",NETPERF_VERSION) != NULL) &&
+        (xmlSetProp(message,(xmlChar *)"updt",NETPERF_UPDATE)  != NULL) &&
+        (xmlSetProp(message,(xmlChar *)"fix", NETPERF_FIX)     != NULL))  {
+      /* still smiling */
+      /* almost there... */
+      rc = send_control_message(server->sock,
+                                message,
+                                server->id,
+                                fromnid);
+      if (rc != NPE_SUCCESS) {
+        if (debug) {
+          fprintf(where,
+                  "send_version_message: send_control_message failed\n");
+          fflush(where);
+        }
+      }
+    } else {
+      if (debug) {
+        fprintf(where,
+                "send_version_message: an xmlSetProp failed\n");
+        fflush(where);
+      }
+      rc = NPE_SEND_VERSION_XMLSETPROP_FAILED;
+    }
+  } else {
+    if (debug) {
+      fprintf(where,
+              "send_version_message: xmlNewNode failed\n");
+      fflush(where);
+    }
+    rc = NPE_SEND_VERSION_XMLNEWNODE_FAILED;
+  }
+  if (debug) {
+    if (rc != NPE_SUCCESS) {
+      fprintf(where,"send_version_message: error status %d\n",rc);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+
+int
+error_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int loc_debug = 1;
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug || loc_debug) {
+      fprintf(where,"error_message: prev_state_req = %d ",test->state_req);
+      fflush(where);
+    }
+    test->err_rc  = atoi((char *)xmlGetProp(msg,(const xmlChar *)"err_rc"));
+    test->err_fn  = (char *)xmlGetProp(msg,(const xmlChar *)"err_fn");
+    test->err_str = (char *)xmlGetProp(msg,(const xmlChar *)"err_str");
+    test->err_no  = atoi((char *)xmlGetProp(msg,(const xmlChar *)"err_no"));
+    test->state   = TEST_ERROR;
+    if (debug || loc_debug) {
+      fprintf(where," new_state_req = %d\n",test->state_req);
+      fprintf(where,"\terr in test function %s  rc = %d\n",
+              test->err_fn,test->err_rc);
+      fprintf(where,"\terror message '%s' errno = %d\n",
+              test->err_str,test->err_no);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+
+int
+clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int          rc = NPE_SUCCESS;
+  xmlChar     *testid;
+  test_t      *test;
+  xmlNodePtr  stats;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"clear_stats_message: test_state = %d ",test->state);
+      fflush(where);
+    }
+    rc = (test->test_clear)(test);
+    if (rc != NPE_SUCCESS) {
+      if (debug) {
+        fprintf(where,
+                "clear_stats_message: clear of statistics failed\n");
+        fflush(where);
+      }
+    }
+  }
+  return(rc);
+}
+
+
+int
+clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int          rc = NPE_SUCCESS;
+  xmlChar     *testid;
+  test_t      *test;
+  xmlNodePtr  stats;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"clear_sys_stats_message: test_state = %d ",test->state);
+      fflush(where);
+    }
+    rc = (test->test_clear)(test);
+    if (rc != NPE_SUCCESS) {
+      if (debug) {
+        fprintf(where,
+                "clear_sys_stats_message: clear of statistics failed\n");
+        fflush(where);
+      }
+    }
+  }
+  return(rc);
+}
+
+
+int
+get_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int          rc = NPE_SUCCESS;
+  xmlChar     *testid;
+  test_t      *test;
+  xmlNodePtr  stats;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"get_stats_message: test_state = %d ",test->state);
+      fflush(where);
+    }
+    stats = (test->test_stats)(test);
+    rc = send_control_message(server->sock,
+                              stats,
+                              server->id,
+                              my_nid);
+    if (rc != NPE_SUCCESS) {
+      if (debug) {
+        fprintf(where,
+                "get_stats_message: send_control_message failed\n");
+        fflush(where);
+      }
+    }
+  }
+  return(rc);
+}
+
+
+int
+get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int          rc = NPE_SUCCESS;
+  xmlChar     *testid;
+  test_t      *test;
+  xmlNodePtr  sys_stats;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"get_sys_stats_message: test_state = %d ",test->state);
+      fflush(where);
+    }
+    sys_stats = (test->test_stats)(test);
+    rc = send_control_message(server->sock,
+                              sys_stats,
+                              server->id,
+                              my_nid);
+    if (rc != NPE_SUCCESS) {
+      if (debug) {
+        fprintf(where,
+                "get_stats_message: send_control_message failed\n");
+        fflush(where);
+      }
+    }
+  }
+  return(rc);
+}
+
+
+int
+np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+  int        hash_value;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+
+  hash_value = TEST_HASH_VALUE(testid);
+
+  /* don't forget to add error checking one day */
+  if (debug) {
+    fprintf(where,"np_idle_message: waiting for mutex\n");
+    fflush(where);
+  }
+  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+
+  test = test_hash[hash_value].test;
+  while (test != NULL) {
+    if (!xmlStrcmp(test->id,testid)) {
+      /* we have a match */
+      break;
+    }
+    test = test->next;
+  }
+
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"np_idle_message: prev_state = %d ",test->state);
+      fflush(where);
+    }
+    test->state = TEST_IDLE;
+    rc = pthread_cond_broadcast(&(test_hash[hash_value].condition));
+    if (debug) {
+      fprintf(where," new_state = %d\n",test->state);
+      fflush(where);
+    }
+  }
+  if (debug) {
+    fprintf(where,"np_idle_message: unlocking mutex\n");
+    fflush(where);
+  }
+  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  return(rc);
+}
+
+int
+idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"idle_message: tid = %s  prev_state_req = %d ",
+              testid, test->state_req);
+      fflush(where);
+    }
+    test->state_req = TEST_IDLE;
+    if (debug) {
+      fprintf(where," new_state_req = %d\n",test->state_req);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+int
+idled_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"idled_message: tid = %s  prev_state_req = %d ",
+              testid, test->state_req);
+      fflush(where);
+    }
+    test->state = TEST_IDLE;
+    if (debug) {
+      fprintf(where," new_state_req = %d\n",test->state_req);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+int
+initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  
+  int        rc = NPE_SUCCESS;
+  xmlNodePtr dependency_data;
+  xmlChar   *testid;
+  test_t    *test;
+  int        hash_value;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+
+  dependency_data = msg->xmlChildrenNode;
+  while (dependency_data != NULL) {
+    if (!xmlStrcmp(dependency_data->name,(const xmlChar *)"dependency_data")) {
+      break;
+    }
+  }
+  
+  hash_value = TEST_HASH_VALUE(testid);
+
+  /* don't forget to add error checking one day */
+  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+
+  test = test_hash[hash_value].test;
+  while (test != NULL) {
+    if (!xmlStrcmp(test->id,testid)) {
+      /* we have a match */
+      break;
+    }
+    test = test->next;
+  }
+
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"initialized_message: prev_state = %d ",test->state);
+      fflush(where);
+    }
+    if (dependency_data != NULL) {
+      test->dependent_data = xmlCopyNode(dependency_data,1);
+      if (test->dependent_data != NULL) {
+        test->state = TEST_INIT;
+      } else {
+        test->state = TEST_ERROR;
+        /* add additional error information later */
+      }
+    } else {
+      test->state = TEST_INIT;
+    }
+    rc = pthread_cond_broadcast(&(test_hash[hash_value].condition));
+      
+    if (debug) {
+      fprintf(where," new_state = %d rc = %d\n",test->state,rc);
+      fflush(where);
+    }
+  }
+  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  return(rc);
+}
+
+
+int
+load_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"load_message: tid = %s  prev_state_req = %d ",
+              testid, test->state_req);
+      fflush(where);
+    }
+    test->state_req = TEST_LOADED;
+    if (debug) {
+      fprintf(where," new_state_req = %d\n",test->state_req);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+int
+loaded_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"loaded_message: prev_state = %d ",test->state);
+      fflush(where);
+    }
+    test->state = TEST_LOADED;
+    if (debug) {
+      fprintf(where," new_state = %d\n",test->state);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+
+int
+measure_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"measure_message: prev_state_req = %d ",test->state_req);
+      fflush(where);
+    }
+    test->state_req = TEST_MEASURE;
+    if (debug) {
+      fprintf(where," new_state_req = %d\n",test->state_req);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+int
+measuring_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"measuring_message: prev_state = %d ",test->state);
+      fflush(where);
+    }
+    test->state = TEST_MEASURE;
+    if (debug) {
+      fprintf(where," new_state = %d\n",test->state);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+
+int
+test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  test_t    *new_test;
+  xmlNodePtr test_node;
+  xmlNodePtr reply;
+  xmlNodePtr new_node;
+  xmlChar   *test_name;
+  xmlChar   *testid;
+
+  if (debug) {
+    fprintf(where,"entering test_message\n");
+    fflush(where);
+  }
+  if (server->state != server->state_req) {
+    /* set netserver state to NSRV_WORK because receiving a test message
+       shows that netperf accepted our version message */
+    server->state = server->state_req;
+  }
+  test_node = msg;
+  while (test_node != NULL && rc == NPE_SUCCESS) {
+    if (xmlStrcmp(test_node->name,(const xmlChar *)"test")) {
+      if (debug) {
+        printf("test_message: skipped a non-test node\n");
+      }
+      test_node = test_node->next;
+      continue;
+    }
+    testid = xmlGetProp(test_node,(const xmlChar *)"tid");
+    new_test = (test_t *)malloc(sizeof(test_t));
+    if (new_test != NULL) { /* we have a new test_t structure */
+      memset(new_test,0,sizeof(test_t));
+      new_test->node      = test_node;
+      new_test->id        = testid;
+      new_test->server_id = server->id;
+      new_test->state     = TEST_PREINIT;
+      new_test->new_state = TEST_PREINIT;
+      new_test->state_req = TEST_IDLE;
+      
+      rc = get_test_function(new_test,(const xmlChar *)"test_name");
+      if (rc == NPE_SUCCESS) {
+        rc = get_test_function(new_test,(const xmlChar *)"test_clear");
+      }
+      if (rc == NPE_SUCCESS) {
+        rc = get_test_function(new_test,(const xmlChar *)"test_stats");
+      }
+      if (rc == NPE_SUCCESS) {
+        rc = get_test_function(new_test,(const xmlChar *)"test_decode");
+      }
+
+    } else {
+      rc = NPE_MALLOC_FAILED2;
+    }
+    if (rc == NPE_SUCCESS) {
+      rc = add_test_to_hash(new_test);
+    }
+    if (rc == NPE_SUCCESS) {
+      if (debug) {
+        fprintf(where,
+                "test_message: about to launch thread for test %d\n",
+                new_test->tid);
+        fflush(where);
+      }
+      rc = launch_thread(&new_test->tid,new_test->test_func,new_test);
+      if (debug) {
+        fprintf(where,
+                "test_message: launched thread for test %d\n",
+                new_test->tid);
+        fflush(where);
+      }
+    }
+    
+    /* wait for test to initialize */
+    if (rc == NPE_SUCCESS) {
+      while (new_test->new_state == TEST_PREINIT) {
+        if (debug) {
+          fprintf(where,
+                  "test_message: waiting on thread %d\n",
+                  new_test->tid);
+          fflush(where);
+        }
+        sleep(1);
+      }  /* end wait */
+      if (debug) {
+        fprintf(where,
+                "test_message: test has started initialization on thread %d\n",
+                new_test->tid);
+        fflush(where);
+      }
+    }
+    if (rc != NPE_SUCCESS) {
+      new_test->state  = TEST_ERROR;
+      new_test->err_rc = rc;
+      new_test->err_fn = "test_message";
+      rc = NPE_TEST_INIT_FAILED;
+      break;
+    }
+    test_node = test_node->next;
+  }
+
+  if (debug) {
+    fprintf(where,"exiting test_message\n");
+    fflush(where);
+  }
+  return(rc);
+}
+
+
+int
+sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int          loc_debug = 0;
+  int          rc = NPE_SUCCESS;
+  xmlChar     *testid;
+  test_t      *test;
+  xmlNodePtr  stats;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (debug || loc_debug) {
+    fprintf(where,"sys_stats_message: test = %p\n",test);
+    fflush(where);
+  }
+  if (test != NULL) {
+    if (test->received_stats == NULL) {
+      test->received_stats = xmlNewNode(NULL,(xmlChar *)"received_stats");
+      if (debug || loc_debug) {
+        fprintf(where,"sys_stats_message: creating received_stats node %p\n",
+                test->received_stats);
+        fflush(where);
+      }
+    }
+    if (test->received_stats) {
+      stats = xmlCopyNode(msg,1);
+      xmlAddChild(test->received_stats, stats);
+      if (debug || loc_debug) {
+        fprintf(where,"sys_stats_message: stats to list %p\n",
+                test->received_stats->xmlChildrenNode);
+        fflush(where);
+      }
+    }
+    if (stats == NULL) {
+      test->state  = TEST_ERROR;
+      test->err_rc = NPE_SYS_STATS_DROPPED;
+      test->err_fn = "sys_stats_message";
+    }
+  }
+  return(rc);
+}
+
+int
+test_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int          rc = NPE_SUCCESS;
+  xmlChar     *testid;
+  test_t      *test;
+  xmlNodePtr  stats;
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"test_stats_message: test_state = %d ",test->state);
+      fflush(where);
+    }
+    if (test->received_stats == NULL) {
+      test->received_stats = xmlNewNode(NULL,(xmlChar *)"received_stats");
+    }
+    if (test->received_stats) {
+      stats = xmlCopyNode(msg,1);
+      xmlAddChild(test->received_stats, stats);
+    }
+    if (stats == NULL) {
+      test->state  = TEST_ERROR;
+      test->err_rc = NPE_TEST_STATS_DROPPED;
+      test->err_fn = "test_stats_message";
+    }
+  }
+  return(rc);
+}
+
+
+int
+unknown_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int rc = NPE_SUCCESS;
+  fprintf(where,"Server %s sent a %s message which is unknown by netperf4\n",
+          server->id, msg->name);
+  fflush(where);
+  return(rc);
+}

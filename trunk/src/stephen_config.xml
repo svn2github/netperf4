@@ -1,0 +1,38 @@
+<?xml version="1.0" standalone="no" ?>
+<!DOCTYPE netperf SYSTEM "../netperf/netperf_docs.dtd" >        
+<netperf xmlns="http://www.netperf.org/ns/netperf">
+<!-- This is just another boring comment -->
+<netserver nid="n1" >
+  <test tid="t0"
+    test_name = "hpux_sys_stats"
+    library   = "netsysstats.sl" >
+  </test>
+  <test tid="t1"
+    test_name = "send_tcp_stream"
+    library   = "nettest_bsd.sl" >
+    <dependson testid="t2" netserverid="n1" />
+    <socket_args
+      send_buffer_size = "128"
+      recv_buffer_size = "128"
+      send_size        = "32"  />
+  </test>
+  <test tid="t2"
+    test_name = "recv_tcp_stream"
+    library = "nettest_bsd.sl" >
+    <socket_args
+      send_buffer_size = "128"
+      recv_buffer_size = "128" />
+  </test>
+  <test tid="t3"
+    test_name = "send_tcp_rr"
+    library   = "nettest_bsd.sl" >
+    <dependson testid="t4" netserverid="n1" />
+    <socket_args />
+  </test>
+  <test tid="t4"
+    test_name = "recv_tcp_rr"
+    library = "nettest_bsd.sl" >
+    <socket_args />
+  </test>
+</netserver>
+</netperf>
