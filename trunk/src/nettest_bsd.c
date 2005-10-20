@@ -317,30 +317,30 @@ set_dependent_data(test)
 
 unsigned int
 convert(string,units)
-  char *string;
-  char *units;
+     unsigned char *string;
+     unsigned char *units;
 {
   unsigned int base;
-  base = atoi(string);
-  if (strstr(units,"B")) {
+  base = atoi((char *)string);
+  if (strstr((char *)units,"B")) {
     base *= 1;
   }
-  if (strstr(units,"KB")) {
+  if (strstr((char *)units,"KB")) {
     base *= 1024;
   }
-  if (strstr(units,"MB")) {
+  if (strstr((char *)units,"MB")) {
     base *= (1024 * 1024);
   }
-  if (strstr(units,"GB")) {
+  if (strstr((char *)units,"GB")) {
     base *= (1024 * 1024 * 1024);
   }
-  if (strstr(units,"kB")) {
+  if (strstr((char *)units,"kB")) {
     base *= (1000);
   }
-  if (strstr(units,"mB")) {
+  if (strstr((char *)units,"mB")) {
     base *= (1000 * 1000);
   }
-  if (strstr(units,"gB")) {
+  if (strstr((char *)units,"gB")) {
     base *= (1000 * 1000 * 1000);
   }
   return(base);
@@ -2200,8 +2200,8 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
         xmit_rate       = 0.0;
         recv_rate       = 0.0;
         calibration     = sys_cntr[CALIBRATE];
-        local_idle      = sys_cntr[IDLE] / elapsed_seconds;
-        local_busy      = (sys_cntr[CALIBRATE]-local_idle)/sys_cntr[CALIBRATE];
+        local_idle      = sys_cntr[IDLE] / calibration;
+        local_busy      = (calibration-sys_cntr[IDLE])/calibration;
         
         if (debug || loc_debug) {
           fprintf(where,"\tnum_cpus        = %f\n",local_cpus);

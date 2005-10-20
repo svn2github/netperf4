@@ -29,17 +29,11 @@ delete this exception statement from your version.
 
 */
 
-
+#ifdef NOTDEF
 #include <netdb.h>
 
-#ifdef NO_GETADDRINFO
-
-#include "np_netdb.h"
-
-#endif
-
 #include <poll.h>
-
+#endif
 
 extern  test_t * find_test_in_hash(const xmlChar *id);
 extern  void report_test_status(server_t *server);

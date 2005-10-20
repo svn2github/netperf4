@@ -1,8 +1,9 @@
 <?xml version="1.0" standalone="no" ?>
-<!DOCTYPE commands SYSTEM "../netperf/netperf_docs.dtd" >        
+<!DOCTYPE commands SYSTEM "./netperf_docs.dtd" >        
 <commands xmlns="http://www.netperf.org/ns/netperf">
 
 <!-- 20 second TCP_STREAM test
+ -->
   <create_test_set set_name="s0" tests_in_set="t0,t1,t2" />
   <create_test_set set_name="s1" tests_in_set="t0,t1" />
   <wait tid="s0" />
@@ -20,11 +21,11 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s1" 
-    library="nettest_bsd.sl"
+    library="nettest_bsd.la"
     function="report_bsd_test_results" />
- -->
 
 <!-- 20 second TCP_MAERTS test
+ -->
   <create_test_set set_name="s4" tests_in_set="t0,t2" />
   <wait tid="s0" />
   <load tid="s0" />
@@ -38,12 +39,12 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s4" 
-    library="nettest_bsd.sl"
+    library="nettest_bsd.la"
     function="report_bsd_test_results" />
- -->
 
 
 <!-- 20 second TCP_RR test
+ -->
   <create_test_set set_name="s2" tests_in_set="t0,t3,t4" />
   <create_test_set set_name="s3" tests_in_set="t3,t0" />
   <wait tid="s2" />
@@ -59,15 +60,14 @@
   <idle tid="s2" />
   <wait tid="s2" />
   <report_stats test_set="s3" 
-     library="nettest_bsd.sl"
+     library="nettest_bsd.la"
      function="report_bsd_test_results" />
- -->
 
-<!-- 20 second TCP_STREAM test with confidence --> 
+<!-- 20 second TCP_STREAM test with confidence
   <create_test_set set_name="s0" tests_in_set="t0,t1,t2" />
   <create_test_set set_name="s1" tests_in_set="t0,t1" />
   <report_stats test_set="s1" 
-    library="nettest_bsd.sl"
+    library="nettest_bsd.la"
     function="report_bsd_test_results" >
     <wait tid="s0" />
     <load tid="s0" />
@@ -82,5 +82,6 @@
     <idle tid="s0" />
     <wait tid="s0" />
   </report_stats>
+ --> 
 
 </commands>

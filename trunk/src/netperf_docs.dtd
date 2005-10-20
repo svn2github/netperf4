@@ -1,4 +1,4 @@
-<?xml version="1.0" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <!-- Contains Declarations for three types of netperf documents:
         netperf configuration file
         netperf command
@@ -352,21 +352,33 @@
 <!ELEMENT received_stats ((test_stats)+) >
 
 
-<!ELEMENT sys_stats ( #PCDATA ) >
+<!ELEMENT sys_stats ( #PCDATA | per_cpu_stats )* >
 <!ATTLIST sys_stats 
   tid            ID      #REQUIRED
   elapsed_sec    CDATA   #IMPLIED
   elapsed_usec   CDATA   #IMPLIED
   time_sec       CDATA   #IMPLIED
   time_usec      CDATA   #IMPLIED
+  method         CDATA   #IMPLIED
   number_cpus    CDATA   #IMPLIED
   calibration    CDATA   #IMPLIED
   idle_count     CDATA   #IMPLIED
   user_count     CDATA   #IMPLIED
   sys_count      CDATA   #IMPLIED
   int_count      CDATA   #IMPLIED
+  other_count    CDATA   #IMPLIED
 >
 
+<!ELEMENT per_cpu_stats ( #PCDATA ) >
+<!ATTLIST per_cpu_stats 
+  cpu_id         CDATA   #REQUIRED
+  calibration    CDATA   #IMPLIED
+  idle_count     CDATA   #IMPLIED
+  user_count     CDATA   #IMPLIED
+  sys_count      CDATA   #IMPLIED
+  int_count      CDATA   #IMPLIED
+  other_count    CDATA   #IMPLIED
+>
 
 <!ELEMENT test_stats ( #PCDATA ) >
 <!ATTLIST test_stats 

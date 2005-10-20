@@ -6,12 +6,25 @@ AM_CFLAGS = $(NETPERF_CFLAGS)
 
 USE_CPU_SOURCE=netsysstats_@NETSYS_SOURCE@.c
 
-EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netconfidence.h netsysstats*.c 
+# anything that might be platform-specific and thus not covered
+# directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 
-COMMON_SRC = hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c nettest_bsd.c nettest_bsd.h netconfidence.c
+EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netsysstats*.c 
 
-netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_CPU_SOURCE)
-netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_CPU_SOURCE)
+COMMON_SRC = hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netconfidence.c netconfidence.h
+
+netperf_SOURCES = netperf.c $(COMMON_SRC)
+netserver_SOURCES = netserver.c $(COMMON_SRC)
+
+# in theory, the stuff below should deal with creating the requisite libs
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
+
+nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
+nettest_bsd_la_LDFLAGS = -module
+
+# the USE_CPU_SOURCE will pick the apropriate file based on the platform
+netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)
+netsysstats_la_LDFLAGS = -module
 
 # if there are any "missing" routines, the libobjs should cover it
 netperf_LDADD = @LIBOBJS@

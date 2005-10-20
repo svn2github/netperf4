@@ -9,7 +9,7 @@
 #include "netconfidence.h"
 
 #define NETPERF_DEFAULT_SERVICE_NAME     "netperf4"
-#define DTD_FILE        (const xmlChar *)"../netperf/netperf_docs.dtd"
+#define DTD_FILE        (const xmlChar *)"./netperf_docs.dtd"
 #define NETPERF_VERSION (const xmlChar *)"4"
 #define NETPERF_UPDATE  (const xmlChar *)"0"
 #define NETPERF_FIX     (const xmlChar *)"999"
@@ -96,6 +96,7 @@ typedef int        (*TestClear)(void *test_info);
 typedef xmlNodePtr (*TestStats)(void *test_data);
 
 #define NETPERF_MAX_TEST_FUNCTION_NAME 64
+#define NETPERF_MAX_TEST_LIBRARY_NAME  PATH_MAX
 
 typedef struct test_instance {
   xmlChar   *id;               /* the global test id of this test

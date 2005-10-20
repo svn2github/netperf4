@@ -35,14 +35,22 @@ delete this exception statement from your version.
 #include <pwd.h>
 */
 
+#include "config.h"
+
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <string.h>
 #include <netinet/in.h>
 
+#include <poll.h>
+
+#include <unistd.h>
+
 #ifndef HAVE_GETOPT_LONG
 #include "missing/getopt.h"
+#else
+#include <getopt.h>
 #endif
 
 /* #include "system.h" */
@@ -83,6 +91,7 @@ enum {DUMMY_CODE=129
       ,BRIEF_CODE
 };
 
+
 /* Option flags and variables */
 
 char *oname = "stdout";         /* --output */
@@ -106,6 +115,7 @@ static struct option const long_options[] =
   {"output", required_argument, 0, 'o'},
   {"input", required_argument, 0, 'i'},
   {"config", required_argument, 0, 'c'},
+  {"debug", no_argument, 0, 'd'},
   {"quiet", no_argument, 0, 'q'},
   {"silent", no_argument, 0, 'q'},
   {"brief", no_argument, 0, BRIEF_CODE},
@@ -125,6 +135,7 @@ Options:\n\
   -o, --output NAME          send output to NAME instead of standard output\n\
   -i, --input  NAME          get input from NAME instead of standard input\n\
   -c, --config NAME          get config from NAME instead of standard input\n\
+  -d, --debug                increase level of debugging output\n\
   -q, --quiet, --silent      inhibit usual output\n\
   --brief                    shorten output\n\
   --verbose                  print more information\n\
@@ -150,61 +161,65 @@ decode_switches (int argc, char **argv)
                            "o:" /* output */
                            "i:" /* input */
                            "c:" /* config */
+			   "d"  /* debug */
                            "h"  /* help */
                            "V", /* version */
                            long_options, (int *) 0)) != EOF) {
     switch (c) {
-      case 'c':               /* --config */
-        cname = strdup(optarg);
-        break;
-      case 'o':               /* --output */
-        oname = strdup(optarg);
-        ofile = fopen(oname, "w");
-        if (!ofile) {
-          fprintf(where,
-                  "%s: cannot open %s for writing\n",
-                  program_name,
-                  optarg);
-          fflush(where);
-            exit(1);
-          }
-        break;
-      case 'i':               /* --input */
-        iname = strdup(optarg);
-        ifile = fopen(iname, "r");
-        if (!ifile) {
-          fprintf(where,
-                  "%s: cannot open %s for reading\n",
-                  program_name,
-                  optarg);
-          fflush(where);
-          exit(1);
-        } else {
-          want_batch = 1;
-          fclose(ifile);
-          ifile = NULL;
-        }
-      case 'q':               /* --quiet, --silent */
-        want_quiet = 1;
-        break;
-      case BRIEF_CODE:        /* --brief */
-        want_brief = 1;
-        break;
-      case 'v':               /* --verbose */
-        want_verbose = 1;
-        break;
-      case 'V':
-        printf ("netperf %s.%s.%s\n",
-                NETPERF_VERSION,
-                NETPERF_UPDATE,
-                NETPERF_FIX);
-        exit (0);
-
-      case 'h':
-        usage (0);
-
-      default:
-        usage (EXIT_FAILURE);
+    case 'c':               /* --config */
+      cname = strdup(optarg);
+      break;
+    case 'd':                 /* --debug */
+      debug++;
+      break;
+    case 'o':               /* --output */
+      oname = strdup(optarg);
+      ofile = fopen(oname, "w");
+      if (!ofile) {
+	fprintf(where,
+		"%s: cannot open %s for writing\n",
+		program_name,
+		optarg);
+	fflush(where);
+	exit(1);
+      }
+      break;
+    case 'i':               /* --input */
+      iname = strdup(optarg);
+      ifile = fopen(iname, "r");
+      if (!ifile) {
+	fprintf(where,
+		"%s: cannot open %s for reading\n",
+		program_name,
+		optarg);
+	fflush(where);
+	exit(1);
+      } else {
+	want_batch = 1;
+	fclose(ifile);
+	ifile = NULL;
+      }
+    case 'q':               /* --quiet, --silent */
+      want_quiet = 1;
+      break;
+    case BRIEF_CODE:        /* --brief */
+      want_brief = 1;
+      break;
+    case 'v':               /* --verbose */
+      want_verbose = 1;
+      break;
+    case 'V':
+      printf ("netperf %s.%s.%s\n",
+	      NETPERF_VERSION,
+	      NETPERF_UPDATE,
+	      NETPERF_FIX);
+      exit (0);
+      
+    case 'h':
+      usage (0);
+      
+    default:
+      usage (EXIT_FAILURE);
     }
   }
   return optind;
@@ -1672,10 +1687,11 @@ struct netperf_cmd netperf_cmds[] = {
 static int
 process_command(xmlNodePtr cmd)
 {
+  int loc_debug = 0;
   int rc = NPE_SUCCESS;
   struct netperf_cmd *which_cmd;
   
-  if (debug) {
+  if (debug || loc_debug) {
     fprintf(where,"process_command: received %s command\n",cmd->name);
     fflush(where);
   }
@@ -1776,6 +1792,8 @@ main (int argc, char **argv)
   xmlInitParser();
   xmlKeepBlanksDefault(0);
 
+  xmlDoValidityCheckingDefaultValue = 1;
+  xmlLoadExtDtdDefaultValue |= XML_COMPLETE_ATTRS;
   parse_xml_file(cname, (const xmlChar *)"netperf", &config_doc);
 
   netperf_init();

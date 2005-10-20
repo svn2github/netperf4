@@ -31,10 +31,16 @@ but you are not obligated to do so.  If you do not wish to do so,
 delete this exception statement from your version.
 
 */
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <unistd.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netdb.h>
 #include <poll.h>
 #include <sys/resource.h>
 #include <pthread.h>
@@ -348,18 +354,100 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
   fflush(dumploc);
 }
 
+/* for libtool, we have an extra level of indirection to "normalize"
+   the names of shared libraries, which means we have to open that
+   file and look for the line with the "real" platform-specific shared
+   library name.  that or use the liblt stuff, which does not appear
+   to be thread-safe, or the documentation is very out of date. raj
+   2005-10-10 */
+
+void
+map_la_to_lib(xmlChar *la, char *lib) {
+
+  FILE *la_file;
+  int ret;
+  char *last_paren;
+  char s1[132];
+  char name[NETPERF_MAX_TEST_LIBRARY_NAME];
+  char *s2=name;
+  char *dlname=NULL;
+  char *libdir=NULL;
+
+  la_file = fopen((char *)la,"r");
+  if (la_file != NULL) {
+    /* time to start trapsing through the file */
+    while ((ret = fscanf(la_file,
+                         "%s",
+                         s1)) != EOF) {
+      if (ret == 1) {
+        /* algorithm depends on only one dlname and one libdir line in file */
+        ret = sscanf(s1,"dlname='%s",s2);
+        if (ret == 1) { 
+          /* we got our match. because %s matches until the next white space
+             the trailing single quote is in the string, which means we need
+             to nuke it */
+          last_paren = strchr(s2,'\'');
+          if (last_paren != NULL) {
+            *last_paren = '\0';
+          }
+          dlname = s2;
+          s2 = s2 + 1 + strlen(dlname);
+          if ((dlname != NULL) && (libdir != NULL)) {
+            break;
+          }
+        } else {
+          ret = sscanf(s1,"libdir='%s",s2);
+          if (ret == 1) {
+            /* we got our match. because %s matches until the next white space
+               the trailing single quote is in the string, which means we need
+               to nuke it */
+            last_paren = strchr(s2,'\'');
+            if (last_paren != NULL) {
+              *last_paren = '\0';
+            }
+            libdir = s2;
+            s2 = s2 + 1 + strlen(libdir);
+            if ((dlname != NULL) && (libdir != NULL)) {
+              break;
+            }
+          }
+        }
+      }
+      /* "digest" the rest of the line, adapted from some stuff
+         found in a web search */
+      fscanf(la_file,"%*[^\n]");   /* Skip to the End of the Line */
+      fscanf(la_file,"%*1[\n]");   /* Skip One Newline */
+      strcpy(lib,"dlnamefound");
+    }
+    strcpy(lib,libdir);
+    strcat(lib,"/");
+    strcat(lib,dlname);
+  }
+  else {
+    strcpy(lib,"libfilenotfound");
+  }
+  if (debug) {
+    printf("map_la_to_lib returning '%s' from '%s'\n",lib,(char *)la);
+  }
+}
 
 GenReport
 get_report_function(xmlNodePtr cmd)
 {
-  xmlChar  *lib_file;
+  int tmp = debug;
+  xmlChar  *la_file;
+  char      lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
   void     *lib_handle;
   xmlChar  *fname;
   GenReport func;
 
-  lib_file   = xmlGetProp(cmd, (const xmlChar *)"library");
+  la_file   = xmlGetProp(cmd, (const xmlChar *)"library");
+  map_la_to_lib(la_file,lib_file);
   if (debug) {
-    fprintf(where,"trying to open library file '%s'\n",(char *)lib_file);
+    fprintf(where,
+            "trying to open library file '%s' via '%s'\n",
+            lib_file,
+            (char *)la_file);
     fflush(where);
   }
   lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
@@ -381,12 +469,14 @@ get_report_function(xmlNodePtr cmd)
     }
     fflush(where);
   }
+  debug = tmp;
   return(func);
 }
 
 int
 get_test_function(test_t *test, xmlChar *func)
 {
+  int tmp = debug;
   void    *lib_handle = test->library_handle;
   xmlChar *fname;
   void    *fptr = NULL;
@@ -395,16 +485,21 @@ get_test_function(test_t *test, xmlChar *func)
   char     func_name[NETPERF_MAX_TEST_FUNCTION_NAME];
 
   if (lib_handle == NULL) {
-    xmlChar *lib_file;
+    xmlChar *la_file;
+    char lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
     /* load the library for the test */
-    lib_file   = xmlGetProp(test->node,(const xmlChar *)"library");
+    la_file   = xmlGetProp(test->node,(const xmlChar *)"library");
+    map_la_to_lib(la_file,lib_file);
     if (debug) {
-      fprintf(where,"trying to open library file '%s'\n",(char *)lib_file);
+      fprintf(where,
+              "trying to open library file '%s' via '%s'\n",
+              lib_file,
+              (char *)la_file);
       fflush(where);
     }
     lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
     if (debug) {
-      fprintf(where,"open of library file '%s' returned %p\n",
+      fprintf(where,"dlopen of library file '%s' returned handle %p\n",
               (char *)lib_file, lib_handle);
       if (lib_handle == NULL) {
         fprintf (where,"dlopen error '%s'\n",dlerror());
@@ -513,6 +608,7 @@ get_test_function(test_t *test, xmlChar *func)
       fflush(where);
     }
   }
+  debug = tmp;
   return(rc);
 }
 
@@ -552,6 +648,7 @@ launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
       rc = NPE_SUCCESS;
     }
   }
+  return(rc);
 }
 
 
@@ -601,10 +698,11 @@ establish_listen(char *hostname, char *service, int af, socklen_t *addrlenp)
 
   if (debug) {
     fprintf(where,
-      "establish_listen: called with host '%s' service '%s' socklen %d\n",
-      hostname,
-      service,
-      len);
+	    "establish_listen: host '%s' service '%s' af %d socklen %d\n",
+	    hostname,
+	    service,
+	    af,
+	    len);
     fflush(where);
   }
 
@@ -1130,8 +1228,8 @@ send_control_message(const int control_sock,
   if ((doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
     /* zippity do dah */
     doc->standalone = 0;
-    if ((dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",
-                                  NULL,DTD_FILE)) != NULL) {
+    dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",NULL,DTD_FILE);
+    if (dtd != NULL) {
       if (((message_header = xmlNewNode(NULL,(xmlChar *)"message")) != NULL) &&
           (xmlSetProp(message_header,(xmlChar *)"tonid",nid) != NULL) &&
           (xmlSetProp(message_header,(xmlChar *)"fromnid",fromnid) != NULL)) {

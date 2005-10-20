@@ -128,7 +128,6 @@ process_message(server_t *server, xmlDocPtr doc)
   int rc = NPE_SUCCESS;
   int cur_state = 0;
   xmlChar *fromnid;
-  xmlChar *tonid;
   xmlNodePtr msg;
   xmlNodePtr cur;
   struct msgs *which_msg;
@@ -145,7 +144,6 @@ process_message(server_t *server, xmlDocPtr doc)
     return(rc);
   }
   fromnid = xmlGetProp(msg,(const xmlChar *)"fromnid");
-  tonid   = xmlGetProp(msg,(const xmlChar *)"tonid");
 
   if (server != NULL)  cur_state = 1 << server->state;
     
@@ -313,7 +311,7 @@ send_version_message(server_t *server, xmlChar *fromnid)
 int
 error_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 {
-  int loc_debug = 1;
+  int loc_debug = 0;
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
   test_t    *test;

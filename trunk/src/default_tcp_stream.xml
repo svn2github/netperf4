@@ -1,5 +1,5 @@
 <?xml version="1.0" standalone="no" ?>
-<!DOCTYPE commands SYSTEM "../netperf/netperf_docs.dtd" >        
+<!DOCTYPE commands SYSTEM "./netperf_docs.dtd" >        
 <commands xmlns="http://www.netperf.org/ns/netperf">
 <!-- 20 second TCP_STREAM test -->
   <create_test_set set_name="s0" tests_in_set="t0,t1,t2" />
@@ -18,6 +18,6 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s1" 
-     library="nettest_bsd.sl"
+     library="nettest_bsd.la"
      function="report_bsd_test_results" />
 </commands>

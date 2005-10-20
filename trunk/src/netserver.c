@@ -30,25 +30,50 @@ delete this exception statement from your version.
 #include <termios.h>
 #include <grp.h>
 #include <pwd.h>
+
 */
 
-#include <stdio.h>
-#include <sys/types.h>
-
-#ifndef HAVE_GETOPT_LONG
-#include "missing/getopt.h"
+#ifdef HAVE_CONFIG_H
+#include "config.h"
 #endif
 
+#include <stdio.h>
+#include <signal.h>
+
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+
+#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include <errno.h>
 
+#ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+
+#include <poll.h>
 
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+
+#ifndef HAVE_GETOPT_LONG
+#include "missing/getopt.h"
+#else
+#include <getopt.h>
+#endif
+
 
 #include "netperf.h"
 #include "netlib.h"
@@ -57,7 +82,7 @@ extern struct msgs NS_Msgs;
 
 struct msgs *np_msg_handler_base = &NS_Msgs;
 
-int debug =0;
+int debug = 0;
 
 /* gcc does not like intializing where here */
 FILE *where;
@@ -77,13 +102,14 @@ FILE      *ofile;
 int        want_quiet;                                  /* --quiet, --silent */
 int        want_brief;                                  /* --brief */
 int        want_verbose;                                /* --verbose */
+int        forground = 1;
 char      *listen_port = NETPERF_DEFAULT_SERVICE_NAME;  /* --port */
 uint16_t   listen_port_num = 0;                         /* --port */
-char local_host_name[1024];
-int  local_address_family = AF_UNSPEC;
+char      *local_host_name       = NULL;
+int        local_address_family  = AF_UNSPEC;
 
-char	arg1[BUFSIZ],  /* argument holders		*/
-        arg2[BUFSIZ];
+char	local_host_name_buf[BUFSIZ];
+char    local_addr_fam_buf[BUFSIZ];
 
 /* getopt_long return codes */
 enum {DUMMY_CODE=129
@@ -96,6 +122,7 @@ static struct option const long_options[] =
   {"input", required_argument, 0, 'i'},
   {"config", required_argument, 0, 'c'},
   {"debug", no_argument, 0, 'd'},
+  {"forground", no_argument, 0, 'f'},
   {"quiet", no_argument, 0, 'q'},
   {"local", required_argument, 0, 'L'},
   {"silent", no_argument, 0, 'q'},
@@ -138,6 +165,7 @@ decode_command_line (int argc, char **argv)
 
   while ((c = getopt_long (argc, argv,
 			   "d"  /* debug */
+			   "f"  /* forground */
 			   "L:" /* local control sock address info */
                            "o:" /* output */
                            "p:" /* port */
@@ -152,20 +180,24 @@ decode_command_line (int argc, char **argv)
 	case 'd':               /* --debug */
 	  debug++;
 	  break;
+        case 'f':               /* --forground */
+          forground = 1;
+          break;
 	case 'L':
-	  break_args_explicit(optarg,arg1,arg2);
-	  if (arg1[0]) {
-	    strncpy(local_host_name,arg1,sizeof(local_host_name));
+	  break_args_explicit(optarg,local_host_name_buf,local_addr_fam_buf);
+	  if (local_host_name_buf[0]) {
+            local_host_name = &local_host_name_buf[0];
 	  }
-	  if (arg2[0]) {
-	    local_address_family = parse_address_family(arg2);
+	  if (local_addr_fam_buf[0]) {
+	    local_address_family = parse_address_family(local_addr_fam_buf);
 	    /* if only the address family was set, we may need to set the
 	       local_host_name accordingly. since our defaults are IPv4
 	       this should only be necessary if we have IPv6 support raj
 	       2005-02-07 */  
 #if defined (AF_INET6)
-	    if (!arg1[0]) {
-	      strncpy(local_host_name,"::0",sizeof(local_host_name));
+	    if (!local_host_name_buf[0]) {
+	      strncpy(local_host_name_buf,"::0",sizeof(local_host_name_buf));
+              local_host_name = &local_host_name_buf[0];
 	    }
 #endif
 	  }
@@ -337,9 +369,109 @@ instantiate_netperf( int sock )
     }
     xmlFreeDoc(message);
   } /* end of while */
+  return(rc);
 }
 
+/* daemonize will fork a daemon into the background, freeing-up the
+   shell prompt for other uses. I suspect that for non-Unix OSes,
+   something other than fork() may be required? raj 2/98 */
+void
+daemonize()
+{
 
+  /* fork off - only the client will return, the parent will exit */
+  
+  switch (fork()) {
+  case -1:
+    /* something went wrong */
+    perror("netserver fork error");
+    exit(-1);
+  case 0:
+    /* we are the child process. set ourselves up ad the session
+       leader so we detatch from the parent, and then return to the
+       caller so he can do whatever it is he wants to do */
+
+    fclose(stdin);
+    fclose(stderr);
+
+    setsid();
+
+    /* not all OSes have SIGCLD as SIGCHLD */
+#ifndef SIGCLD
+#define SIGCLD SIGCHLD
+#endif /* SIGCLD */
+    
+    signal(SIGCLD, SIG_IGN);
+
+    break;
+  default:
+    /* we are the parent process - the one invoked from the
+       shell. since the first child will detach itself, we can just go
+       ahead and slowly fade away */
+    exit(0);
+  }
+}
+
+static void
+setup_listen_endpoint(char service[]) {
+
+  struct sockaddr  name;
+  struct sockaddr *peeraddr     = &name;
+  int              namelen      = sizeof(name);
+  int              peerlen      = namelen;
+  int              peeraddr_len = namelen;
+  int              sock;
+  int              rc;
+  int              listenfd     = 0;
+  /*
+     if we were given a port number on the command line open a socket.
+     Otherwise, if fd 0 is a socket then assume netserver was called by
+     inetd and the socket and connection where created by inetd.
+     Otherwise, use the default service name to open a socket.
+   */
+
+  if (service != NULL) {
+    /* we are not a child of inetd start a listen socket */
+    listenfd = establish_listen(local_host_name,
+                                service,
+                                local_address_family,
+                                &peerlen);
+
+    if (listenfd == -1) {
+      fprintf(where,"netserver_init: failed to open listen socket\n");
+      fflush(where);
+      exit(1);
+    }
+
+    if (peerlen > namelen) {
+      peeraddr = (struct sockaddr *)malloc (peerlen);
+      peeraddr_len = peerlen;
+    }
+
+    if (!forground) {
+      daemonize();
+    }
+
+    if ((sock = accept(listenfd,peeraddr,&peerlen)) == -1) {
+      fprintf(where,"netserver_init: accept failed\n");
+      fflush(where);
+      exit(1);
+    }
+    if (debug) {
+      fprintf(where,
+              "netserver_init: accepted connection on sock %d\n",
+              sock);
+      fflush(where);
+    }
+
+    rc = instantiate_netperf(sock);
+    if (rc != NPE_SUCCESS) {
+      fprintf(where, "netserver_init: instantiate_netperf  error %d\n",rc);
+      fflush(where);
+      exit;
+    }
+  }
+}
 
 /* Netserver initialization */
 static void
@@ -580,10 +712,17 @@ check_test_state()
   }
 }
 
+
+static void
+accopt_netperf_connections()
+{
+}
 
+
 static void
 handle_netperf_requests()
 {
+  int loc_debug = 0;
   int rc = NPE_SUCCESS;
   struct pollfd fds;
   xmlDocPtr     message;
@@ -626,7 +765,7 @@ handle_netperf_requests()
         }
       }
     } else {
-      if (debug) {
+      if (debug || loc_debug) {
         fprintf(where,"ho hum, nothing to do\n");
         fflush(where);
         report_test_status(netperf);
@@ -665,7 +804,46 @@ main (int argc, char **argv)
   xmlInitParser();
   xmlKeepBlanksDefault(0);
 
+  xmlDoValidityCheckingDefaultValue = 1;
+  xmlLoadExtDtdDefaultValue |= XML_COMPLETE_ATTRS;
+
+  /* initialize basic data structures and stuff that needs to be done
+     whether we are a child of inetd or not. raj 2005-10-11 */
   netserver_init();
+
+  /* so, are we a child of inetd or the like, and if not, should we
+     daemonize? if we are given a port number on which we should
+     listen, or if stdin is not a socket, then we need to setup a
+     listen endpoint, and we may want to daemonize. otherwise, if we
+     are a child of inet or the like, we just want to start processing
+     requests. raj 2005-10-11 */
+
+#ifdef OFF
+  if (0 == listen_port_num) {
+    if (getsockname(0, &name, &namelen) == -1) {
+      /* we may not be a child of inetd */
+#ifdef WIN32
+      if (WSAGetLastError() == WSAENOTSOCK) {
+        setup_listen_endpoint(listen_port);
+      }
+#else
+      if (errno == ENOTSOCK) {
+        setup_listen_endpoint(listen_port);
+      }
+#endif /* WIN32 */
+    }
+  } else {
+    /* we are a child of inetd, so just go ahead and do the right
+       thing. raj 2005-10-11 */
+    /* I wonder if this should be in handle_netperf_requests? */
+    rc = instantiate_netperf(sock);
+    if (rc != NPE_SUCCESS) {
+      fprintf(where, "netserver_init: instantiate_netperf  error %d\n",rc);
+      fflush(where);
+      exit;
+    }
+  }
+#endif
   handle_netperf_requests();
 }
 

@@ -7,7 +7,17 @@ information is in the manual, which can be found in doc/ in the
 directory where you are finding this readme file. The sources should
 be (mostly) in src/
 
+Of course, as of this writing, the manual in doc/ is actually for
+netperf2... :( So, all that "BE SURE TO READ THE MANUAL" business is
+pretty much bunk for now.
+
 BE SURE TO READ THE MANUAL. EVEN THOUGH IT MAY BE OUTDATED.
+
+Pointers:
+
+The netperf4 benchmark depends on libxml2.  You must have libxml2 and
+its development environment installed prior to building netperf4.
+
 
 There is a COPYRIGHT file included.  It is called COPYING because that
 is what autosomethingorother wanted.   Netperf4 is covered by version
@@ -25,9 +35,14 @@ which people can submit results.
 There is an Internet mailing list devoted to netperf. Both netperf4
 and netperf2 (ie the original netperf) are discussed there. It is
 called netperf-talk and it is hosted on netperf.org. Subscription
-requests should go to netperf-talk-request@netperf.org.
+requests are handled via
 
-Please DO NOT SEND subscription requests to netperf-talk!
+http://www.netperf.org/cgi-bin/mailman/listinfo/netperf-talk
+
+Please DO NOT SEND subscription requests to netperf-talk!  Your
+message will be rejected because only subscribers can send email to
+netperf-talk@netperf.org.  It may seem a bit draconian, but is done to
+minimize spam on the mailing list.
 
 If you run into severe difficulties, or are just feeling chatty,
 please feel free to drop some email to me - Rick Jones

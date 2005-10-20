@@ -2,15 +2,15 @@
 # Process this file with autoconf to produce a configure script.
 
 FULL-PACKAGE-NAME=netperf
-VERSION=4.0.0alpha1
+VERSION=4.0.0alpha2
 BUG-REPORT-ADDRESS=netperf-feedback@netperf.org
 
 AC_PREREQ(2.59)
-AC_INIT(netperf, 4.0.0alpha1)
+AC_INIT(netperf, 4.0.0alpha2)
 # use the target version rather than host - one day we may want cross-compile
 AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR([src/hist.h])
-AM_INIT_AUTOMAKE(netperf, 4.0.0alpha1)
+AM_INIT_AUTOMAKE(netperf, 4.0.0alpha2)
 AM_CONFIG_HEADER(config.h)
 # AC_CONFIG_HEADER(config.h)
 
@@ -99,7 +99,7 @@ if test "x$have_libxml2"="xyes"; then
 	libxml2_cflags=`xml2-config --cflags`
 	libxml2_libs=`xml2-config --libs`
 else
-	AC_MSG_ERROR(Cannot find libpreludeDB.)
+	AC_MSG_ERROR(Cannot find xml2-config.)
 fi
 
 # see if we should be enabling histogram support
