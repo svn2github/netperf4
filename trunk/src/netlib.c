@@ -1088,13 +1088,14 @@ recv_control_message(int control_sock, xmlDocPtr *message)
      being asked for a massive message size, but for now, we will
      simply check the return value on the malloc() call :) raj
      2003-03-06 */
-  if ((message_base = malloc(bytes_left)) == NULL) {
+  if ((message_base = malloc(bytes_left+1)) == NULL) {
     fprintf(where,
             "recv_control_messsage: unable to allocate %u bytes for inbound message\n",
             bytes_left);
     fflush(where);
     return(NPE_MALLOC_FAILED1);
   }
+  memset(message_base,'\0',bytes_left+1);  /* cover fprintf problem */
 
   read_ptr = message_base;
 

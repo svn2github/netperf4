@@ -603,21 +603,30 @@ instantiate_netservers()
       new_server->id        = netserverid;
       if (add_server_to_hash(new_server) == NPE_SUCCESS) {
         new_server->node      = this_netserver;
-        rc = instantiate_tests(this_netserver, new_server);
+        rc = pthread_rwlock_init(&new_server->rwlock, NULL);
+        if (rc) {
+          fprintf(where, "instaniate_netservers: ");
+          fprintf(where, "pthread_rwlock_init error %d\n", rc);
+          fflush(where);
+          rc == NPE_PTHREAD_RWLOCK_INIT_FAILED;
+        }
+        if (rc == NPE_SUCCESS) {
+          rc = instantiate_tests(this_netserver, new_server);
+        }
         if (rc == NPE_SUCCESS) { /* instantiate_tests was successful */
-          new_server->sock      = connect_netserver(config_doc,
-                                                    this_netserver,
-                                                    new_server);
-          if (new_server->sock == -1) {
-            /* connect netserver unhappy */
-            fprintf(where,"connect_netserver: Failed\n");
-            fflush(where);
-            new_server->state     = NSRV_PREINIT;
-            new_server->state_req = NSRV_PREINIT;
-            rc = NPE_CONNECT_FAILED;
-          }
-          new_server->state     = NSRV_CONNECTED;
-          new_server->state_req = NSRV_CONNECTED;
+            new_server->sock      = connect_netserver(config_doc,
+                                                      this_netserver,
+                                                      new_server);
+            if (new_server->sock == -1) {
+              /* connect netserver unhappy */
+              fprintf(where,"connect_netserver: Failed\n");
+              fflush(where);
+              new_server->state     = NSRV_PREINIT;
+              new_server->state_req = NSRV_PREINIT;
+              rc = NPE_CONNECT_FAILED;
+            }
+            new_server->state     = NSRV_CONNECTED;
+            new_server->state_req = NSRV_CONNECTED;
           rc = send_version_message(new_server, my_nid);
           if (rc == NPE_SUCCESS) {
             new_server->state     = NSRV_VERS;
@@ -650,25 +659,25 @@ wait_for_version_response(server_t *server)
   struct     pollfd fds;
   xmlDocPtr  message;
 
-  pthread_mutex_lock(server->lock);
   if (debug) {
     fprintf(where,"entering wait_for_version_response\n");
     fflush(where);
   }
+  pthread_mutex_lock(server->lock);
   while (server->state == NSRV_VERS) {
     fds.fd      = server->sock;
     fds.events  = POLLIN;
     fds.revents = 0;
     pthread_mutex_unlock(server->lock);
     if (poll(&fds,1,5000) > 0) {
-      pthread_mutex_lock(server->lock);
       if (debug) {
         fprintf(where,"wait_for_version_response ");
         fprintf(where,"calling recv_control_messaage\n");
         fflush(where);
       }
+      pthread_rwlock_rdlock(&server->rwlock);
       rc = recv_control_message(server->sock, &message);
-      pthread_mutex_unlock(server->lock);
+      pthread_rwlock_unlock(&server->rwlock);
       if (rc > 0) {
         if (debug) {
           fprintf(where,"wait_for_version_response ");
@@ -685,6 +694,7 @@ wait_for_version_response(server_t *server)
         } else {
           server->err_rc = rc;
         }
+        pthread_mutex_unlock(server->lock);
       }
     } else {
       if (debug) {
@@ -707,11 +717,11 @@ wait_for_version_response(server_t *server)
   if (rc != NPE_SUCCESS) {
     report_server_error(server);
   }
+  pthread_mutex_unlock(server->lock);
   if (debug) {
     fprintf(where,"exiting wait_for_version_response\n");
     fflush(where);
   }
-  pthread_mutex_unlock(server->lock);
   return rc;
 }
 
@@ -721,13 +731,19 @@ static void *initialize_test(void *data);
 static int
 resolve_dependency(xmlChar *id, xmlNodePtr *data)
 {
-  int          rc = NPE_DEPENDENCY_NOT_PRESENT;
-  int          hash_value;
-  test_t      *test;
-  test_hash_t *h;
+  int              rc = NPE_DEPENDENCY_NOT_PRESENT;
+  int              hash_value;
+  test_t          *test;
+  test_hash_t     *h;
+  struct timespec  delta_time;
+  struct timespec  abstime;
 
+  delta_time.tv_sec  = 1;
+  delta_time.tv_nsec = 0;
+  
   *data = NULL;
 
+   
   /* find the dependency in the hash list */
   hash_value = TEST_HASH_VALUE(id);
   h = &(test_hash[hash_value]);
@@ -736,6 +752,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
   while (test != NULL) {
     if (!xmlStrcmp(test->id,id)) {
 
+#ifdef OFF
       /* found the test we depend on check its state */
       if (test->state_req == TEST_PREINIT) {
         /* test is not yet initialized initialize it */
@@ -753,16 +770,20 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
           break;
         } 
       } /* end of test initilization */
-
+#endif
       /* wait for test to initialize */
       while (test->state == TEST_PREINIT) {
+        pthread_mutex_unlock(&h->hash_lock);
         if (debug) {
           fprintf(where,
-                  "resolve_dependency: waiting on thread %d\n",
+                  "resolve_dependency: waiting on test %s thread %d\n",
+                  (char *)id,
                   test->tid);
           fflush(where);
         }
-        rc = pthread_cond_wait(&h->condition, &h->hash_lock);
+        pthread_mutex_lock(&h->hash_lock);
+        get_expiration_time(&delta_time,&abstime);
+        rc = pthread_cond_timedwait(&h->condition, &h->hash_lock, & abstime);
         if (debug) {
             fprintf(where,
                     "resolve_dependency: pthread_cond_wait exited %d\n",rc);
@@ -774,11 +795,14 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
       if (test->state != TEST_ERROR) {
         if (test->dependent_data != NULL) {
           *data = test->dependent_data;
+          pthread_mutex_unlock(&h->hash_lock);
           rc = NPE_SUCCESS;
           if (debug) {
-            fprintf(where,"resolve_dependency: successful\n");
+            fprintf(where,"resolve_dependency: successful for %s\n",
+                    (char *)id);
             fflush(where);
           }
+          pthread_mutex_lock(&h->hash_lock);
         } else {
           rc = NPE_DEPENDENCY_NOT_PRESENT;
         }
@@ -843,12 +867,12 @@ initialize_test(void *data)
         }  
       }
       /* is the lock around the send required? */
-      pthread_mutex_lock(server->lock);
+      pthread_rwlock_wrlock(&server->rwlock);
       rc = send_control_message(server->sock,
                                 msg,
                                 server->id,
                                 my_nid);
-      pthread_mutex_unlock(server->lock);
+      pthread_rwlock_unlock(&server->rwlock);
     } else {
       rc = NPE_INIT_TEST_XMLCOPYNODE_FAILED;
     }
@@ -900,8 +924,10 @@ initialize_tests(server_t *server)
             test->err_fn = "initialize_tests";
           };
         }
-        /* restart the chain just incase an entry was inserted or deleted */
-        test = h->test;
+        /* should we restart the chain just incase an entry was inserted
+           or deleted?  no for now   sgb 2005-10-25 */
+        /* test = h->test; */
+        test = test->next;
       } else {
         /* test initialization has already been requested try next test */
         test = test->next;
@@ -936,9 +962,9 @@ static void *netperf_worker(void *data)
     fds.revents = 0;
     pthread_mutex_unlock(server->lock);
     if (poll(&fds,1,5000) > 0) {
-      pthread_mutex_lock(server->lock);
+      pthread_rwlock_rdlock(&server->rwlock);
       rc = recv_control_message(server->sock, &message);
-      pthread_mutex_unlock(server->lock);
+      pthread_rwlock_unlock(&server->rwlock);
       if (rc > 0) {
         rc = process_message(server, message);
       } else {
@@ -992,12 +1018,12 @@ launch_worker_threads()
     while (server != NULL) {
       if (server->state_req == NSRV_INIT) {
         /* netserver worker thread needs to be started */
+        pthread_mutex_unlock(&h->hash_lock);
         if (debug) {
           fprintf(where,"launching thread for netserver %s\n",server->id);
           fflush(where);
         }
         /* netserver worker thread is not yet initialized start it */
-        pthread_mutex_unlock(&h->hash_lock);
         rc = launch_thread(&server->tid, netperf_worker, server);
         if (debug) {
           fprintf(where,"launched thread %d for netserver %s\n",
@@ -1025,12 +1051,17 @@ launch_worker_threads()
 static int
 wait_for_tests_to_initialize()
 {
-  int          rc = NPE_SUCCESS;
-  int          prc;
-  int          i;
-  server_t    *server;
-  test_t      *test;
-  test_hash_t *h;
+  int              rc = NPE_SUCCESS;
+  int              prc;
+  int              i;
+  server_t        *server;
+  test_t          *test;
+  test_hash_t     *h;
+  struct timespec  delta_time;
+  struct timespec  abstime;
+
+  delta_time.tv_sec  = 1;
+  delta_time.tv_nsec = 0;
 
   if (debug) {
     fprintf(where,"entering wait_for_tests_to_initialize\n");
@@ -1046,9 +1077,9 @@ wait_for_tests_to_initialize()
           rc = NPE_TEST_FOUND_IN_ERROR_STATE;
           break;
         }
-        sleep(1);
         /* test is not yet initialized wait for it */
-        prc = pthread_cond_wait(&h->condition, &h->hash_lock);
+        get_expiration_time(&delta_time,&abstime);
+        prc = pthread_cond_timedwait(&h->condition, &h->hash_lock, &abstime);
         if (prc != 0) {
           fprintf(where,
             "wait_for_tests_to_initialize: pthread_cond_wait failed %d\n",prc);
@@ -1741,6 +1772,8 @@ process_commands_and_events()
      end of default command file commands */
 
   /* parse command file */
+  fprintf(where,"parsing command file %s\n",iname);
+  fflush(where);
   commands = parse_xml_file(iname, (const xmlChar *)"commands", &doc);
 
   /* execute commands and events in a loop */

@@ -31,6 +31,9 @@ typedef struct server_instance {
   xmlChar          *id;          /* the id of the server instance. used
                                     in searches and as sanity checks  */
 
+  pthread_rwlock_t rwlock;       /* the mutex used to ensure exclusive
+                                    access to this servers resources */
+
   pthread_mutex_t  *lock;        /* the mutex used to ensure exclusive
                                     access to this servers resources */
 
@@ -196,7 +199,7 @@ typedef struct test_instance {
 } test_t;
 
 
-#define TEST_HASH_BUCKETS 8
+#define TEST_HASH_BUCKETS 16
 #define TEST_HASH_VALUE(id)  ((atoi((char *)id + 1)) % TEST_HASH_BUCKETS)
 
 
@@ -263,7 +266,7 @@ typedef struct test_set_hash_elt {
 /* Error codes to be used within Netperf4 */
 #define NPE_MIN_ERROR_NUM -1023
 enum {
-  NPE_MAX_ERROR_NUM = NPE_MIN_ERROR_NUM,
+  NPE_MAX_ERROR_NUM = NPE_MIN_ERROR_NUM,   /* -1023 */
   NPE_COMMANDED_TO_EXIT_NETPERF,
   NPE_TEST_SET_NOT_FOUND,
   NPE_BAD_TEST_RANGE,
@@ -273,7 +276,7 @@ enum {
   NPE_TEST_NOT_FOUND,
   NPE_TEST_FOUND_IN_ERROR_STATE,
   NPE_TEST_INITIALIZED_FAILED,
-  NPE_TEST_INIT_FAILED,
+  NPE_TEST_INIT_FAILED,                       /* -1013 */
   NPE_INIT_TEST_XMLCOPYNODE_FAILED,
   NPE_INIT_TEST_XMLNEWDOC_FAILED,
   NPE_EMPTY_MSG,
@@ -281,7 +284,9 @@ enum {
   NPE_ALREADY_CONNECTED,
   NPE_BAD_VERSION,
   NPE_XMLCOPYNODE_FAILED,
-  NPE_PTHREAD_COND_WAIT_FAILED,
+  NPE_PTHREAD_MUTEX_INIT_FAILED,
+  NPE_PTHREAD_RWLOCK_INIT_FAILED,
+  NPE_PTHREAD_COND_WAIT_FAILED,               /* -1003 */
   NPE_PTHREAD_DETACH_FAILED,
   NPE_PTHREAD_CREATE_FAILED,
   NPE_DEPENDENCY_NOT_PRESENT,
@@ -290,7 +295,7 @@ enum {
   NPE_FUNC_NAME_TOO_LONG,
   NPE_FUNC_NOT_FOUND,
   NPE_LIBRARY_NOT_LOADED,
-  NPE_ADD_TO_EVENT_LIST_FAILED,
+  NPE_ADD_TO_EVENT_LIST_FAILED,               /*  -993 */
   NPE_CONNECT_FAILED,
   NPE_MALLOC_FAILED6,
   NPE_MALLOC_FAILED5,
@@ -299,7 +304,7 @@ enum {
   NPE_MALLOC_FAILED2,
   NPE_MALLOC_FAILED1,
   NPE_REMOTE_CLOSE,
-  NPE_SEND_VERSION_XMLNEWNODE_FAILED,
+  NPE_SEND_VERSION_XMLNEWNODE_FAILED,         /*  -983 */
   NPE_SEND_VERSION_XMLSETPROP_FAILED,
   NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED,
   NPE_SEND_CTL_MSG_XMLCOPYNODE_FAILED,
@@ -335,6 +340,8 @@ const char *NP_ERROR_NAMES[] = {
   "NPE_ALREADY_CONNECTED",
   "NPE_BAD_VERSION",
   "NPE_XMLCOPYNODE_FAILED",
+  "NPE_PTHREAD_MUTEX_INIT_FAILED",
+  "NPE_PTHREAD_RWLOCK_INIT_FAILED",
   "NPE_PTHREAD_COND_WAIT_FAILED",
   "NPE_PTHREAD_DETACH_FAILED",
   "NPE_PTHREAD_CREATE_FAILED",

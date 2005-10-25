@@ -71,11 +71,10 @@ char    nettest_id[]="\
 /****************************************************************/
 
 
-
+#include <stdio.h>
 #include <values.h>
 #include <unistd.h>
 #include <string.h>
-#include <stdio.h>
 #include <errno.h>
 
 #ifdef OFF
@@ -1139,6 +1138,10 @@ recv_tcp_stream(test_t *test)
                               BSDE_DATA_RECV_ERROR,
                               "data_recv_error");
         }
+      } else {
+        /* how do we deal with a closed connection in the loaded state */
+        fprintf(where,"\nWE JUST GOT A CLOSE INDICATION !!!!!!!!!!!!!!!!\n\n");
+        fflush(where);
       }
       /* code to timestamp enabled by HISTOGRAM */
       HIST_TIMESTAMP(&time_two);
@@ -2247,8 +2250,8 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
           }
         }
         elapsed_seconds = test_cntr[TST_E_SEC] + test_cntr[TST_E_USEC]/1000000;
-        xmit_rate       = test_cntr[TST_X_BYTES]/(elapsed_seconds * 1000000);
-        recv_rate       = test_cntr[TST_R_BYTES]/(elapsed_seconds * 1000000);
+        xmit_rate       = test_cntr[TST_X_BYTES]*8/(elapsed_seconds*1000000);
+        recv_rate       = test_cntr[TST_R_BYTES]*8/(elapsed_seconds*1000000);
         xmit_trans_rate = test_cntr[TST_X_TRANS]/elapsed_seconds;
         recv_trans_rate = test_cntr[TST_R_TRANS]/elapsed_seconds;
         if (debug || loc_debug) {

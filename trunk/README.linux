@@ -1,0 +1,9 @@
+Until I can find a way to get the configure script ot add it
+automagically, you need to define something along the lines of
+_GNU_SOURCE in CPPFLAGS when doing the configure:
+
+CPPFLAGS="-D_GNU_SOURCE" ./configure
+
+Otherwise, the ever-so-helpful Linux (debian at least) build
+environment will not find things like the posix_rwlock_t that are
+seemingly so easily found on other platforms (eg HP-UX).
