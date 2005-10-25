@@ -1229,7 +1229,7 @@ send_control_message(const int control_sock,
   if ((doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
     /* zippity do dah */
     doc->standalone = 0;
-    dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",NULL,DTD_FILE);
+    dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",NULL,NETPERF_DTD_FILE);
     if (dtd != NULL) {
       if (((message_header = xmlNewNode(NULL,(xmlChar *)"message")) != NULL) &&
           (xmlSetProp(message_header,(xmlChar *)"tonid",nid) != NULL) &&

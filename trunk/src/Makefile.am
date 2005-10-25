@@ -16,6 +16,11 @@ COMMON_SRC = hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netconfidence.
 netperf_SOURCES = netperf.c $(COMMON_SRC)
 netserver_SOURCES = netserver.c $(COMMON_SRC)
 
+# in theory this will cause these header files to be put in the
+# installed headers location, where folks who want to make their own
+# test libraries can find them
+include_HEADERS = netperf.h netconfidence.h
+
 # in theory, the stuff below should deal with creating the requisite libs
 lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
 

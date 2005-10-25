@@ -1,4 +1,5 @@
-<?xml version="1.0"?><!DOCTYPE texinfo PUBLIC "-//GNU//DTD TexinfoML V4.7//EN" "http://www.gnu.org/software/texinfo/dtd/4.7/texinfo.dtd">
+<?xml version="1.0"?>
+<!DOCTYPE texinfo PUBLIC "-//GNU//DTD TexinfoML V4.8//EN" "http://www.gnu.org/software/texinfo/dtd/4.8/texinfo.dtd">
 <texinfo xml:lang="en">
   <setfilename>netperf4.xml</setfilename>
   <settitle>Care and Feeding of Netperf 4.X.X</settitle>
