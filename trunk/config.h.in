@@ -42,6 +42,9 @@
 /* Define to 1 if you have the `gettimeofday' function. */
 #undef HAVE_GETTIMEOFDAY
 
+/* Define to 1 if you have the `get_expiration_time' function. */
+#undef HAVE_GET_EXPIRATION_TIME
+
 /* Define to one to include ICSC-EXS tests. */
 #undef HAVE_ICSC_EXS
 

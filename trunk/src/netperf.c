@@ -783,7 +783,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
         }
         pthread_mutex_lock(&h->hash_lock);
         get_expiration_time(&delta_time,&abstime);
-        rc = pthread_cond_timedwait(&h->condition, &h->hash_lock, & abstime);
+        rc = pthread_cond_timedwait(&h->condition, &h->hash_lock, &abstime);
         if (debug) {
             fprintf(where,
                     "resolve_dependency: pthread_cond_wait exited %d\n",rc);

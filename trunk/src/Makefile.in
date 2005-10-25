@@ -199,7 +199,8 @@ netserver_LDFLAGS =
 DEFAULT_INCLUDES =  -I. -I$(srcdir) -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
-@AMDEP_TRUE@DEP_FILES = $(DEPDIR)/missing/getaddrinfo.Po \
+@AMDEP_TRUE@DEP_FILES = $(DEPDIR)/missing/get_expiration_time.Po \
+@AMDEP_TRUE@	$(DEPDIR)/missing/getaddrinfo.Po \
 @AMDEP_TRUE@	$(DEPDIR)/missing/getopt.Po \
 @AMDEP_TRUE@	$(DEPDIR)/missing/getopt1.Po \
 @AMDEP_TRUE@	$(DEPDIR)/missing/inet_ntop.Po \
@@ -218,7 +219,8 @@ LINK = $(LIBTOOL) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
 DIST_SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) \
 	$(netperf_SOURCES) $(netserver_SOURCES)
-DIST_COMMON = $(srcdir)/Makefile.in Makefile.am missing/getaddrinfo.c \
+DIST_COMMON = $(srcdir)/Makefile.in Makefile.am \
+	missing/get_expiration_time.c missing/getaddrinfo.c \
 	missing/getopt.c missing/getopt1.c missing/inet_ntop.c
 SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
 
@@ -305,6 +307,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/get_expiration_time.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getaddrinfo.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getopt.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getopt1.Po@am__quote@

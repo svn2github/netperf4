@@ -71,7 +71,7 @@ AC_CHECK_FUNCS([alarm bzero gethostbyname gethrtime gettimeofday inet_ntoa memse
 
 #AC_CONFIG_SUBDIRS(src/missing)
 
-# does this platform need the replacement getaddrinfo
+# does this platform need the replacement getaddrinfo or other
 AC_CHECK_FUNCS([getnameinfo getaddrinfo inet_ntop getopt_long])
 # AC_REPLACE_FUNCS([getaddrinfo])
 
@@ -90,6 +90,12 @@ if test "$ac_cv_func_getopt_long" != yes ; then
    AC_LIBOBJ(missing/getopt1)
 fi 
 
+AC_CHECK_FUNCS([get_expiration_time])
+if test "$ac_cv_func_get_expiration_time" != yes ; then
+   AC_MSG_NOTICE([Requesting replacement get_expiration_time])
+   AC_LIBOBJ(missing/get_expiration_time)
+fi 
+   
 AC_CHECK_FUNCS(sendfile)
 
 AC_CHECK_FUNCS(mpctl processor_bind sched_setaffinity bind_to_cpu_id)
