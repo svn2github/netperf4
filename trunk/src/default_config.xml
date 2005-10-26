@@ -5,7 +5,7 @@
 <netserver nid="n1" >
   <test tid="t0"
     test_name = "sys_stats"
-    library   = "netsystats.la" >
+    library   = "netsysstats.la" >
   </test>
   <test tid="t1"
     test_name = "send_tcp_stream"

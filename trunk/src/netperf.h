@@ -14,6 +14,12 @@
 #define NETPERF_UPDATE  (const xmlChar *)"0"
 #define NETPERF_FIX     (const xmlChar *)"999"
 
+#ifndef WIN32
+#define NETPERF_PATH_SEP "/"
+#else
+#define NETPERF_PATH_SEP "\\"
+#endif
+
 /* a set of server_t's will exist in the netperf process and will
    describe everything that netperf needs to know about a server
    instance (ie remote netserver). */

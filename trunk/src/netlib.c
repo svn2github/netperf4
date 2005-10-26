@@ -36,11 +36,34 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
+#ifdef HAVE_SYS_TYPES_H
+#include <sys/types.h>
+#endif
+
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+
+#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+
+#ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+
+#ifdef HAVE_NETDB_H
 #include <netdb.h>
+#endif
+
 #include <poll.h>
 #include <sys/resource.h>
 #include <pthread.h>
@@ -359,7 +382,21 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
    file and look for the line with the "real" platform-specific shared
    library name.  that or use the liblt stuff, which does not appear
    to be thread-safe, or the documentation is very out of date. raj
-   2005-10-10 */
+   2005-10-10
+
+   for those who are making their own test libraries, we do not want
+   to dictate they use libtool, so if the "la" file actually ends in
+   something other than ".la" we will ass-u-me that it is an actual
+   library file and pass that back unscathed.  at some point this will
+   also be the place where we follow LD_LIBRARY_PATH and the like so
+   one does not have to fully-qualify the names. raj 2005-10-25
+
+   this is not the prettiest code ever produced.  it could and
+   probably should be a lot cleaner, but messing with pointers and
+   strings has never been a great deal of fun.
+
+   we probably need to check if "la" is already a fully qualified path
+   name and simply pass it back if it is...  */
 
 void
 map_la_to_lib(xmlChar *la, char *lib) {
@@ -372,59 +409,119 @@ map_la_to_lib(xmlChar *la, char *lib) {
   char *s2=name;
   char *dlname=NULL;
   char *libdir=NULL;
+  int file_len;
+  char *temp;
+  char *ld_library_path = NULL;
+  char full_path[PATH_MAX];
+  char *last;
+  char *s;
 
-  la_file = fopen((char *)la,"r");
-  if (la_file != NULL) {
-    /* time to start trapsing through the file */
-    while ((ret = fscanf(la_file,
-                         "%s",
-                         s1)) != EOF) {
-      if (ret == 1) {
-        /* algorithm depends on only one dlname and one libdir line in file */
-        ret = sscanf(s1,"dlname='%s",s2);
-        if (ret == 1) { 
-          /* we got our match. because %s matches until the next white space
-             the trailing single quote is in the string, which means we need
-             to nuke it */
-          last_paren = strchr(s2,'\'');
-          if (last_paren != NULL) {
-            *last_paren = '\0';
-          }
-          dlname = s2;
-          s2 = s2 + 1 + strlen(dlname);
-          if ((dlname != NULL) && (libdir != NULL)) {
-            break;
-          }
-        } else {
-          ret = sscanf(s1,"libdir='%s",s2);
-          if (ret == 1) {
-            /* we got our match. because %s matches until the next white space
-               the trailing single quote is in the string, which means we need
-               to nuke it */
-            last_paren = strchr(s2,'\'');
-            if (last_paren != NULL) {
-              *last_paren = '\0';
-            }
-            libdir = s2;
-            s2 = s2 + 1 + strlen(libdir);
-            if ((dlname != NULL) && (libdir != NULL)) {
-              break;
-            }
-          }
-        }
-      }
-      /* "digest" the rest of the line, adapted from some stuff
-         found in a web search */
-      fscanf(la_file,"%*[^\n]");   /* Skip to the End of the Line */
-      fscanf(la_file,"%*1[\n]");   /* Skip One Newline */
-      strcpy(lib,"dlnamefound");
+
+  /* if we have no environment variables, this will not be
+     overwritten */
+  strncpy(full_path,(char *)la,PATH_MAX);
+
+  /* for now, we will first look for NETPERF_LIBRARY_PATH, then
+     LD_LIBRARY_PATH, then SHLIB_PATH. raj 2005-10-25 */
+  temp = getenv("NETPERF_LIBRARY_PATH");
+  if (NULL == temp) {
+    temp = getenv("LD_LIBRARY_PATH");
+    if (NULL == temp) {
+      /* OK, there was no LD_LIBRARY_PATH, was there a SHLIB_PATH? I
+	 wonder which if these should have precedence? */
+      temp = getenv("SHLIB_PATH");
     }
-    strcpy(lib,libdir);
-    strcat(lib,"/");
-    strcat(lib,dlname);
+  }
+
+  if (NULL != temp) {
+    ld_library_path = malloc(strlen(temp)+1);
+  }
+
+  if (NULL != ld_library_path) {
+    /* OK, start trapsing down the path until we find a match */
+    strcpy(ld_library_path,temp);
+    s = ld_library_path;
+    while ((temp = strtok_r(s,":",&last)) != NULL) {
+      struct stat buf;
+      s = NULL;
+      snprintf(full_path,PATH_MAX,"%s%s%s",temp,NETPERF_PATH_SEP,la);
+      if (stat(full_path,&buf) == 0) {
+	/* we have a winner, time to go */
+	break;
+      }
+      else {
+	/* put-back the original la file */
+	strncpy(full_path,(char *)la,PATH_MAX);
+      }
+    }
+  }
+
+  /* so, after all that, is it really a ".la" file or is it some other
+     file. I wonder if we should ask that first and then ass-u-me that
+     the dlopen will do the right thing instead of doing all the stuff
+     with the environment variables - only looking at them if it is an
+     "la" file?  raj 2005-10-26 */
+  file_len = strlen(full_path);
+  if ((full_path[file_len-1] != 'a') ||
+      (full_path[file_len-2] != 'l') ||
+      (full_path[file_len-3] != '.')) {
+    /* we will ass-u-me it is an actual library file name */
+    strcpy(lib,full_path);
   }
   else {
-    strcpy(lib,"libfilenotfound");
+    la_file = fopen(full_path,"r");
+    if (la_file != NULL) {
+      /* time to start trapsing through the file */
+      while ((ret = fscanf(la_file,
+			   "%s",
+			   s1)) != EOF) {
+	if (ret == 1) {
+	  /* algorithm depends on only one dlname and one libdir line in file */
+	  ret = sscanf(s1,"dlname='%s",s2);
+	  if (ret == 1) { 
+	    /* we got our match. because %s matches until the next white space
+	       the trailing single quote is in the string, which means we need
+	       to nuke it */
+	    last_paren = strchr(s2,'\'');
+	    if (last_paren != NULL) {
+	      *last_paren = '\0';
+	    }
+	    dlname = s2;
+	    s2 = s2 + 1 + strlen(dlname);
+	    if ((dlname != NULL) && (libdir != NULL)) {
+	      break;
+	    }
+	  } else {
+	    ret = sscanf(s1,"libdir='%s",s2);
+	    if (ret == 1) {
+	      /* we got our match. because %s matches until the next white space
+		 the trailing single quote is in the string, which means we need
+		 to nuke it */
+	      last_paren = strchr(s2,'\'');
+	      if (last_paren != NULL) {
+		*last_paren = '\0';
+	      }
+	      libdir = s2;
+	      s2 = s2 + 1 + strlen(libdir);
+	      if ((dlname != NULL) && (libdir != NULL)) {
+		break;
+	      }
+	    }
+	  }
+	}
+	/* "digest" the rest of the line, adapted from some stuff
+	   found in a web search */
+	fscanf(la_file,"%*[^\n]");   /* Skip to the End of the Line */
+	fscanf(la_file,"%*1[\n]");   /* Skip One Newline */
+	strcpy(lib,"dlnamefound");
+      }
+      strcpy(lib,libdir);
+      strcat(lib,NETPERF_PATH_SEP);
+      strcat(lib,dlname);
+    }
+    else {
+      strcpy(lib,"libfilenotfound");
+    }
   }
   if (debug) {
     printf("map_la_to_lib returning '%s' from '%s'\n",lib,(char *)la);
