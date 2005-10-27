@@ -39,9 +39,11 @@ delete this exception statement from your version.
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
+
 #if HAVE_INTTYPES_H
 # include <inttypes.h>
 #else
@@ -49,9 +51,23 @@ delete this exception statement from your version.
 #  include <stdint.h>
 # endif
 #endif
+
+#ifdef HAVE_STRING_H
+#include <string.h>
+#endif
+
+#ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+
+#ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
+#endif
+
+#ifdef HAVE_FCNTL_H
 #include <fcntl.h>
+#endif 
+
 #include <errno.h>
 
 #include "netperf.h"
@@ -75,9 +91,6 @@ enum {
   LINUX_SYS_STATS_SUCCESS = 0
 };
 
-extern int   debug;
-FILE  *where;
-
 int                 ticks;
 
 struct timeval      prev_time;
@@ -87,10 +100,13 @@ struct timeval      total_elapsed_time;
 struct timeval      delta_elapsed_time;
 
 int
-sys_cpu_util_init(netsysstat_data_t *tsd) 
+sys_cpu_util_init(test_t *test) 
 {
-  where = stderr;
+
   int err;
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   if ((tsd->num_cpus = sysconf(_SC_NPROCESSORS_ONLN)) == -1) {
     return(LINUX_SYS_STATS_SYSCONF_FAILED);
@@ -127,20 +143,23 @@ sys_cpu_util_init(netsysstat_data_t *tsd)
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
 		      struct timeval *time,
-		      netsysstat_data_t *tsd)
+		      test_t *test)
 {
 
   int i,space,records;
   char *p = proc_stat_buf;
   char cpunam[64];
   uint64_t nicetime;
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   lseek (proc_stat_fd, 0, SEEK_SET);
   read (proc_stat_fd, p, proc_stat_buflen);
   
-  if (debug) {
-    fprintf(where,"proc_stat_buf %s\n",p);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"proc_stat_buf %s\n",p);
+    fflush(test->where);
   }
   /* Skip first line (total) on SMP */
   if (tsd->num_cpus > 1) p = strchr (p, '\n');
@@ -158,21 +177,21 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     res[i].other = 0;
     res[i].interrupt = 0;
 
-    if(debug) {
-      fprintf(where,
+    if(test->debug) {
+      fprintf(test->where,
 	      "\tidle[%d] = 0x%"PRIx64" ",
 	      i,
 	      res[i].idle);
-      fprintf(where,
+      fprintf(test->where,
 	      "user[%d] = 0x%"PRIx64" ",
 	      i,
 	      res[i].user);
-      fprintf(where,
+      fprintf(test->where,
 	      "kern[%d] = 0x%"PRIx64" ",
 	      i,
 	      res[i].kernel);
-      fflush(where);
-      fprintf(where,
+      fflush(test->where);
+      fprintf(test->where,
 	      "intr[%d] = 0x%"PRIx64"\n",
 	      i,
 	      res[i].interrupt);

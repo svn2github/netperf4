@@ -14,6 +14,12 @@
 #define NETPERF_UPDATE  (const xmlChar *)"0"
 #define NETPERF_FIX     (const xmlChar *)"999"
 
+#define NETPERF_DEBUG_ENTRY(d,w) \
+  if (d) { \
+    fprintf(w,"DEBUG entering function %s\n",__func__); \
+    fflush(w); \
+  }
+
 #ifndef WIN32
 #define NETPERF_PATH_SEP "/"
 #else
@@ -119,7 +125,12 @@ typedef struct test_instance {
                                   to reach the test instance */
 
   xmlNodePtr node;             /* the xml document node containing the
-                                  tests configuration data */
+                                  test's configuration data */
+
+  uint32_t   debug;            /* should the test routine generate
+				  debug output */
+
+  FILE       *where;           /* where that debug output should go */
 
   uint32_t   state;            /* the state netperf or netserver believes the
                                   test instance to be in at the moment.

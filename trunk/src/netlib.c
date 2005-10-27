@@ -102,6 +102,7 @@ break_args(char *s, char *arg1, char *arg2)
 
 {
   char *ns;
+
   ns = strchr(s,',');
   if (ns) {
     /* there was a comma arg2 should be the second arg*/
@@ -128,6 +129,7 @@ break_args_explicit(char *s, char *arg1, char *arg2)
 
 {
   char *ns;
+
   ns = strchr(s,',');
   if (ns) {
     /* there was a comma arg2 should be the second arg*/
@@ -153,6 +155,7 @@ parse_address_family(char family_string[])
 {
 
   char temp[10];  /* gotta love magic constants :) */
+
 
   strncpy(temp,family_string,10);
 
@@ -279,6 +282,7 @@ display_test_hash()
 {
   int i;
   test_t * test;
+
   if (debug) {
     for (i=0;i < TEST_HASH_BUCKETS; i++) {
       test = test_hash[i].test;
@@ -297,6 +301,7 @@ int
 add_test_to_hash(test_t *new_test)
 {
   int hash_value;
+
 
   hash_value = TEST_HASH_VALUE(new_test->id);
 
@@ -319,6 +324,7 @@ find_test_in_hash(const xmlChar *id)
 
   int hash_value;
   test_t *test_pointer;
+
 
   hash_value = TEST_HASH_VALUE(id);
 
@@ -538,6 +544,7 @@ get_report_function(xmlNodePtr cmd)
   xmlChar  *fname;
   GenReport func;
 
+
   la_file   = xmlGetProp(cmd, (const xmlChar *)"library");
   map_la_to_lib(la_file,lib_file);
   if (debug) {
@@ -580,6 +587,7 @@ get_test_function(test_t *test, xmlChar *func)
   int      fnlen = 0;
   int      rc = NPE_FUNC_NAME_TOO_LONG;
   char     func_name[NETPERF_MAX_TEST_FUNCTION_NAME];
+
 
   if (debug) {
     fprintf(where,"get_test_func enter test %p func %s\n",test, func);
@@ -732,6 +740,7 @@ launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
   int rc;
   pthread_t temp_tid;
 
+
   rc = pthread_create(&temp_tid, (pthread_attr_t *)NULL, start_routine, data);
   if (rc != 0) {
     if (debug) {
@@ -769,6 +778,7 @@ launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
 int
 strtofam(xmlChar *familystr)
 {
+
   if (debug) {
     fprintf(where, "strtofam called with %s\n", familystr);
     fflush(where);
@@ -1141,6 +1151,7 @@ recv_control_message(int control_sock, xmlDocPtr *message)
 
   struct timeval timeout;
 
+
   /* one of these days, we probably aught to make sure that what
      message points to is NULL... but only as a debug assert... raj
      2003-03-05 */
@@ -1333,6 +1344,7 @@ send_control_message(const int control_sock,
   char *control_message;
   int  control_message_len;
 
+
   if (debug) {
     fprintf(where,
             "send_control_message: called with sock %d and message node at %p",
@@ -1426,6 +1438,8 @@ void
 report_server_error(server_t *server)
 {
   int i;
+
+
   i = server->err_rc - NPE_MIN_ERROR_NUM;
   fprintf(where,
           "server %s entered error state %d from %s error code %d %s\n",

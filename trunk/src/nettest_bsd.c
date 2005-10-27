@@ -30,7 +30,7 @@ delete this exception statement from your version.
 */
 #ifndef lint
 char    nettest_id[]="\
-@(#)nettest_bsd.c (c) Copyright 2005 Hewlett-Packard Co. Version 4.0.0";
+@(#)nettest_bsd.c (c) Copyright 2005 Hewlett-Packard Co. $Id$";
 #else
 #define DIRTY
 #define HISTOGRAM
@@ -86,9 +86,6 @@ char    nettest_id[]="\
 
 #include "netperf.h"
 
-static int debug = 0;
-FILE *where;
-
 #ifdef HISTOGRAM
 #include "hist.h"
 #else
@@ -123,10 +120,10 @@ report_test_failure(test, function, err_code, err_string)
   int     err_code;
   char   *err_string;
 {
-  if (debug) {
-    fprintf(where,"%s: called report_test_failure:",function);
-    fprintf(where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"%s: called report_test_failure:",function);
+    fprintf(test->where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
+    fflush(test->where);
   }
   test->err_rc    = err_code;
   test->err_fn    = function;
@@ -177,11 +174,6 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
 static int
 strtofam(xmlChar *familystr)
 {
-  if (debug) {
-    fprintf(where, "strtofam called with %s\n", familystr);
-    fflush(where);
-  }
-
   if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET")) {
     return(AF_INET);
   } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_UNSPEC")) {
@@ -192,8 +184,6 @@ strtofam(xmlChar *familystr)
 #endif /* AF_INET6 */
   } else {
     /* we should never get here if the validator is doing its thing */
-    fprintf(where, "strtofam: unknown address family %s\n",familystr);
-    fflush(where);
     return(-1);
   }
 }
@@ -233,25 +223,25 @@ get_dependency_data(test_t *test, int type, int protocol)
                             &hints, &remote_ai);
     count += 1;
     if (error == EAI_AGAIN) {
-      if (debug) {
-        fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
-        fflush(where);
+      if (test->debug) {
+        fprintf(test->where,"Sleeping on getaddrinfo EAI_AGAIN\n");
+        fflush(test->where);
       }
       sleep(1);
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
     
-  if (debug) {
-    dump_addrinfo(where, remote_ai, remotehost, remoteport, remotefam);
+  if (test->debug) {
+    dump_addrinfo(test->where, remote_ai, remotehost, remoteport, remotefam);
   }
 
   if (!error) {
     my_data->remaddr = remote_ai;
   } else {
-    if (debug) {
-      fprintf(where,"get_dependency_data: getaddrinfo returned %d %s\n",
+    if (test->debug) {
+      fprintf(test->where,"get_dependency_data: getaddrinfo returned %d %s\n",
               error, gai_strerror(error));
-      fflush(where);
+      fflush(test->where);
     }
     report_test_failure(test,
                         "get_dependency_data",
@@ -454,9 +444,9 @@ create_data_socket(test)
     return(temp_socket);
   }
 
-  if (debug) {
-    fprintf(where,"create_data_socket: socket %d obtained...\n",temp_socket);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"create_data_socket: socket %d obtained...\n",temp_socket);
+    fflush(test->where);
   }
 
   /* Modify the local socket size. The reason we alter the send buffer */
@@ -482,11 +472,11 @@ create_data_socket(test)
                           "error setting local send socket buffer size");
       return(temp_socket);
     }
-    if (debug > 1) {
-      fprintf(where,
+    if (test->debug > 1) {
+      fprintf(test->where,
               "nettest_bsd: create_data_socket: SO_SNDBUF of %d requested.\n",
               lss_size);
-      fflush(where);
+      fflush(test->where);
     }
   }
 
@@ -499,11 +489,11 @@ create_data_socket(test)
                           "error setting local recv socket buffer size");
       return(temp_socket);
     }
-    if (debug > 1) {
-      fprintf(where,
+    if (test->debug > 1) {
+      fprintf(test->where,
               "nettest_bsd: create_data_socket: SO_RCVBUF of %d requested.\n",
               lsr_size);
-      fflush(where);
+      fflush(test->where);
     }
   }
 
@@ -517,10 +507,10 @@ create_data_socket(test)
                  SO_SNDBUF,
                  (char *)&lss_size,
                  &sock_opt_len) < 0) {
-    fprintf(where,
+    fprintf(test->where,
         "nettest_bsd: create_data_socket: getsockopt SO_SNDBUF: errno %d\n",
         errno);
-    fflush(where);
+    fflush(test->where);
     lss_size = -1;
   }
   if (getsockopt(temp_socket,
@@ -528,19 +518,19 @@ create_data_socket(test)
                  SO_RCVBUF,
                  (char *)&lsr_size,
                  &sock_opt_len) < 0) {
-    fprintf(where,
+    fprintf(test->where,
         "nettest_bsd: create_data_socket: getsockopt SO_RCVBUF: errno %d\n",
         errno);
-    fflush(where);
+    fflush(test->where);
     lsr_size = -1;
   }
-  if (debug) {
-    fprintf(where,
+  if (test->debug) {
+    fprintf(test->where,
             "nettest_bsd: create_data_socket: socket sizes determined...\n");
-    fprintf(where,
+    fprintf(test->where,
             "                       send: %d recv: %d\n",
             lss_size,lsr_size);
-    fflush(where);
+    fflush(test->where);
   }
 
 #else /* SO_SNDBUF */
@@ -562,9 +552,9 @@ create_data_socket(test)
                    SO_RCV_COPYAVOID,
                    &loc_rcvavoid,
                    sizeof(int)) < 0) {
-      fprintf(where,
+      fprintf(test->where,
               "nettest_bsd: create_data_socket: Could not enable receive copy avoidance");
-      fflush(where);
+      fflush(test->where);
       loc_rcvavoid = 0;
     }
   }
@@ -580,9 +570,9 @@ create_data_socket(test)
                    SO_SND_COPYAVOID,
                    &loc_sndavoid,
                    sizeof(int)) < 0) {
-      fprintf(where,
+      fprintf(test->where,
         "netperf: create_data_socket: Could not enable send copy avoidance\n");
-      fflush(where);
+      fflush(test->where);
       loc_sndavoid = 0;
     }
   }
@@ -605,16 +595,16 @@ create_data_socket(test)
                   TCP_NODELAY,
                   (char *)&one,
                   sizeof(one)) < 0) {
-      fprintf(where,
+      fprintf(test->where,
               "netperf: create_data_socket: nodelay: errno %d\n",
               errno);
-      fflush(where);
+      fflush(test->where);
     }
 
-    if (debug > 1) {
-      fprintf(where,
+    if (test->debug > 1) {
+      fprintf(test->where,
               "netperf: create_data_socket: TCP_NODELAY requested...\n");
-      fflush(where);
+      fflush(test->where);
     }
   }
 #else /* TCP_NODELAY */
@@ -654,8 +644,6 @@ bsd_test_init(test_t *test, int type, int protocol)
   struct addrinfo   hints;
   struct addrinfo  *local_ai;
   struct addrinfo  *local_temp;
-
-  where = stderr;
 
   /* allocate memory to store the information about this test */
   new_data = (bsd_data_t *)malloc(sizeof(bsd_data_t));
@@ -752,25 +740,25 @@ bsd_test_init(test_t *test, int type, int protocol)
                               &hints, &local_ai);
       count += 1;
       if (error == EAI_AGAIN) {
-        if (debug) {
-          fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"Sleeping on getaddrinfo EAI_AGAIN\n");
+          fflush(test->where);
         }
         sleep(1);
       }
     } while ((error == EAI_AGAIN) && (count <= 5));
     
-    if (debug) {
-      dump_addrinfo(where, local_ai, localhost, localport, localfam);
+    if (test->debug) {
+      dump_addrinfo(test->where, local_ai, localhost, localport, localfam);
     }
 
     if (!error) {
       new_data->locaddr = local_ai;
     } else {
-      if (debug) {
-        fprintf(where,"bsd_test_init: getaddrinfo returned %d %s\n",
+      if (test->debug) {
+        fprintf(test->where,"bsd_test_init: getaddrinfo returned %d %s\n",
                 error, gai_strerror(error));
-        fflush(where);
+        fflush(test->where);
       }
       report_test_failure(test,
                           "bsd_test_init",
@@ -844,10 +832,10 @@ bsd_test_get_stats(test_t *test)
 
   bsd_data_t *my_data = GET_TEST_DATA(test);
 
-  if (debug) {
-    fprintf(where,"bsd_test_get_stats: entered for %s test %s\n",
+  if (test->debug) {
+    fprintf(test->where,"bsd_test_get_stats: entered for %s test %s\n",
             test->id, test->test_name);
-    fflush(where);
+    fflush(test->where);
   }
   if ((stats = xmlNewNode(NULL,(xmlChar *)"test_stats")) != NULL) {
     /* set the properites of the test_stats message -
@@ -856,8 +844,8 @@ bsd_test_get_stats(test_t *test)
     ap = xmlSetProp(stats,(xmlChar *)"tid",test->id);
     for (i = 0; i < BSD_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
-      if (debug) {
-        fprintf(where,"BSD_COUNTER%X = %#llx\n",i,loc_cnt[i]);
+      if (test->debug) {
+        fprintf(test->where,"BSD_COUNTER%X = %#llx\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -865,34 +853,34 @@ bsd_test_get_stats(test_t *test)
       if (ap != NULL) {
         sprintf(value,"%#ld",my_data->curr_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"time_sec",(xmlChar *)value);
-        if (debug) {
-          fprintf(where,"time_sec=%s\n",value);
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"time_sec=%s\n",value);
+          fflush(test->where);
         }
       }
       if (ap != NULL) {
         sprintf(value,"%#ld",my_data->curr_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"time_usec",(xmlChar *)value);
-        if (debug) {
-          fprintf(where,"time_usec=%s\n",value);
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"time_usec=%s\n",value);
+          fflush(test->where);
         }
       }
     } else {
       if (ap != NULL) {
         sprintf(value,"%#ld",my_data->elapsed_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_sec",(xmlChar *)value);
-        if (debug) {
-          fprintf(where,"elapsed_sec=%s\n",value);
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"elapsed_sec=%s\n",value);
+          fflush(test->where);
         }
       }
       if (ap != NULL) {
         sprintf(value,"%#ld",my_data->elapsed_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_usec",(xmlChar *)value);
-        if (debug) {
-          fprintf(where,"elapsed_usec=%s\n",value);
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"elapsed_usec=%s\n",value);
+          fflush(test->where);
         }
       }
     }
@@ -904,9 +892,9 @@ bsd_test_get_stats(test_t *test)
         sprintf(value,"%#llx",my_data->stats.counter[i]);
         sprintf(name,"cntr%1X_value",i);
         ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value);
-        if (debug) {
-          fprintf(where,"%s=%s\n",name,value);
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"%s=%s\n",name,value);
+          fflush(test->where);
         }
       }
     }
@@ -915,10 +903,10 @@ bsd_test_get_stats(test_t *test)
       stats == NULL;
     }
   }
-  if (debug) {
-    fprintf(where,"bsd_test_get_stats: exiting for %s test %s\n",
+  if (test->debug) {
+    fprintf(test->where,"bsd_test_get_stats: exiting for %s test %s\n",
             test->id, test->test_name);
-    fflush(where);
+    fflush(test->where);
   }
   return(stats);
 }
@@ -1013,21 +1001,21 @@ recv_tcp_stream(test_t *test)
         firsttime = 0;
         recv_ring = my_data->recv_ring;
         recv_size = my_data->recv_size;
-        if (debug) {
-          dump_addrinfo(where, my_data->locaddr,
+        if (test->debug) {
+          dump_addrinfo(test->where, my_data->locaddr,
                         (xmlChar *)NULL, (xmlChar *)NULL, -1);
         }
-        if (debug) {
-          fprintf(where,"recv_tcp_stream:create_data_socket returned %d\n",
+        if (test->debug) {
+          fprintf(test->where,"recv_tcp_stream:create_data_socket returned %d\n",
                   s_listen);
-          fflush(where);
+          fflush(test->where);
         }
         rc = bind(s_listen, my_data->locaddr->ai_addr,
                    my_data->locaddr->ai_addrlen);
-        if (debug) {
-          fprintf(where,"recv_tcp_stream:bind returned %d  errno=%d\n",
+        if (test->debug) {
+          fprintf(test->where,"recv_tcp_stream:bind returned %d  errno=%d\n",
                   rc,errno);
-          fflush(where);
+          fflush(test->where);
         }
         if (len == -1) {
           report_test_failure(test,
@@ -1062,9 +1050,9 @@ recv_tcp_stream(test_t *test)
     case TEST_INIT:
       if (CHECK_REQ_STATE == TEST_IDLE) {
         peerlen = sizeof(peeraddr);
-        if (debug) {
-          fprintf(where,"recv_tcp_stream:waiting in accept\n");
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"recv_tcp_stream:waiting in accept\n");
+          fflush(test->where);
         }
         if ((s_data=accept(s_listen,
                           &peeraddr,
@@ -1074,10 +1062,10 @@ recv_tcp_stream(test_t *test)
                               BSDE_ACCEPT_FAILED,
                               "listen socket accept failed");
         } else {
-          if (debug) {
-            fprintf(where,"recv_tcp_stream:accept returned successfully %d\n",
+          if (test->debug) {
+            fprintf(test->where,"recv_tcp_stream:accept returned successfully %d\n",
                     s_data);
-            fflush(where);
+            fflush(test->where);
           }
           SET_TEST_STATE(TEST_IDLE);
         }
@@ -1140,8 +1128,8 @@ recv_tcp_stream(test_t *test)
         }
       } else {
         /* how do we deal with a closed connection in the loaded state */
-        fprintf(where,"\nWE JUST GOT A CLOSE INDICATION !!!!!!!!!!!!!!!!\n\n");
-        fflush(where);
+        fprintf(test->where,"\nWE JUST GOT A CLOSE INDICATION !!!!!!!!!!!!!!!!\n\n");
+        fflush(test->where);
       }
       /* code to timestamp enabled by HISTOGRAM */
       HIST_TIMESTAMP(&time_two);
@@ -1164,9 +1152,9 @@ recv_tcp_stream(test_t *test)
           } else {
             close(s_data);
             peerlen = sizeof(peeraddr);
-            if (debug) {
-              fprintf(where,"recv_tcp_stream:waiting in accept\n");
-              fflush(where);
+            if (test->debug) {
+              fprintf(test->where,"recv_tcp_stream:waiting in accept\n");
+              fflush(test->where);
             }
             if ((s_data=accept(s_listen,
                               &peeraddr,
@@ -1176,11 +1164,11 @@ recv_tcp_stream(test_t *test)
                                   BSDE_ACCEPT_FAILED,
                                   "listen socket accept failed");
             } else {
-              if (debug) {
-                fprintf(where,
+              if (test->debug) {
+                fprintf(test->where,
                         "recv_tcp_stream:accept returned successfully %d\n",
                         s_data);
-                fflush(where);
+                fflush(test->where);
               }
               SET_TEST_STATE(TEST_IDLE);
             }
@@ -1267,9 +1255,9 @@ send_tcp_stream(test_t *test)
       break;
     case TEST_INIT:
       if (CHECK_REQ_STATE == TEST_IDLE) {
-        if (debug) {
-          fprintf(where,"send_tcp_stream: in INIT state making connect call\n");
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"send_tcp_stream: in INIT state making connect call\n");
+          fflush(test->where);
         }
         if (connect(send_socket,
                     my_data->remaddr->ai_addr,
@@ -1279,9 +1267,9 @@ send_tcp_stream(test_t *test)
                               BSDE_CONNECT_FAILED,
                               "data socket connect failed");
         } else {
-          if (debug) {
-            fprintf(where,"send_tcp_stream: connected and moving to IDLE\n");
-            fflush(where);
+          if (test->debug) {
+            fprintf(test->where,"send_tcp_stream: connected and moving to IDLE\n");
+            fflush(test->where);
           }
           SET_TEST_STATE(TEST_IDLE);
         }
@@ -1367,9 +1355,9 @@ send_tcp_stream(test_t *test)
             close(send_socket);
             send_socket = create_data_socket(test);
             if (GET_TEST_STATE != TEST_ERROR) {
-              if (debug) {
-                fprintf(where,"send_tcp_stream: connecting from LOAD state\n");
-                fflush(where);
+              if (test->debug) {
+                fprintf(test->where,"send_tcp_stream: connecting from LOAD state\n");
+                fflush(test->where);
               }
               if (connect(send_socket,
                           my_data->remaddr->ai_addr,
@@ -1379,9 +1367,9 @@ send_tcp_stream(test_t *test)
                                     BSDE_CONNECT_FAILED,
                                     "data socket connect failed");
               } else {
-                if (debug) {
-                  fprintf(where,"send_tcp_stream: connected moving to IDLE\n");
-                  fflush(where);
+                if (test->debug) {
+                  fprintf(test->where,"send_tcp_stream: connected moving to IDLE\n");
+                  fflush(test->where);
                 }
                 SET_TEST_STATE(TEST_IDLE);
               }
@@ -1520,21 +1508,21 @@ recv_tcp_rr(test_t *test)
         recv_size = my_data->recv_size;
         send_ring = my_data->send_ring;
         send_size = my_data->send_size;
-        if (debug) {
-          dump_addrinfo(where, my_data->locaddr,
+        if (test->debug) {
+          dump_addrinfo(test->where, my_data->locaddr,
                         (xmlChar *)NULL, (xmlChar *)NULL, -1);
         }
-        if (debug || loc_debug) {
-          fprintf(where,"recv_tcp_rr:create_data_socket returned %d\n",
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"recv_tcp_rr:create_data_socket returned %d\n",
                   s_listen);
-          fflush(where);
+          fflush(test->where);
         }
         rc = bind(s_listen, my_data->locaddr->ai_addr,
                    my_data->locaddr->ai_addrlen);
-        if (debug || loc_debug) {
-          fprintf(where,"recv_tcp_rr:bind returned %d  errno=%d\n",
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"recv_tcp_rr:bind returned %d  errno=%d\n",
                   rc,errno);
-          fflush(where);
+          fflush(test->where);
         }
         if (len == -1) {
           report_test_failure(test,
@@ -1569,9 +1557,9 @@ recv_tcp_rr(test_t *test)
     case TEST_INIT:
       if (CHECK_REQ_STATE == TEST_IDLE) {
         peerlen = sizeof(peeraddr);
-        if (debug || loc_debug) {
-          fprintf(where,"recv_tcp_rr:waiting in accept\n");
-          fflush(where);
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"recv_tcp_rr:waiting in accept\n");
+          fflush(test->where);
         }
         if ((s_data=accept(s_listen,
                           &peeraddr,
@@ -1581,10 +1569,10 @@ recv_tcp_rr(test_t *test)
                               BSDE_ACCEPT_FAILED,
                               "listen socket accept failed");
         } else {
-          if (debug || loc_debug) {
-            fprintf(where,"recv_tcp_rr:accept returned successfully %d\n",
+          if (test->debug || loc_debug) {
+            fprintf(test->where,"recv_tcp_rr:accept returned successfully %d\n",
                     s_data);
-            fflush(where);
+            fflush(test->where);
           }
           SET_TEST_STATE(TEST_IDLE);
         }
@@ -1698,9 +1686,9 @@ recv_tcp_rr(test_t *test)
             recv(s_data, send_ring->buffer_ptr, send_size, 0);
             close(s_data);
             peerlen = sizeof(peeraddr);
-            if (debug || loc_debug) {
-              fprintf(where,"recv_tcp_rr:waiting in accept\n");
-              fflush(where);
+            if (test->debug || loc_debug) {
+              fprintf(test->where,"recv_tcp_rr:waiting in accept\n");
+              fflush(test->where);
             }
             if ((s_data=accept(s_listen,
                               &peeraddr,
@@ -1710,10 +1698,10 @@ recv_tcp_rr(test_t *test)
                                   BSDE_ACCEPT_FAILED,
                                   "listen socket accept failed");
             } else {
-              if (debug || loc_debug) {
-                fprintf(where,"recv_tcp_rr:accept returned successfully %d\n",
+              if (test->debug || loc_debug) {
+                fprintf(test->where,"recv_tcp_rr:accept returned successfully %d\n",
                         s_data);
-                fflush(where);
+                fflush(test->where);
               }
               SET_TEST_STATE(TEST_IDLE);
             }
@@ -1812,9 +1800,9 @@ send_tcp_rr(test_t *test)
       break;
     case TEST_INIT:
       if (CHECK_REQ_STATE == TEST_IDLE) {
-        if (debug) {
-          fprintf(where,"send_tcp_rr: in INIT state making connect call\n");
-          fflush(where);
+        if (test->debug) {
+          fprintf(test->where,"send_tcp_rr: in INIT state making connect call\n");
+          fflush(test->where);
         }
         if (connect(send_socket,
                     my_data->remaddr->ai_addr,
@@ -1824,9 +1812,9 @@ send_tcp_rr(test_t *test)
                               BSDE_CONNECT_FAILED,
                               "data socket connect failed");
         } else {
-          if (debug) {
-            fprintf(where,"send_tcp_rr: connected and moving to IDLE\n");
-            fflush(where);
+          if (test->debug) {
+            fprintf(test->where,"send_tcp_rr: connected and moving to IDLE\n");
+            fflush(test->where);
           }
           SET_TEST_STATE(TEST_IDLE);
         }
@@ -1934,9 +1922,9 @@ send_tcp_rr(test_t *test)
           close(send_socket);
           send_socket = create_data_socket(test);
           if (GET_TEST_STATE != TEST_ERROR) {
-            if (debug) {
-              fprintf(where,"send_tcp_rr: connecting from LOAD state\n");
-              fflush(where);
+            if (test->debug) {
+              fprintf(test->where,"send_tcp_rr: connecting from LOAD state\n");
+              fflush(test->where);
             }
             if (connect(send_socket,
                         my_data->remaddr->ai_addr,
@@ -1946,9 +1934,9 @@ send_tcp_rr(test_t *test)
                                   BSDE_CONNECT_FAILED,
                                   "data socket connect failed");
             } else {
-              if (debug) {
-                fprintf(where,"send_tcp_rr: connected moving to IDLE\n");
-                fflush(where);
+              if (test->debug) {
+                fprintf(test->where,"send_tcp_rr: connected moving to IDLE\n");
+                fflush(test->where);
               }
               SET_TEST_STATE(TEST_IDLE);
             }
@@ -2099,16 +2087,16 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
 
   if (my_data == NULL) {
     if (output) {
-      if (debug || loc_debug) {
-        fprintf(where,"report_bsd_test_results: report going to file %s\n",
+      if (test->debug || loc_debug) {
+        fprintf(test->where,"report_bsd_test_results: report going to file %s\n",
                 output);
-        fflush(where);
+        fflush(test->where);
       }
       outfd = fopen(output,"a");
     } else {
-      if (debug || loc_debug) {
-        fprintf(where,"report_bsd_test_results: report going to file stdout\n");
-        fflush(where);
+      if (test->debug || loc_debug) {
+        fprintf(test->where,"report_bsd_test_results: report going to file stdout\n");
+        fflush(test->where);
       }
       outfd = stdout;
     }
@@ -2129,10 +2117,10 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
   }
   if (max_count != my_data->max_count) {
     /* someone is playing games don't generate report*/
-    fprintf(where,"Max_count changed between invocations of %s\n",
+    fprintf(test->where,"Max_count changed between invocations of %s\n",
             "report_bsd_test_results");
-    fprintf(where,"exiting netperf now!!\n");
-    fflush(where);
+    fprintf(test->where,"exiting netperf now!!\n");
+    fflush(test->where);
     exit;
   }
   
@@ -2144,10 +2132,10 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
   sys_seconds   = 0.0;
   sys_util      = 0.0;
   set_elt = test_set->tests;
-  if (debug || loc_debug) {
-   fprintf(where,"test_set %s has %d tests looking for statistics\n",
+  if (test->debug || loc_debug) {
+   fprintf(test->where,"test_set %s has %d tests looking for statistics\n",
            test_set->id,test_set->num_tests);
-   fflush(where);
+   fflush(test->where);
   }
   while (set_elt != NULL) {
     int stats_for_test;
@@ -2155,28 +2143,28 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
     test   = set_elt->test;
     stats  = test->received_stats->xmlChildrenNode;
 
-    if (debug || loc_debug) {
+    if (test->debug || loc_debug) {
       if (stats) {
-        fprintf(where,"\ttest %s has '%s' statistics\n", test->id,stats->name);
+        fprintf(test->where,"\ttest %s has '%s' statistics\n", test->id,stats->name);
       } else {
-        fprintf(where,"\ttest %s has no statistics available!\n", test->id);
+        fprintf(test->where,"\ttest %s has no statistics available!\n", test->id);
       }
-      fflush(where);
+      fflush(test->where);
     }
 
     stats_for_test = 0;
     while(stats != NULL) {
       /* process all the statistics records for this test */
-      if (debug || loc_debug) {
-        fprintf(where,"\tfound some statistics");
-        fflush(where);
+      if (test->debug || loc_debug) {
+        fprintf(test->where,"\tfound some statistics");
+        fflush(test->where);
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"sys_stats")) {
         /* process system statistics */
         test_stats = 0;
-        if (debug || loc_debug) {
-          fprintf(where,"\tprocessing sys_stats\n");
-          fflush(where);
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"\tprocessing sys_stats\n");
+          fflush(test->where);
         }
         for (i=0; i<MAX_SYS_CNTRS; i++) {
           char *value_str =
@@ -2191,8 +2179,8 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
           } else {
             sys_cntr[i] = 0.0;
           }
-          if (debug || loc_debug) {
-            fprintf(where,"\t%12s sys_stats[%d] = %10g '%s'\n",
+          if (test->debug || loc_debug) {
+            fprintf(test->where,"\t%12s sys_stats[%d] = %10g '%s'\n",
                     sys_cntr_name[i], i, sys_cntr[i],
                     xmlGetProp(stats, (const xmlChar *)sys_cntr_name[i]));
           }
@@ -2206,14 +2194,14 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
         local_idle      = sys_cntr[IDLE] / calibration;
         local_busy      = (calibration-sys_cntr[IDLE])/calibration;
         
-        if (debug || loc_debug) {
-          fprintf(where,"\tnum_cpus        = %f\n",local_cpus);
-          fprintf(where,"\telapsed_seconds = %7.2f\n",elapsed_seconds);
-          fprintf(where,"\tidle_cntr       = %e\n",sys_cntr[IDLE]);
-          fprintf(where,"\tcalibrate_cntr  = %e\n",sys_cntr[CALIBRATE]);
-          fprintf(where,"\tlocal_idle      = %e\n",local_idle);
-          fprintf(where,"\tlocal_busy      = %e\n",local_busy);
-          fflush(where);
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"\tnum_cpus        = %f\n",local_cpus);
+          fprintf(test->where,"\telapsed_seconds = %7.2f\n",elapsed_seconds);
+          fprintf(test->where,"\tidle_cntr       = %e\n",sys_cntr[IDLE]);
+          fprintf(test->where,"\tcalibrate_cntr  = %e\n",sys_cntr[CALIBRATE]);
+          fprintf(test->where,"\tlocal_idle      = %e\n",local_idle);
+          fprintf(test->where,"\tlocal_busy      = %e\n",local_busy);
+          fflush(test->where);
         }
         if (stats_for_test == 0) {
           sys_stats_count++;
@@ -2226,9 +2214,9 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
       if(!xmlStrcmp(stats->name,(const xmlChar *)"test_stats")) {
         /* process test statistics */
         test_stats = 1;
-        if (debug || loc_debug) {
-          fprintf(where,"\tprocessing test_stats\n");
-          fflush(where);
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"\tprocessing test_stats\n");
+          fflush(test->where);
         }
         for (i=0; i<MAX_TEST_CNTRS; i++) {
           char *value_str =
@@ -2243,8 +2231,8 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
           } else {
             test_cntr[i] = 0.0;
           }
-          if (debug || loc_debug) {
-            fprintf(where,"\t%12s test_cntr[%2d] = %10g\t'%s'\n",
+          if (test->debug || loc_debug) {
+            fprintf(test->where,"\t%12s test_cntr[%2d] = %10g\t'%s'\n",
                     cntr_name[i], i, test_cntr[i],
                     xmlGetProp(stats, (const xmlChar *)cntr_name[i]));
           }
@@ -2254,16 +2242,16 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
         recv_rate       = test_cntr[TST_R_BYTES]*8/(elapsed_seconds*1000000);
         xmit_trans_rate = test_cntr[TST_X_TRANS]/elapsed_seconds;
         recv_trans_rate = test_cntr[TST_R_TRANS]/elapsed_seconds;
-        if (debug || loc_debug) {
-          fprintf(where,"\txmit_rate = %7g\t%7g\n",
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"\txmit_rate = %7g\t%7g\n",
                   xmit_rate, test_cntr[TST_X_BYTES]);
-          fprintf(where,"\trecv_rate = %7g\t%7g\n",
+          fprintf(test->where,"\trecv_rate = %7g\t%7g\n",
                   recv_rate, test_cntr[TST_R_BYTES]);
-          fprintf(where,"\txmit_trans_rate = %7g\t%7g\n",
+          fprintf(test->where,"\txmit_trans_rate = %7g\t%7g\n",
                   xmit_trans_rate, test_cntr[TST_X_TRANS]);
-          fprintf(where,"\trecv_trans_rate = %7g\t%7g\n",
+          fprintf(test->where,"\trecv_trans_rate = %7g\t%7g\n",
                   recv_trans_rate, test_cntr[TST_X_TRANS]);
-          fflush(where);
+          fflush(test->where);
         }
         if (sd_denominator == 0.0) {
           if (xmit_rate > 0.0 || recv_rate > 0.0) {
@@ -2272,18 +2260,18 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
             sd_denominator = 1.0;
           }
         }
-        if (debug || loc_debug) {
-          fprintf(where,"\tsd_denominator = %f\n",sd_denominator);
-          fflush(where);
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"\tsd_denominator = %f\n",sd_denominator);
+          fflush(test->where);
         }
         if (sd_denominator != 1.0) {
           result = recv_rate + xmit_rate;
         } else {
           result = recv_trans_rate + xmit_trans_rate;
         }
-        if (debug || loc_debug) {
-          fprintf(where,"\tresult    = %f\n",result);
-          fflush(where);
+        if (test->debug || loc_debug) {
+          fprintf(test->where,"\tresult    = %f\n",result);
+          fflush(test->where);
         }
         if (stats_for_test == 0) {
           test_stats_count++;
@@ -2307,12 +2295,12 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
     /* should only have one stats record for this test otherwise error */
     if (stats_for_test > 1) {
       /* someone is playing games don't generate report*/
-      fprintf(where,"More than one statistics measurement for test %d\n",
+      fprintf(test->where,"More than one statistics measurement for test %d\n",
               stats_for_test);
-      fprintf(where,"%s was not designed to deal with this.\n",
+      fprintf(test->where,"%s was not designed to deal with this.\n",
               "report_bsd_test_results");
-      fprintf(where,"exiting netperf now!!\n");
-      fflush(where);
+      fprintf(test->where,"exiting netperf now!!\n");
+      fflush(test->where);
       exit;
     }
           
@@ -2428,12 +2416,12 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
   /* should only have one system stats count otherwise error */
   if (sys_stats_count > 1) {
     /* someone is playing games don't generate report*/
-    fprintf(where,"More than one system statistics measurement %d\n",
+    fprintf(test->where,"More than one system statistics measurement %d\n",
             sys_stats_count);
-    fprintf(where,"%s was not designed to deal with this.\n",
+    fprintf(test->where,"%s was not designed to deal with this.\n",
             "report_bsd_test_results");
-    fprintf(where,"exiting netperf now!!\n");
-    fflush(where);
+    fprintf(test->where,"exiting netperf now!!\n");
+    fflush(test->where);
     exit;
   }
           

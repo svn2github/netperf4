@@ -48,6 +48,10 @@ delete this exception statement from your version.
 # endif
 #endif
 
+#ifdef HAVE_STRING_H
+#include <string.h>
+#endif
+
 #include <errno.h>
 
 #include "netperf.h"
@@ -70,14 +74,12 @@ enum {
   SYS_STATS_SUCCESS = 0
 };
 
-int    debug;
-extern FILE  *where;
-
 
 static void
-update_sys_stats(netsysstat_data_t *tsd)
+update_sys_stats(test_t *test)
 {
-  int loc_debug = 0;
+
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
   int        i;
   uint64_t   subtotal;
@@ -96,12 +98,14 @@ update_sys_stats(netsysstat_data_t *tsd)
   dtime->tv_usec = curr->tv_usec - prev->tv_usec;
   dtime->tv_sec  = curr->tv_sec  - prev->tv_sec;
 
-  if (loc_debug) {
-    fprintf(where,"\tdelta_sec  = %d\t%d\t%d\n",
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
+  if (test->debug) {
+    fprintf(test->where,"\tdelta_sec  = %d\t%d\t%d\n",
             dtime->tv_sec,curr->tv_sec,prev->tv_sec);
-    fprintf(where,"\tdelta_usec = %d\t%d\t%d\n",
+    fprintf(test->where,"\tdelta_usec = %d\t%d\t%d\n",
             dtime->tv_usec,curr->tv_usec,prev->tv_usec);
-    fflush(where);
+    fflush(test->where);
   }
 
   if (curr->tv_usec < prev->tv_usec) {
@@ -114,17 +118,17 @@ update_sys_stats(netsysstat_data_t *tsd)
     dtime->tv_sec++;
   }
 
-  if (loc_debug) {
-    fprintf(where,"\tdelta_sec  = %d\t%d\t%d\n",
+  if (test->debug) {
+    fprintf(test->where,"\tdelta_sec  = %d\t%d\t%d\n",
             dtime->tv_sec,curr->tv_sec,prev->tv_sec);
-    fprintf(where,"\tdelta_usec = %d\t%d\t%d\n",
+    fprintf(test->where,"\tdelta_usec = %d\t%d\t%d\n",
             dtime->tv_usec,curr->tv_usec,prev->tv_usec);
-    fflush(where);
+    fflush(test->where);
   }
 
-  if (loc_debug) {
-    fprintf(where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
+    fflush(test->where);
   }
 
   ttime->tv_sec += dtime->tv_sec;
@@ -135,9 +139,9 @@ update_sys_stats(netsysstat_data_t *tsd)
     ttime->tv_sec++;
   }
 
-  if (loc_debug) {
-    fprintf(where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
+    fflush(test->where);
   }
 
   for (i = 0; i < tsd->num_cpus; i++) {
@@ -190,11 +194,14 @@ report_test_failure(test, function, err_code, err_string)
   int     err_code;
   char   *err_string;
 {
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   test->err_no    = GET_ERRNO;
-  if (debug) {
-    fprintf(where,"%s: called report_test_failure:\n",function);
-    fprintf(where,"\nreporting  %s  errno = %d\n",err_string,test->err_no);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"%s: called report_test_failure:\n",function);
+    fprintf(test->where,"\nreporting  %s  errno = %d\n",err_string,test->err_no);
+    fflush(test->where);
   }
   test->err_rc    = err_code;
   test->err_fn    = function;
@@ -205,6 +212,7 @@ report_test_failure(test, function, err_code, err_string)
 static void
 clear_cpu_time_counters(cpu_time_counters_t *counters, int count) {
   int i;
+
   /* lets be paranoid */
   if (NULL != counters) {
     for (i=0;i<count;i++) {
@@ -226,6 +234,8 @@ sys_stats_clear_stats(test_t *test)
 {
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   tsd->total_elapsed_time.tv_usec = 0;
   tsd->total_elapsed_time.tv_sec  = 0;
   tsd->delta_elapsed_time.tv_usec = 0;
@@ -243,67 +253,74 @@ sys_stats_clear_stats(test_t *test)
 }
 
 static xmlAttrPtr
-set_stat_attribute(xmlNodePtr stats,char *name, uint32_t value)
+set_stat_attribute(test_t *test, xmlNodePtr stats,char *name, uint32_t value)
 {
   xmlAttrPtr  ap  = NULL;
   char        value_str[32];
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   sprintf(value_str,"%#ld",value);
   ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value_str);
-  if (debug) {
-    fprintf(where,"%s=%s\n",name,value_str);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"%s=%s\n",name,value_str);
+    fflush(test->where);
   }
   return(ap);
 }
 
 static xmlAttrPtr
-set_counter_attribute(xmlNodePtr stats,char *name, uint64_t value)
+set_counter_attribute(test_t *test, xmlNodePtr stats,char *name, uint64_t value)
 {
   xmlAttrPtr  ap  = NULL;
   char        value_str[32];
 
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   sprintf(value_str,"%#llx",value);
   ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value_str);
-  if (debug) {
-    fprintf(where,"%s=%s\n",name,value_str);
-    fflush(where);
+  if (test->debug) {
+    fprintf(test->where,"%s=%s\n",name,value_str);
+    fflush(test->where);
   }
   return(ap);
 }
 
 static xmlAttrPtr
-add_per_cpu_attributes(xmlNodePtr stats,
+add_per_cpu_attributes(test_t *test,
+		       xmlNodePtr stats,
                        cpu_time_counters_t *cpu,
                        uint32_t num_cpus)
 {
   int        i;
   xmlNodePtr cpu_stats = NULL;
   xmlAttrPtr ap        = NULL;
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
   
   for (i=0;i<num_cpus;i++) {
     if ((cpu_stats = xmlNewNode(NULL,(xmlChar *)"per_cpu_stats")) != NULL) {
       /* set the properites of the per_cpu_stats -
          the cpu_id counter values  sgb 2005-10-17 */
-      ap = set_stat_attribute(cpu_stats,"cpu_id",i);
+      ap = set_stat_attribute(test, cpu_stats,"cpu_id",i);
       if (ap != NULL) {
-        ap = set_counter_attribute(cpu_stats, "calibration", cpu[i].calibrate);
+        ap = set_counter_attribute(test, cpu_stats, "calibration", cpu[i].calibrate);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(cpu_stats, "idle_count",  cpu[i].idle);
+        ap = set_counter_attribute(test, cpu_stats, "idle_count",  cpu[i].idle);
       }
 #ifndef EXTRA_COUNTERS_MISSING
       if (ap != NULL) {
-        ap = set_counter_attribute(cpu_stats, "user_count",  cpu[i].user);
+        ap = set_counter_attribute(test, cpu_stats, "user_count",  cpu[i].user);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(cpu_stats, "sys_count",  cpu[i].kernel);
+        ap = set_counter_attribute(test, cpu_stats, "sys_count",  cpu[i].kernel);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(cpu_stats, "int_count",  cpu[i].interrupt);
+        ap = set_counter_attribute(test, cpu_stats, "int_count",  cpu[i].interrupt);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(cpu_stats, "other_count", cpu[i].other);
+        ap = set_counter_attribute(test, cpu_stats, "other_count", cpu[i].other);
       }
 #endif
       xmlAddChild(stats,cpu_stats);
@@ -327,10 +344,12 @@ sys_stats_get_stats(test_t *test)
   cpu_time_counters_t  *total_cpu  = tsd->total_cpu_counters;
   cpu_time_counters_t  *ending_cpu = tsd->ending_cpu_counters;
   
-  if (debug) {
-    fprintf(where,"sys_stats_get_stats: entering for %s test %s\n",
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
+  if (test->debug) {
+    fprintf(test->where,"sys_stats_get_stats: entering for %s test %s\n",
             test->id, test->test_name);
-    fflush(where);
+    fflush(test->where);
   }
 
   if ((stats = xmlNewNode(NULL,(xmlChar *)"sys_stats")) != NULL) {
@@ -342,62 +361,62 @@ sys_stats_get_stats(test_t *test)
       /* get_cpu_time_counters sets current timestamp */
       get_cpu_time_counters(tsd->ending_cpu_counters, &(tsd->curr_time), tsd);
       if (ap != NULL) {
-        ap = set_stat_attribute(stats,"time_sec",tsd->curr_time.tv_sec);
+        ap = set_stat_attribute(test, stats,"time_sec",tsd->curr_time.tv_sec);
       }
       if (ap != NULL) {
-        ap = set_stat_attribute(stats,"time_usec",tsd->curr_time.tv_usec);
+        ap = set_stat_attribute(test, stats,"time_usec",tsd->curr_time.tv_usec);
       }
       if (ap != NULL) {
-        ap = set_stat_attribute(stats,"number_cpus",tsd->num_cpus);
+        ap = set_stat_attribute(test, stats,"number_cpus",tsd->num_cpus);
       }
       if (ap != NULL) {
-        ap = add_per_cpu_attributes(stats, ending_cpu, tsd->num_cpus);
+        ap = add_per_cpu_attributes(test, stats, ending_cpu, tsd->num_cpus);
       }
     } else {
       if (ap != NULL) {
-        ap = set_stat_attribute(stats,
+        ap = set_stat_attribute(test, stats,
                                 "elapsed_sec",
                                 tsd->total_elapsed_time.tv_sec);
       }
       if (ap != NULL) {
-        ap = set_stat_attribute(stats,
+        ap = set_stat_attribute(test, stats,
                                 "elapsed_usec",
                                 tsd->total_elapsed_time.tv_usec);
       }
       if (ap != NULL) {
-        ap = set_stat_attribute(stats, "number_cpus", tsd->num_cpus);
+        ap = set_stat_attribute(test, stats, "number_cpus", tsd->num_cpus);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(stats, "calibration", total_sys->calibrate);
+        ap = set_counter_attribute(test, stats, "calibration", total_sys->calibrate);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(stats, "idle_count",  total_sys->idle);
+        ap = set_counter_attribute(test, stats, "idle_count",  total_sys->idle);
       }
 #ifndef EXTRA_COUNTERS_MISSING
       if (ap != NULL) {
-        ap = set_counter_attribute(stats, "user_count",  total_sys->user);
+        ap = set_counter_attribute(test, stats, "user_count",  total_sys->user);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(stats, "sys_count",  total_sys->kernel);
+        ap = set_counter_attribute(test, stats, "sys_count",  total_sys->kernel);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(stats, "int_count",  total_sys->interrupt);
+        ap = set_counter_attribute(test, stats, "int_count",  total_sys->interrupt);
       }
       if (ap != NULL) {
-        ap = set_counter_attribute(stats, "other_count", total_sys->other);
+        ap = set_counter_attribute(test, stats, "other_count", total_sys->other);
       }
 #endif
-      ap = add_per_cpu_attributes(stats,total_cpu, tsd->num_cpus);
+      ap = add_per_cpu_attributes(test,stats,total_cpu, tsd->num_cpus);
     }
     if (ap == NULL) {
       xmlFreeNode(stats);
       stats = NULL;
     }
   }
-  if (debug) {
-    fprintf(where,"sys_stats_get_stats: exiting for %s test %s\n",
+  if (test->debug) {
+    fprintf(test->where,"sys_stats_get_stats: exiting for %s test %s\n",
             test->id, test->test_name);
-    fflush(where);
+    fflush(test->where);
   }
   return(stats);
 }
@@ -406,6 +425,7 @@ sys_stats_get_stats(test_t *test)
 void
 sys_stats_decode_stats(xmlNodePtr stats, test_t *test)
 {
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 }
 
 void
@@ -417,34 +437,38 @@ sys_stats(test_t *test)
  
   netsysstat_data_t  *tsd;
 
-  tsd = (netsysstat_data_t *)malloc(sizeof(netsysstat_data_t));
-  memset(tsd,0,sizeof(netsysstat_data_t));
-  test->test_specific_data = tsd;
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
-  if (tsd == NULL) {
+  tsd = (netsysstat_data_t *)malloc(sizeof(netsysstat_data_t));
+
+  if (NULL == tsd) {
     report_test_failure(test,
                         "sys_stats",
                         SYS_STATS_MALLOC_FAILED,
                         "call to malloc failed");
   }
+  /* lets make sure we have a valid pointer before we go calling
+     memset, so put this after the if (tsd == NULL) bit... */
+  memset(tsd,0,sizeof(netsysstat_data_t));
+  test->test_specific_data = tsd;
   while ((GET_TEST_STATE != TEST_ERROR) &&
          (GET_TEST_STATE != TEST_DEAD)) {
     switch (GET_TEST_STATE) {
     case TEST_PREINIT:
       /* following allocates and initializes num_cpus, and psd
          in the netsysstat_data structure   sgb 2005-10-17 */
-      err = sys_cpu_util_init(tsd);
+      err = sys_cpu_util_init(test);
       num_cpus = tsd->num_cpus;
       if (num_cpus > 0) {
-        if (debug) {
-          fprintf(where,
+        if (test->debug) {
+          fprintf(test->where,
                   "sys_stats: allocating counters for %d cpus\n",
                   num_cpus);
-          fflush(where);
+          fflush(test->where);
         }
         tsd->total_sys_counters =
           (cpu_time_counters_t *)malloc(sizeof(cpu_time_counters_t));
-        memset(tsd->total_sys_counters,0,sizeof(netsysstat_data_t));
+
 	tsd->starting_cpu_counters = 
 	  (cpu_time_counters_t *)malloc(num_cpus * 
 					sizeof(cpu_time_counters_t));
@@ -457,16 +481,26 @@ sys_stats(test_t *test)
 	tsd->total_cpu_counters = 
 	  (cpu_time_counters_t *)malloc(num_cpus * 
 					sizeof(cpu_time_counters_t));
-        memset(tsd->total_cpu_counters,0,(num_cpus * 
-                                          sizeof(netsysstat_data_t)));
 
 	if ((NULL != tsd->total_sys_counters) && 
 	    (NULL != tsd->starting_cpu_counters) &&
 	    (NULL != tsd->ending_cpu_counters) &&
 	    (NULL != tsd->delta_cpu_counters) &&
 	    (NULL != tsd->total_cpu_counters)) {
+	  /* put the memset's here, once we know that the pointers are
+	     good. raj 2005-10-27 */
+	  memset(tsd->total_sys_counters,0,sizeof(netsysstat_data_t));
+	  memset(tsd->total_cpu_counters,0,
+		 (num_cpus * sizeof(netsysstat_data_t)));
           SET_TEST_STATE(TEST_INIT);
         } else {
+	  /* lets see about cleaning-up some memory shall we? */
+	  if (tsd->total_sys_counters) free(tsd->total_sys_counters);
+	  if (tsd->starting_cpu_counters) free(tsd->starting_cpu_counters);
+	  if (tsd->ending_cpu_counters) free(tsd->ending_cpu_counters);
+	  if (tsd->delta_cpu_counters) free(tsd->delta_cpu_counters);
+	  if (tsd->total_cpu_counters) free(tsd->total_cpu_counters);
+	  
           report_test_failure(test,
                               "sys_stats",
                               SYS_STATS_MALLOC_FAILED,
@@ -480,11 +514,11 @@ sys_stats(test_t *test)
       }
       break;
     case TEST_INIT:
+      if (test->debug) {
+	fprintf(test->where,"sys_stats: in INIT state\n");
+	fflush(test->where);
+      }
       if (CHECK_REQ_STATE == TEST_IDLE) {
-        if (debug) {
-          fprintf(where,"sys_stats: in INIT state\n");
-          fflush(where);
-        }
         SET_TEST_STATE(TEST_IDLE);
       } else {
         report_test_failure(test,
@@ -494,6 +528,10 @@ sys_stats(test_t *test)
       }
       break;
     case TEST_IDLE:
+      if (test->debug) {
+	fprintf(test->where,"sys_stats: in IDLE state\n");
+	fflush(test->where);
+      }
       /* check for state transition */
       if (CHECK_REQ_STATE == TEST_IDLE) {
         sleep(1);
@@ -509,12 +547,17 @@ sys_stats(test_t *test)
       }
       break;
     case TEST_MEASURE:
+      if (test->debug) {
+	fprintf(test->where,"sys_stats: in MEAS state\n");
+	fflush(test->where);
+      }
+
       if (CHECK_REQ_STATE == TEST_MEASURE) {
         sleep(1);
       } else if (CHECK_REQ_STATE == TEST_LOADED) {
         /* get_cpu_time_counters sets current timestamp */
-	get_cpu_time_counters(tsd->ending_cpu_counters,&(tsd->curr_time),tsd);
-	update_sys_stats(tsd);
+	get_cpu_time_counters(tsd->ending_cpu_counters,&(tsd->curr_time),test);
+	update_sys_stats(test);
 	SET_TEST_STATE(TEST_LOADED);
       } else {
         report_test_failure(test,
@@ -524,12 +567,17 @@ sys_stats(test_t *test)
       }
       break;
     case TEST_LOADED:
+      if (test->debug) {
+	fprintf(test->where,"sys_stats: in LOAD state\n");
+	fflush(test->where);
+      }
+
       if (CHECK_REQ_STATE == TEST_LOADED) {
         sleep(1);
       } else if (CHECK_REQ_STATE == TEST_MEASURE) {
 	/* transitioning to measure state from loaded state set
 	   get_cpu_time_counters sets previous timestamp */
-	get_cpu_time_counters(tsd->starting_cpu_counters,&(tsd->prev_time),tsd);
+	get_cpu_time_counters(tsd->starting_cpu_counters,&(tsd->prev_time),test);
 	SET_TEST_STATE(TEST_MEASURE);
       } else if (CHECK_REQ_STATE == TEST_IDLE) {
         SET_TEST_STATE(TEST_IDLE);

@@ -132,10 +132,6 @@ process_message(server_t *server, xmlDocPtr doc)
   xmlNodePtr cur;
   struct msgs *which_msg;
 
-  if (debug) {
-    fprintf(where,"process_message: entered\n");
-    fflush(where);
-  }
 
   msg = xmlDocGetRootElement(doc);
   if (msg == NULL) {
@@ -269,6 +265,7 @@ send_version_message(server_t *server, xmlChar *fromnid)
   int rc = NPE_SUCCESS;
   xmlNodePtr message;
 
+
   if ((message = xmlNewNode(NULL,(xmlChar *)"version")) != NULL) {
     /* set the properties of the version message -
        the version, update, and fix levels  sgb 2003-02-27 */
@@ -322,6 +319,7 @@ error_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   test_t    *test;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -355,6 +353,7 @@ clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test_t      *test;
   xmlNodePtr  stats;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -383,6 +382,7 @@ clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test_t      *test;
   xmlNodePtr  stats;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -410,6 +410,7 @@ get_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar     *testid;
   test_t      *test;
   xmlNodePtr  stats;
+
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
@@ -443,6 +444,7 @@ get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test_t      *test;
   xmlNodePtr  sys_stats;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -474,6 +476,7 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   test_t    *test;
   int        hash_value;
+
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
 
@@ -522,6 +525,7 @@ idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   test_t    *test;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -545,6 +549,7 @@ idled_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
   test_t    *test;
+
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
@@ -572,6 +577,7 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   test_t    *test;
   int        hash_value;
+
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
 
@@ -631,6 +637,7 @@ load_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   test_t    *test;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -654,6 +661,7 @@ loaded_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
   test_t    *test;
+
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
@@ -679,6 +687,7 @@ measure_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   test_t    *test;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -701,6 +710,7 @@ measuring_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
   test_t    *test;
+
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
@@ -730,10 +740,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *test_name;
   xmlChar   *testid;
 
-  if (debug) {
-    fprintf(where,"entering test_message\n");
-    fflush(where);
-  }
+
   if (server->state != server->state_req) {
     /* set netserver state to NSRV_WORK because receiving a test message
        shows that netperf accepted our version message */
@@ -743,7 +750,8 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   while (test_node != NULL && rc == NPE_SUCCESS) {
     if (xmlStrcmp(test_node->name,(const xmlChar *)"test")) {
       if (debug) {
-        printf("test_message: skipped a non-test node\n");
+        fprintf(where,"test_message: skipped a non-test node\n");
+	fflush(where);
       }
       test_node = test_node->next;
       continue;
@@ -758,7 +766,8 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       new_test->state     = TEST_PREINIT;
       new_test->new_state = TEST_PREINIT;
       new_test->state_req = TEST_IDLE;
-      
+      new_test->debug     = debug;
+      new_test->where     = where;
       rc = get_test_function(new_test,(const xmlChar *)"test_name");
       if (rc == NPE_SUCCESS) {
         rc = get_test_function(new_test,(const xmlChar *)"test_clear");
@@ -779,8 +788,9 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (rc == NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "test_message: about to launch thread for test %d\n",
-                new_test->tid);
+                "test_message: about to launch thread for test %d using func %p\n",
+                new_test->tid,
+		new_test->test_func);
         fflush(where);
       }
       rc = launch_thread(&new_test->tid,new_test->test_func,new_test);
@@ -805,7 +815,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       }  /* end wait */
       if (debug) {
         fprintf(where,
-                "test_message: test has started initialization on thread %d\n",
+                "test_message: test has finished initialization on thread %d\n",
                 new_test->tid);
         fflush(where);
       }
@@ -836,6 +846,7 @@ sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar     *testid;
   test_t      *test;
   xmlNodePtr  stats;
+
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
@@ -878,6 +889,7 @@ test_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test_t      *test;
   xmlNodePtr  stats;
 
+
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -906,6 +918,8 @@ int
 unknown_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 {
   int rc = NPE_SUCCESS;
+
+
   fprintf(where,"Server %s sent a %s message which is unknown by netperf4\n",
           server->id, msg->name);
   fflush(where);

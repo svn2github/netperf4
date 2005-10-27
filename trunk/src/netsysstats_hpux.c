@@ -47,9 +47,6 @@ delete this exception statement from your version.
 #include "netlib.h"
 #include "netsysstats.h"
 
-extern FILE *where;
-extern int debug;
-
 /* data is kept is malloced data structures which are referenced from
    the test specific data structure.  a pointer to platform specific data
    is passed for holding data needed for each platform.  255-10-18 sgb */
@@ -65,23 +62,24 @@ enum {
 
 
 int
-sys_cpu_util_init(netsysstat_data_t *tsd)
+sys_cpu_util_init(test_t *test)
 {
   struct pst_processor *psp;
   struct pst_dynamic    psd;
   int num_cpus;
   int err = HPUX_SYS_STATS_SUCCESS;
-  
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
+
   if (pstat_getdynamic(&psd, sizeof(psd), (size_t)1, 0) != -1) {
     num_cpus  = psd.psd_proc_cnt;
-    if (debug) {
-      fprintf(where,"sys_cpu_util_init: num_cpus = %d\n\n",num_cpus);
-      fflush(where);
+    if (test->debug) {
+      fprintf(test->where,"sys_cpu_util_init: num_cpus = %d\n\n",num_cpus);
+      fflush(test->where);
     }
     psp   = (struct pst_processor *)malloc(num_cpus * sizeof(*psp));
-    if (debug) {
-      fprintf(where,"sys_cpu_util_init: allocated pst_processor\n");
-      fflush(where);
+    if (test->debug) {
+      fprintf(test->where,"sys_cpu_util_init: allocated pst_processor\n");
+      fflush(test->where);
     }
     tsd->num_cpus = num_cpus;
     tsd->psd      = psp;
@@ -95,15 +93,16 @@ sys_cpu_util_init(netsysstat_data_t *tsd)
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
                       struct timeval *time,
-                      netsysstat_data_t *tsd)
+		      test_t *test);
 {
-  int loc_debug = 0;
+
   struct pst_processor *psp      = tsd->psd;
   int                   num_cpus = tsd->num_cpus;
   int                   i;
   double                ticks;
   double                iticksperclktick;
   double                elapsed;
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
   /* get the idle cycle counter for each processor. now while on a
      64-bit kernel the ".psc_hi" and ".psc_lo" fields are 64 bits,
@@ -135,22 +134,22 @@ get_cpu_time_counters(cpu_time_counters_t *res,
       res[i].other    -= res[i].interrupt;
 #endif
       
-      if(debug) {
-	fprintf(where, "\tidle[%d] = %#llx", i, res[i].idle);
+      if(test->debug) {
+	fprintf(test->where, "\tidle[%d] = %#llx", i, res[i].idle);
 #ifndef EXTRA_COUNTERS_MISSING
-	fprintf(where, "\tuser[%d] = %#llx", i, res[i].user);
-	fprintf(where, "\tkern[%d] = %#llx", i, res[i].kernel);
-	fprintf(where, "\tintr[%d] = %#llx", i, res[i].interrupt);
-	fprintf(where, "\tothr[%d] = %#llx", i, res[i].other);
+	fprintf(test->where, "\tuser[%d] = %#llx", i, res[i].user);
+	fprintf(test->where, "\tkern[%d] = %#llx", i, res[i].kernel);
+	fprintf(test->where, "\tintr[%d] = %#llx", i, res[i].interrupt);
+	fprintf(test->where, "\tothr[%d] = %#llx", i, res[i].other);
 #endif
-        fprintf(where, "\n");
-	fflush(where);
+        fprintf(test->where, "\n");
+	fflush(test->where);
       }
     }
-    if (debug | loc_debug) {
-      fprintf(where, "\tseconds=%d\tusec=%d\telapsed=%f\n",
+    if (test->debug) {
+      fprintf(test->where, "\tseconds=%d\tusec=%d\telapsed=%f\n",
               time->tv_sec,time->tv_usec,elapsed);
-      fflush(where);
+      fflush(test->where);
     }
   }
 }
