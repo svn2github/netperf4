@@ -1,7 +1,7 @@
+char netperf_id[]="\
+@(#)netperf.c (c) Copyright 2005, Hewlett-Packard Company, $Id$";
 /*
    netperf - network-oriented performance benchmarking
-
-/*
 
 This file is part of netperf4.
 

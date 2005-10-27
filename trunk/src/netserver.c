@@ -1,3 +1,5 @@
+char netserver_id[]="\
+@(#)netserver.c (c) Copyright 2005, Hewlett-Packard Company, $Id$";
 /*
 
 This file is part of netperf4.

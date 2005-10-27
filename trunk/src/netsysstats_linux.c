@@ -1,5 +1,5 @@
 char netsysstats_linux[]="\
-@(#)netsysstats_linux.c (c) Copyright 2005, Hewlett-Packard Company, Version 4.0.0";
+@(#)netsysstats_linux.c (c) Copyright 2005, Hewlett-Packard Company, $Id$";
 
 /*
 
@@ -67,9 +67,9 @@ static char* proc_stat_buf = NULL;
 static int proc_stat_buflen = 0;
 
 enum {
-  LINUX_SYS_STATS_PSTAT_GETPROCESSOR_FAILED = -5,
+  LINUX_SYS_STATS_PROCSTAT_OPEN_FAILED = -5,
   LINUX_SYS_STATS_MALLOC_FAILED = -4,
-  LINUX_SYS_STATS_GETDYNAMIC_FAILED = -3,
+  LINUX_SYS_STATS_SYSCONF_FAILED = -3,
   LINUX_SYS_STATS_REQUESTED_STATE_INVALID = -2,
   LINUX_SYS_STATS_STATE_CORRUPTED = -1,
   LINUX_SYS_STATS_SUCCESS = 0
@@ -78,7 +78,6 @@ enum {
 extern int   debug;
 FILE  *where;
 
-int                 num_cpus;
 int                 ticks;
 
 struct timeval      prev_time;
@@ -87,30 +86,34 @@ struct timeval      curr_time;
 struct timeval      total_elapsed_time;
 struct timeval      delta_elapsed_time;
 
-struct pst_processor *psp;
-
-static void
-sys_cpu_util_init(void) 
+int
+sys_cpu_util_init(netsysstat_data_t *tsd) 
 {
   where = stderr;
+  int err;
+
+  if ((tsd->num_cpus = sysconf(_SC_NPROCESSORS_ONLN)) == -1) {
+    return(LINUX_SYS_STATS_SYSCONF_FAILED);
+  }
 
   if (proc_stat_fd < 0) {
     proc_stat_fd = open (PROC_STAT_FILE_NAME, O_RDONLY, NULL);
     if (proc_stat_fd < 0) {
       fprintf (stderr, "Cannot open %s!\n", PROC_STAT_FILE_NAME);
-      exit (1);
+      return(LINUX_SYS_STATS_PROCSTAT_OPEN_FAILED);
     };
   };
 
   if (!proc_stat_buf) {
-    proc_stat_buflen = N_CPU_LINES (num_cpus) * CPU_LINE_LENGTH;
+    proc_stat_buflen = N_CPU_LINES (tsd->num_cpus) * CPU_LINE_LENGTH;
     proc_stat_buf = (char *)malloc (proc_stat_buflen);
     if (!proc_stat_buf) {
       fprintf (stderr, "Cannot allocate buffer memory!\n");
-      exit (1);
+      close(proc_stat_fd);
+      return(LINUX_SYS_STATS_MALLOC_FAILED);
     };
   };
-  return;
+  return LINUX_SYS_STATS_SUCCESS;
 }
 
   /* get the cpu ticks from /proc/stat for each CPU.  There are four
@@ -140,10 +143,10 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     fflush(where);
   }
   /* Skip first line (total) on SMP */
-  if (num_cpus > 1) p = strchr (p, '\n');
+  if (tsd->num_cpus > 1) p = strchr (p, '\n');
   
   
-  for (i = 0; i < num_cpus; i++) {
+  for (i = 0; i < tsd->num_cpus; i++) {
     records = sscanf(proc_stat_buf,
 		     "%s %lld %lld %lld %lld",
 		     cpunam,
