@@ -1654,8 +1654,20 @@ static int
 wait_command(xmlNodePtr cmd, uint32_t junk)
 {
   int seconds;
+  xmlChar *string;
+
   wait_for_tests_to_enter_requested_state(cmd);
-  seconds = atoi((char *)xmlGetProp(cmd,(const xmlChar *)"seconds"));
+  
+  /* again with the ass-u-me either the string will be there, or that
+     atoi will do what we want it to if given a null pointer... so,
+     lets fix that sort of bug - again...  raj 2005-10-27 */
+  string = xmlGetProp(cmd,(const xmlChar *)"seconds");
+  if (string) {
+    seconds = atoi((char *)string);
+  }
+  else {
+    seconds = 0;
+  }
   if (seconds) {
     sleep(seconds);
   }

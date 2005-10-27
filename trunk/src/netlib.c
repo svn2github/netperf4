@@ -190,6 +190,7 @@ parse_address_family(char family_string[])
 void
 report_test_status(server_t *server)
 {
+  int ret;
   test_hash_t *h;
   bsd_data_t  *my_data;
   test_t      *test;
@@ -203,16 +204,27 @@ report_test_status(server_t *server)
           "cnt1","cnt2","cnt3","cnt4");
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
-    pthread_mutex_lock(&h->hash_lock);
+    ret = pthread_mutex_lock(&h->hash_lock);
+    if (ret) {
+      fprintf(where,"__func__ pthread_mutex_lock returned %d\n",ret);
+      fflush(where);
+    }
     test = h->test;
 
-    my_data = (bsd_data_t *)test->test_specific_data;
-    a    = my_data->stats.counter[0];
-    b    = my_data->stats.counter[1];
-    c    = my_data->stats.counter[2];
-    d    = my_data->stats.counter[3];
-
     while (test != NULL) {
+
+      my_data = (bsd_data_t *)test->test_specific_data;
+      /* of course, there can be times when we don't yet have a my_data?
+	 so, we best not be trying to dereference that pointer had we?!?
+	 raj 2005-10-27 */
+      if (my_data) {
+	a    = my_data->stats.counter[0];
+	b    = my_data->stats.counter[1];
+	c    = my_data->stats.counter[2];
+	d    = my_data->stats.counter[3];
+      }
+      
+      
       if (!xmlStrcmp(test->server_id,server->id)) {
         switch (test->state) {
         case TEST_PREINIT:
@@ -271,8 +283,13 @@ report_test_status(server_t *server)
                 test->id,test->test_name,state,req_st,a,b,c,d);
       }
       test = test->next;
+      printf("in report_test_status, test is moving to %p\n",test);
     }
-    pthread_mutex_unlock(&h->hash_lock);
+    ret = pthread_mutex_unlock(&h->hash_lock);
+    if (ret) {
+      fprintf(where,"__func__ pthread_mutex_unlock returned %d\n",ret);
+      fflush(where);
+    }
   }
   fflush(where);
 }

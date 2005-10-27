@@ -359,7 +359,7 @@ sys_stats_get_stats(test_t *test)
     ap = xmlSetProp(stats,(xmlChar *)"tid",test->id);
     if (GET_TEST_STATE == TEST_MEASURE) {
       /* get_cpu_time_counters sets current timestamp */
-      get_cpu_time_counters(tsd->ending_cpu_counters, &(tsd->curr_time), tsd);
+      get_cpu_time_counters(tsd->ending_cpu_counters, &(tsd->curr_time), test);
       if (ap != NULL) {
         ap = set_stat_attribute(test, stats,"time_sec",tsd->curr_time.tv_sec);
       }

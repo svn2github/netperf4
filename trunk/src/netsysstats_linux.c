@@ -154,6 +154,15 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
+  if (test->debug) {
+    fprintf(test->where,
+	    "__func__ res %p timeptr %p test %p tsd %p\n",
+	    res,
+	    time,
+	    test,
+	    tsd);
+    fflush(test->where);
+  }
   lseek (proc_stat_fd, 0, SEEK_SET);
   read (proc_stat_fd, p, proc_stat_buflen);
   
@@ -169,10 +178,10 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     records = sscanf(proc_stat_buf,
 		     "%s %lld %lld %lld %lld",
 		     cpunam,
-		     res[i].user,
-		     nicetime,
-		     res[i].kernel,
-		     res[i].idle);
+		     &(res[i].user),
+		     &nicetime,
+		     &(res[i].kernel),
+		     &(res[i].idle));
     res[i].user += nicetime;
     res[i].other = 0;
     res[i].interrupt = 0;

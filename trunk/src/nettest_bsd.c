@@ -659,14 +659,24 @@ bsd_test_init(test_t *test, int type, int protocol)
     } 
     break;
   }
- 
-  if (args != NULL) {
+
+  /* probably a good idea to make sure that new_data is real */
+  if ((args != NULL) &&
+      (NULL != new_data)) {
     /* zero the bsd test specific data structure */
     memset(new_data,0,sizeof(bsd_data_t));
 
     string =  xmlGetProp(args,(const xmlChar *)"fill_file");
-    /* fopen the fill file it will be used when allocating buffer rings */
-    fill_source = fopen((char *)string,"r");
+    /* fopen the fill file it will be used when allocating buffer
+       rings. only call fopen if there is really a "fill_file"
+       property present... */
+    if (string) {
+      fill_source = fopen((char *)string,"r");
+    }
+
+    /* we are relying on the good graces of the validating and
+       attribute filling of libxml when we parsed the message that got
+       us here... */
     string =  xmlGetProp(args,(const xmlChar *)"send_buffer_size");
     units  =  xmlGetProp(args,(const xmlChar *)"send_buffer_units");
     new_data->send_buf_size = convert(string,units);
@@ -689,11 +699,23 @@ bsd_test_init(test_t *test, int type, int protocol)
     string =  xmlGetProp(args,(const xmlChar *)"rsp_size");
     new_data->rsp_size = atoi((char *)string);
 
+    /* relying on the DTD to give us defaults isn't always the most
+       robust way to go about doing things. */
     string =  xmlGetProp(args,(const xmlChar *)"port_min");
-    new_data->port_min = atoi((char *)string);
+    if (string) {
+      new_data->port_min = atoi((char *)string);
+    }
+    else {
+      new_data->port_min = -1;
+    }
 
     string =  xmlGetProp(args,(const xmlChar *)"port_max");
-    new_data->port_max = atoi((char *)string);
+    if (string) {
+      new_data->port_max = atoi((char *)string);
+    }
+    else {
+      new_data->port_max = -1;
+    }
 
     string =  xmlGetProp(args,(const xmlChar *)"send_width");
     new_data->send_width = atoi((char *)string);
