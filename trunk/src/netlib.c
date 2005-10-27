@@ -1,5 +1,5 @@
 char netlib_id[]="\
-@(#)netlib.c (c) Copyright 2005, Hewlett-Packard Company, Version 4.0.0";
+@(#)netlib.c (c) Copyright 2005, Hewlett-Packard Company, $Id$";
 
 /*
 
@@ -581,6 +581,11 @@ get_test_function(test_t *test, xmlChar *func)
   int      rc = NPE_FUNC_NAME_TOO_LONG;
   char     func_name[NETPERF_MAX_TEST_FUNCTION_NAME];
 
+  if (debug) {
+    fprintf(where,"get_test_func enter test %p func %s\n",test, func);
+    fflush(where);
+  }
+
   if (lib_handle == NULL) {
     xmlChar *la_file;
     char lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
@@ -607,10 +612,21 @@ get_test_function(test_t *test, xmlChar *func)
   }
 
   fname = xmlGetProp(test->node,func);
-  fnlen = strlen((char *)fname);
+  if (!fname) {
+    fnlen = 0;
+  }
+  else {
+    fnlen = strlen((char *)fname);
+  }
   if (debug) {
-    fprintf(where,"func = '%s'  fname = '%s' fname[0] = %c fnlen = %d\n",
-            (char *)func, fname, fname[0], fnlen);
+    if (fname) {
+      fprintf(where,"func = '%s'  fname = '%s' fname[0] = %c fnlen = %d\n",
+	      (char *)func, fname, fname[0], fnlen);
+    }
+    else {
+      fprintf(where,"func = '%s'  fname = '' fname[0] = '' fnlen = %d\n",
+	      (char *)func, fnlen);
+    }
     fflush(where);
   }
 
@@ -1053,9 +1069,11 @@ establish_control(xmlChar *hostname,
                 remote_res_temp->ai_addrlen) == 0) {
       /* we have successfully connected to the remote netserver */
       if (debug) {
-        printf("successful connection to remote netserver at %s and %d\n",
-               hostname,
-               port);
+        fprintf(where,
+		"successful connection to remote netserver at %s and %s\n",
+		hostname,
+		port);
+	fflush(where);
       }
       not_connected = 0;
       /* this should get us out of the while loop */
@@ -1090,7 +1108,7 @@ establish_control(xmlChar *hostname,
 
   /* so, we are either connected or not */
   if (not_connected) {
-    fprintf(where, "establish control: are you sure there is a netserver listening on %s at port %u?\n",hostname,port);
+    fprintf(where, "establish control: are you sure there is a netserver listening on %s at port %s?\n",hostname,port);
     fflush(where);
     return(-1);
   }
@@ -1180,6 +1198,9 @@ recv_control_message(int control_sock, xmlDocPtr *message)
   }
 
   bytes_left = ntohl(message_len);
+  /* might as well make message_len native too, just give it
+     bytes_left. raj 2005-10-26 */
+  message_len = bytes_left;
 
   /* at some point we probably need to sanity check that we aren't
      being asked for a massive message size, but for now, we will
@@ -1243,9 +1264,9 @@ recv_control_message(int control_sock, xmlDocPtr *message)
   if (debug || loc_debug) {
     fprintf(where,
             "Just received %d byte message from sock %d\n",
-            ntohl(message_len),
+            message_len,
             control_sock);
-    fprintf(where,"|%*s|\n", ntohl(message_len)+1, message_base);
+    fprintf(where,"|%*s|\n", message_len+1, message_base);
     fflush(where);
   }
 
@@ -1256,10 +1277,12 @@ recv_control_message(int control_sock, xmlDocPtr *message)
               *message);
       fflush(where);
     }
-    return(ntohl(message_len));
+    return(message_len);
   } else {
     if (debug) {
-      fprintf(where, "recv_control_message: xmlParseMemory failed\n");
+      fprintf(where, 
+	      "recv_control_message: xmlParseMemory of message %p len %d  failed\n",
+	      message_base,message_len);
       fflush(where);
     }
     free(message_base);
