@@ -818,7 +818,7 @@ update_elapsed_time(bsd_data_t *my_data)
   }
 }
 
-static void
+static int
 bsd_test_clear_stats(bsd_data_t *my_data)
 {
   int i;
@@ -829,6 +829,7 @@ bsd_test_clear_stats(bsd_data_t *my_data)
   my_data->elapsed_time.tv_sec  = 0;
   gettimeofday(&(my_data->prev_time),NULL);
   my_data->curr_time = my_data->prev_time;
+  return(NPE_SUCCESS);
 }
 
 void
@@ -933,11 +934,11 @@ bsd_test_get_stats(test_t *test)
   return(stats);
 }
 
-void
+int
 recv_tcp_stream_clear_stats(test_t *test)
 {
   bsd_data_t *my_data = GET_TEST_DATA(test);
-  bsd_test_clear_stats(my_data);
+  return(bsd_test_clear_stats(my_data));
 }
 
 
@@ -954,11 +955,11 @@ recv_tcp_stream_decode_stats(xmlNodePtr stats,test_t *test)
 }
 
 
-void
+int
 send_tcp_stream_clear_stats(test_t *test)
 {
   bsd_data_t *my_data = GET_TEST_DATA(test);
-  bsd_test_clear_stats(my_data);
+  return(bsd_test_clear_stats(my_data));
 }
 
 xmlNodePtr
@@ -1426,11 +1427,11 @@ send_tcp_stream(test_t *test)
 
 
 
-void
+int
 recv_tcp_rr_clear_stats(test_t *test)
 {
   bsd_data_t *my_data = GET_TEST_DATA(test);
-  bsd_test_clear_stats(my_data);
+  return(bsd_test_clear_stats(my_data));
 }
 
 
@@ -1447,11 +1448,11 @@ recv_tcp_rr_decode_stats(xmlNodePtr stats,test_t *test)
 }
 
 
-void
+int
 send_tcp_rr_clear_stats(test_t *test)
 {
   bsd_data_t *my_data = GET_TEST_DATA(test);
-  bsd_test_clear_stats(my_data);
+  return(bsd_test_clear_stats(my_data));
 }
 
 xmlNodePtr
@@ -1491,7 +1492,6 @@ recv_tcp_rr(test_t *test)
   int              mylen=sizeof(myaddr);
   struct sockaddr  peeraddr;
   int              peerlen=sizeof(peeraddr);
-  int              loc_debug = 0;
 
   HISTOGRAM_VARS;
 
@@ -1534,14 +1534,14 @@ recv_tcp_rr(test_t *test)
           dump_addrinfo(test->where, my_data->locaddr,
                         (xmlChar *)NULL, (xmlChar *)NULL, -1);
         }
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"recv_tcp_rr:create_data_socket returned %d\n",
                   s_listen);
           fflush(test->where);
         }
         rc = bind(s_listen, my_data->locaddr->ai_addr,
                    my_data->locaddr->ai_addrlen);
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"recv_tcp_rr:bind returned %d  errno=%d\n",
                   rc,errno);
           fflush(test->where);
@@ -1579,7 +1579,7 @@ recv_tcp_rr(test_t *test)
     case TEST_INIT:
       if (CHECK_REQ_STATE == TEST_IDLE) {
         peerlen = sizeof(peeraddr);
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"recv_tcp_rr:waiting in accept\n");
           fflush(test->where);
         }
@@ -1591,7 +1591,7 @@ recv_tcp_rr(test_t *test)
                               BSDE_ACCEPT_FAILED,
                               "listen socket accept failed");
         } else {
-          if (test->debug || loc_debug) {
+          if (test->debug) {
             fprintf(test->where,"recv_tcp_rr:accept returned successfully %d\n",
                     s_data);
             fflush(test->where);
@@ -1708,7 +1708,7 @@ recv_tcp_rr(test_t *test)
             recv(s_data, send_ring->buffer_ptr, send_size, 0);
             close(s_data);
             peerlen = sizeof(peeraddr);
-            if (test->debug || loc_debug) {
+            if (test->debug) {
               fprintf(test->where,"recv_tcp_rr:waiting in accept\n");
               fflush(test->where);
             }
@@ -1720,7 +1720,7 @@ recv_tcp_rr(test_t *test)
                                   BSDE_ACCEPT_FAILED,
                                   "listen socket accept failed");
             } else {
-              if (test->debug || loc_debug) {
+              if (test->debug) {
                 fprintf(test->where,"recv_tcp_rr:accept returned successfully %d\n",
                         s_data);
                 fflush(test->where);
@@ -2000,7 +2000,6 @@ void
 report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
 {
   bsd_results_t *my_data   = test_set->report_data;
-  int            loc_debug = 0;
   int            count            = test_set->confidence.count - 1;
   int            max_count        = test_set->confidence.max_count;
   int            min_count        = test_set->confidence.min_count;
@@ -2045,7 +2044,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
   double         recv_trans_rate;
 
   int            i;
-  int            flags    = atoi(report_flags);
+  int            flags;
   int            last_hdr = 0;
   xmlNodePtr     stats;
   xmlNodePtr     prev_stats;
@@ -2107,18 +2106,25 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
 
   flags = BSD_PER_TEST_FLAG + BSD_PER_RUN_FLAG;
 
+  /* SOMETHING THAT NEEDS TO BE FIXED!!!  if we are keying off of the
+     test_t for tihngs like debug and where the debug output is to go,
+     we kind of need test set up here where these decisions are being
+     made, which suggests that a lot of this has to go inside the
+     later while with some sort of "have we done this part already"
+     protection. */
+
   if (my_data == NULL) {
     if (output) {
-      if (test->debug || loc_debug) {
-        fprintf(test->where,"report_bsd_test_results: report going to file %s\n",
+      if (1) {
+        fprintf(stderr,"report_bsd_test_results: report going to file %s\n",
                 output);
-        fflush(test->where);
+        fflush(stderr);
       }
       outfd = fopen(output,"a");
     } else {
-      if (test->debug || loc_debug) {
-        fprintf(test->where,"report_bsd_test_results: report going to file stdout\n");
-        fflush(test->where);
+      if (1) {
+        fprintf(stderr,"report_bsd_test_results: report going to file stdout\n");
+        fflush(stderr);
       }
       outfd = stdout;
     }
@@ -2139,10 +2145,10 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
   }
   if (max_count != my_data->max_count) {
     /* someone is playing games don't generate report*/
-    fprintf(test->where,"Max_count changed between invocations of %s\n",
+    fprintf(stderr,"Max_count changed between invocations of %s\n",
             "report_bsd_test_results");
-    fprintf(test->where,"exiting netperf now!!\n");
-    fflush(test->where);
+    fprintf(stderr,"exiting netperf now!!\n");
+    fflush(stderr);
     exit;
   }
   
@@ -2154,10 +2160,10 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
   sys_seconds   = 0.0;
   sys_util      = 0.0;
   set_elt = test_set->tests;
-  if (test->debug || loc_debug) {
-   fprintf(test->where,"test_set %s has %d tests looking for statistics\n",
+  if (1) {
+   fprintf(stderr,"test_set %s has %d tests looking for statistics\n",
            test_set->id,test_set->num_tests);
-   fflush(test->where);
+   fflush(stderr);
   }
   while (set_elt != NULL) {
     int stats_for_test;
@@ -2165,7 +2171,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
     test   = set_elt->test;
     stats  = test->received_stats->xmlChildrenNode;
 
-    if (test->debug || loc_debug) {
+    if (test->debug) {
       if (stats) {
         fprintf(test->where,"\ttest %s has '%s' statistics\n", test->id,stats->name);
       } else {
@@ -2177,14 +2183,14 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
     stats_for_test = 0;
     while(stats != NULL) {
       /* process all the statistics records for this test */
-      if (test->debug || loc_debug) {
+      if (test->debug) {
         fprintf(test->where,"\tfound some statistics");
         fflush(test->where);
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"sys_stats")) {
         /* process system statistics */
         test_stats = 0;
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"\tprocessing sys_stats\n");
           fflush(test->where);
         }
@@ -2201,7 +2207,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
           } else {
             sys_cntr[i] = 0.0;
           }
-          if (test->debug || loc_debug) {
+          if (test->debug) {
             fprintf(test->where,"\t%12s sys_stats[%d] = %10g '%s'\n",
                     sys_cntr_name[i], i, sys_cntr[i],
                     xmlGetProp(stats, (const xmlChar *)sys_cntr_name[i]));
@@ -2216,7 +2222,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
         local_idle      = sys_cntr[IDLE] / calibration;
         local_busy      = (calibration-sys_cntr[IDLE])/calibration;
         
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"\tnum_cpus        = %f\n",local_cpus);
           fprintf(test->where,"\telapsed_seconds = %7.2f\n",elapsed_seconds);
           fprintf(test->where,"\tidle_cntr       = %e\n",sys_cntr[IDLE]);
@@ -2236,7 +2242,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
       if(!xmlStrcmp(stats->name,(const xmlChar *)"test_stats")) {
         /* process test statistics */
         test_stats = 1;
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"\tprocessing test_stats\n");
           fflush(test->where);
         }
@@ -2253,7 +2259,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
           } else {
             test_cntr[i] = 0.0;
           }
-          if (test->debug || loc_debug) {
+          if (test->debug) {
             fprintf(test->where,"\t%12s test_cntr[%2d] = %10g\t'%s'\n",
                     cntr_name[i], i, test_cntr[i],
                     xmlGetProp(stats, (const xmlChar *)cntr_name[i]));
@@ -2264,7 +2270,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
         recv_rate       = test_cntr[TST_R_BYTES]*8/(elapsed_seconds*1000000);
         xmit_trans_rate = test_cntr[TST_X_TRANS]/elapsed_seconds;
         recv_trans_rate = test_cntr[TST_R_TRANS]/elapsed_seconds;
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"\txmit_rate = %7g\t%7g\n",
                   xmit_rate, test_cntr[TST_X_BYTES]);
           fprintf(test->where,"\trecv_rate = %7g\t%7g\n",
@@ -2282,7 +2288,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
             sd_denominator = 1.0;
           }
         }
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"\tsd_denominator = %f\n",sd_denominator);
           fflush(test->where);
         }
@@ -2291,7 +2297,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
         } else {
           result = recv_trans_rate + xmit_trans_rate;
         }
-        if (test->debug || loc_debug) {
+        if (test->debug) {
           fprintf(test->where,"\tresult    = %f\n",result);
           fflush(test->where);
         }

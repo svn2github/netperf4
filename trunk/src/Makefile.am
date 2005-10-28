@@ -35,6 +35,10 @@ netsysstats_la_LDFLAGS = -module
 netperf_LDADD = @LIBOBJS@
 netserver_LDADD = @LIBOBJS@
 
+# so far, it does not appear we need this in netserver
+netperf_LDFLAGS = -export-dynamic
+
+
 missing/getaddrinfo.o: $(srcdir)/missing/getaddrinfo.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getaddrinfo.c
 missing/inet_ntop.o: $(srcdir)/missing/inet_ntop.c

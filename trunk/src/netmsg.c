@@ -358,7 +358,10 @@ clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test   = find_test_in_hash(testid);
   if (test != NULL) {
     if (debug) {
-      fprintf(where,"clear_stats_message: test_state = %d ",test->state);
+      fprintf(where,
+	      "clear_stats_message: test_state = %d calling %p\n",
+	      test->state,
+	      test->test_clear);
       fflush(where);
     }
     rc = (test->test_clear)(test);
@@ -387,7 +390,11 @@ clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test   = find_test_in_hash(testid);
   if (test != NULL) {
     if (debug) {
-      fprintf(where,"clear_sys_stats_message: test_state = %d ",test->state);
+      fprintf(where,
+	      "clear_sys_stats_message: test %p test_state = %d calling %p\n",
+	      test,
+	      test->state,
+	      test->test_clear);
       fflush(where);
     }
     rc = (test->test_clear)(test);

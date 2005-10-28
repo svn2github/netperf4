@@ -1251,6 +1251,7 @@ static int
 report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
 {
   int            rc   = NPE_SUCCESS;
+  xmlChar       *string;
   xmlDocPtr      doc;
   xmlNodePtr     commands;
   xmlNodePtr     cmd;
@@ -1278,8 +1279,23 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
   set_name      = xmlGetProp(my_cmd,(const xmlChar *)"test_set");
   report_flags  = (char *)xmlGetProp(my_cmd,(const xmlChar *)"report_flags");
   output_file   = (char *)xmlGetProp(my_cmd,(const xmlChar *)"output_file");
-  max_count     = atoi((char *)xmlGetProp(my_cmd,(const xmlChar *)"max_count"));
-  min_count     = atoi((char *)xmlGetProp(my_cmd,(const xmlChar *)"min_count"));
+
+  /* once more, we have to make sure that there really is a valid
+     string returned from the xmlGetProp call!!!  raj 2005-10-27 */
+  string = xmlGetProp(my_cmd,(const xmlChar *)"max_count");
+  if (string) {
+    max_count     = atoi((char *)string);
+  }
+  else {
+    max_count = 1;
+  }
+  string = xmlGetProp(my_cmd,(const xmlChar *)"min_count");
+  if (string) {
+    min_count     = atoi((char *)string);
+  }
+  else {
+    min_count = 1;
+  }
 
   if (commands == NULL) {
     max_count = 1;

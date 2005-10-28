@@ -283,7 +283,6 @@ report_test_status(server_t *server)
                 test->id,test->test_name,state,req_st,a,b,c,d);
       }
       test = test->next;
-      printf("in report_test_status, test is moving to %p\n",test);
     }
     ret = pthread_mutex_unlock(&h->hash_lock);
     if (ret) {

@@ -207,7 +207,7 @@ sample_stddev(double *values, int count, double *avg)
   return(sqrt(variance));
 }
 
-extern double
+double
 get_confidence(double *values, confidence_t *confidence, double *avg)
 {
   double mean;
