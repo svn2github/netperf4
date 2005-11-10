@@ -137,7 +137,6 @@ process_message(server_t *server, xmlDocPtr doc)
   if (msg == NULL) {
     fprintf(stderr,"empty document\n");
     fflush(stderr);
-    printf("freeing the %p empty doc\n",doc);
     xmlFreeDoc(doc);
     /* somehow I don't think that returning NPE_SUCCESS is the right
        thing here? raj 2005-10-26 */
@@ -185,9 +184,7 @@ process_message(server_t *server, xmlDocPtr doc)
       which_msg++;
     }
   }
-  printf("freeing the %p doc doc\n",doc);
   xmlFreeDoc(doc);
-  printf("freed the %p doc doc\n",doc);
   return(rc);
 }
 

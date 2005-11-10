@@ -164,7 +164,6 @@ decode_command_line (int argc, char **argv)
   int c;
   ofile = stdout;
 
-
   while ((c = getopt_long (argc, argv,
 			   "d"  /* debug */
 			   "f"  /* forground */
@@ -308,10 +307,7 @@ instantiate_netperf( int sock )
   xmlNodePtr cur;
   server_t * netperf;
 
-  if (debug) {
-    fprintf(where,"instantiate_netperf: entered\n");
-    fflush(where);
-  }
+  NETPERF_DEBUG_ENTRY(debug,where);
 
   while (rc != NPE_SUCCESS) {
     rc = recv_control_message(sock,&message);
@@ -356,7 +352,8 @@ instantiate_netperf( int sock )
           rc = ns_version_check(cur,message,netperf);
         }
       }
-    } else {
+    } 
+    else {
       if (debug) {
         fprintf(where,"instantiate_netperf: close connection remote close\n");
         fflush(where);
@@ -425,6 +422,9 @@ setup_listen_endpoint(char service[]) {
   int              sock;
   int              rc;
   int              listenfd     = 0;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
   /*
      if we were given a port number on the command line open a socket.
      Otherwise, if fd 0 is a socket then assume netserver was called by
@@ -440,7 +440,7 @@ setup_listen_endpoint(char service[]) {
                                 &peerlen);
 
     if (listenfd == -1) {
-      fprintf(where,"netserver_init: failed to open listen socket\n");
+      fprintf(where,"setup_listen_endpoint: failed to open listen socket\n");
       fflush(where);
       exit(1);
     }
@@ -455,25 +455,26 @@ setup_listen_endpoint(char service[]) {
     }
 
     if ((sock = accept(listenfd,peeraddr,&peerlen)) == -1) {
-      fprintf(where,"netserver_init: accept failed\n");
+      fprintf(where,"setup_listen_endpoint: accept failed\n");
       fflush(where);
       exit(1);
     }
     if (debug) {
       fprintf(where,
-              "netserver_init: accepted connection on sock %d\n",
-              sock);
+	      "setup_listen_endpoint: accepted connection on sock %d\n",
+	      sock);
       fflush(where);
     }
-
+    
     rc = instantiate_netperf(sock);
     if (rc != NPE_SUCCESS) {
-      fprintf(where, "netserver_init: instantiate_netperf  error %d\n",rc);
+      fprintf(where, "setup_listen_endpoint: instantiate_netperf  error %d\n",rc);
       fflush(where);
       exit;
     }
   }
 }
+
 
 /* Netserver initialization */
 static void
@@ -488,6 +489,8 @@ netserver_init()
   int              namelen      = sizeof(name);
   int              peerlen      = namelen;
   int              peeraddr_len = namelen;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
 
   char *service = NULL;
 
@@ -716,7 +719,7 @@ check_test_state()
 
 
 static void
-accopt_netperf_connections()
+accept_netperf_connections()
 {
 }
 
@@ -729,6 +732,8 @@ handle_netperf_requests()
   struct pollfd fds;
   xmlDocPtr     message;
   server_t     *netperf;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
 
   netperf = netperf_hash[0].server;
   /* mutex locking is not required because only one 
@@ -840,7 +845,10 @@ main (int argc, char **argv)
     /* I wonder if this should be in handle_netperf_requests? */
     rc = instantiate_netperf(sock);
     if (rc != NPE_SUCCESS) {
-      fprintf(where, "netserver_init: instantiate_netperf  error %d\n",rc);
+      fprintf(where,
+	      "%s main: instantiate_netperf  error %d\n",
+	      program_name,
+	      rc);
       fflush(where);
       exit;
     }

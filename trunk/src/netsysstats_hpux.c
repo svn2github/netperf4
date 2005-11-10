@@ -93,16 +93,16 @@ sys_cpu_util_init(test_t *test)
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
                       struct timeval *time,
-		      test_t *test);
+		      test_t *test)
 {
 
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
   struct pst_processor *psp      = tsd->psd;
   int                   num_cpus = tsd->num_cpus;
   int                   i;
   double                ticks;
   double                iticksperclktick;
   double                elapsed;
-  netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
   /* get the idle cycle counter for each processor. now while on a
      64-bit kernel the ".psc_hi" and ".psc_lo" fields are 64 bits,
