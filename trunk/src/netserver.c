@@ -528,105 +528,11 @@ netserver_init()
 
   netlib_init();
 
-  int listenfd=0;
-  /*
-     if we were given a port number on the command line open a socket.
-     Otherwise, if fd 0 is a socket then assume netserver was called by
-     inetd and the socket and connection where created by inetd.
-     Otherwise, use the default service name to open a socket.
-   */
-
-  if (listen_port_num==0) {
-    if (getsockname(0, &name, &namelen) == -1) {
-      /* we may not be a child of inetd */
-#ifdef WIN32
-      if (WSAGetLastError() == WSAENOTSOCK) {
-        service=listen_port;
-      }
-#else
-      if (errno == ENOTSOCK) {
-        service=listen_port;
-      }
-#endif /* WIN32 */
-    }
-  } else {
-    service=listen_port;
-  }
-
-  if (service != NULL) {
-    /* we are not a child of inetd start a listen socket */
-    listenfd = establish_listen(local_host_name,
-				service,
-				local_address_family,
-				&peerlen);
-
-    if (listenfd == -1) {
-      fprintf(where,"netserver_init: failed to open listen socket\n");
-      fflush(where);
-      exit(1);
-    }
-
-    if (peerlen > namelen) {
-      peeraddr = (struct sockaddr *)malloc (peerlen);
-      peeraddr_len = peerlen;
-    }
-
-/* turn off fork for now so that netserver can be debuged in the foreground */
-#ifdef OFF
-    switch (fork()) {
-      case -1:
-        fprintf(where,"netserver_init: fork failed\n");
-        fflush(where);
-        exit(1);
-
-      case 0:
-        if (debug) {
-          fprintf(where, "netserver_init: fork returned 0\n");
-          fflush(where);
-        }
-        fclose(stdin);
-        fclose(stderr);
-        /* can I just use setsid on all systems? raj 4/96 */
-        /* I choose to use only setsid sgb 8/03 */
-        setsid();
-        signal(SIGCLD, SIG_IGN);
+#ifdef NOTDEF
+  /* stick this here for now, but will be moving elsewhere later. raj
+     2005-11-10 */
+  setup_listen_endpoint(listen_port);
 #endif
-
-        if ((sock = accept(listenfd,peeraddr,&peeraddr_len)) == -1) {
-          fprintf(where,"netserver_init: accept failed\n");
-          fflush(where);
-          exit(1);
-        }
-        if (debug) {
-          fprintf(where,
-                  "netserver_init: accepted connection on sock %d\n",
-                  sock);
-          fflush(where);
-        }
-
-#ifdef OFF
-        break;
-
-      default:
-        if (debug) {
-          fprintf(where, "netserver_init: fork return !=0 and !=-1\n");
-          fflush(where);
-        }
-        exit(0);
-    }
-#endif
-
-  } else {
-    /* we are a child of inetd */
-    sock = 0;
-  }
-  
-  rc = instantiate_netperf(sock);
-  if (rc != NPE_SUCCESS) {
-    fprintf(where, "netserver_init: instantiate_netperf  error %d\n",rc);
-    fflush(where);
-    exit;
-  }
 }
 
 
@@ -799,6 +705,7 @@ int
 main (int argc, char **argv)
 {
   int i;
+  int rc;
   int sock;
 
   program_name = argv[0];
@@ -825,8 +732,10 @@ main (int argc, char **argv)
      are a child of inet or the like, we just want to start processing
      requests. raj 2005-10-11 */
 
-#ifdef OFF
   if (0 == listen_port_num) {
+    struct sockaddr name;
+    int namelen = sizeof(name);
+      
     if (getsockname(0, &name, &namelen) == -1) {
       /* we may not be a child of inetd */
 #ifdef WIN32
@@ -853,7 +762,7 @@ main (int argc, char **argv)
       exit;
     }
   }
-#endif
+
   handle_netperf_requests();
 }
 

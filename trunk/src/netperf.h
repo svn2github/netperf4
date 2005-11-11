@@ -16,7 +16,10 @@
 
 #define NETPERF_DEBUG_ENTRY(d,w) \
   if (d) { \
-    fprintf(w,"DEBUG entering function %s\n",__func__); \
+    fprintf(w,\
+	    "DEBUG entering function %s file %s \n",\
+	    __func__, \
+	    __FILE__); \
     fflush(w); \
   }
 
