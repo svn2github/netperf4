@@ -104,7 +104,7 @@ FILE      *ofile;
 int        want_quiet;                                  /* --quiet, --silent */
 int        want_brief;                                  /* --brief */
 int        want_verbose;                                /* --verbose */
-int        forground = 2;
+int        forground = 1;
 char      *listen_port = NETPERF_DEFAULT_SERVICE_NAME;  /* --port */
 uint16_t   listen_port_num = 0;                         /* --port */
 char      *local_host_name       = NULL;
@@ -182,7 +182,7 @@ decode_command_line (int argc, char **argv)
 	  debug++;
 	  break;
         case 'f':       /* --forground */
-          forground++;  /* 1 means no deamon, 2 means no fork */
+          forground++;  /* 1 means no deamon, 2 means no fork after accept */
           break;
 	case 'L':
 	  break_args_explicit(optarg,local_host_name_buf,local_addr_fam_buf);
@@ -537,7 +537,7 @@ handle_netperf_requests()
         }
       } else {
         netperf->state = NSRV_ERROR;
-        netperf->err_fn = "__func__";
+        netperf->err_fn = (char *)__func__;
         if (rc == 0) {
           netperf->err_rc = NPE_REMOTE_CLOSE;
         } else {
@@ -558,7 +558,7 @@ handle_netperf_requests()
     if (rc != NPE_SUCCESS) {
       netperf->state  = NSRV_ERROR;
       netperf->err_rc = rc;
-      netperf->err_fn = "__func__";
+      netperf->err_fn = (char *)__func__;
     }
   }
 
@@ -675,12 +675,10 @@ setup_listen_endpoint(char service[]) {
 	    exit;
 	  }
 	  handle_netperf_requests();
-	  /* if we get here, before we go back to call accept again,
-	     probably a good idea to close the sock. of course, I'm not
-	     even sure we will ever get here, but hey, what the heck.
-	     raj 2005-11-10 */
-	  printf("server closing sock %d\n",sock);
-	  close(sock);
+	  /* as the child, if we've no more requests to process - eg
+	     the connection has closed etc, then we might as well just
+	     exit. raj 2005-11-11 */
+	  exit(0);
 	  break;
 	default:
 	  /* we are the parent, close the socket we just accept()ed

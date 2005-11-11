@@ -688,7 +688,7 @@ wait_for_version_response(server_t *server)
       } else {
         pthread_mutex_lock(server->lock);
         server->state  = NSRV_ERROR;
-        server->err_fn = "__func__";
+        server->err_fn = (char *)__func__;
         if (rc == 0) {
           server->err_rc = NPE_REMOTE_CLOSE;
         } else {
@@ -709,7 +709,7 @@ wait_for_version_response(server_t *server)
       server->state_req = NSRV_WORK;
     } else {
       server->state  = NSRV_ERROR;
-      server->err_fn = "__func__";
+      server->err_fn = (char *)__func__;
       server->err_rc = rc;
     }
   }
@@ -764,7 +764,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
-          test->err_fn = "__func__";
+          test->err_fn = (char *)__func__;
           rc = NPE_DEPENDENCY_NOT_PRESENT;
           break;
         } 
@@ -880,7 +880,7 @@ initialize_test(void *data)
   if (rc != NPE_SUCCESS) {
     test->state  = TEST_ERROR;
     test->err_rc = rc;
-    test->err_fn = "__func__";
+    test->err_fn = (char *)__func__;
   }
 
 
@@ -919,7 +919,7 @@ initialize_tests(server_t *server)
           if (rc != NPE_SUCCESS) {
             test->state = TEST_ERROR;
             test->err_rc = rc;
-            test->err_fn = "__func__";
+            test->err_fn = (char *)__func__;
           };
         }
         /* should we restart the chain just incase an entry was inserted
@@ -983,7 +983,7 @@ netperf_worker(void *data)
     if (rc != NPE_SUCCESS) {
       server->state  = NSRV_ERROR;
       server->err_rc = rc;
-      server->err_fn = "__func__";
+      server->err_fn = (char *)__func__;
     }
   }
 
@@ -1031,7 +1031,7 @@ launch_worker_threads()
         if (rc != NPE_SUCCESS) {
           server->state = NSRV_ERROR;
           server->err_rc = rc;
-          server->err_fn = "__func__";
+          server->err_fn = (char *)__func__;
         }
       }
       server = server->next;
@@ -1193,7 +1193,7 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
-          test->err_fn = "__func__";
+          test->err_fn = (char *)__func__;
         }
       }
       set_elt = set_elt->next;
@@ -1216,7 +1216,7 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
-        test->err_fn = "__func__";
+        test->err_fn = (char *)__func__;
       }
     }
   }
@@ -1622,7 +1622,7 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
-          test->err_fn = "__func__";
+          test->err_fn = (char *)__func__;
         }
       }
       set_elt = set_elt->next;
@@ -1644,7 +1644,7 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
-        test->err_fn = "__func__";
+        test->err_fn = (char *)__func__;
       }
     }
   }
