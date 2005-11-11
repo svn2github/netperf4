@@ -104,7 +104,7 @@ FILE      *ofile;
 int        want_quiet;                                  /* --quiet, --silent */
 int        want_brief;                                  /* --brief */
 int        want_verbose;                                /* --verbose */
-int        forground = 1;
+int        forground = 2;
 char      *listen_port = NETPERF_DEFAULT_SERVICE_NAME;  /* --port */
 uint16_t   listen_port_num = 0;                         /* --port */
 char      *local_host_name       = NULL;
@@ -178,11 +178,11 @@ decode_command_line (int argc, char **argv)
     {
       switch (c)
         {
-	case 'd':               /* --debug */
+	case 'd':       /* --debug */
 	  debug++;
 	  break;
-        case 'f':               /* --forground */
-          forground = 1;
+        case 'f':       /* --forground */
+          forground++;  /* 1 means no deamon, 2 means no fork */
           break;
 	case 'L':
 	  break_args_explicit(optarg,local_host_name_buf,local_addr_fam_buf);
@@ -410,130 +410,6 @@ daemonize()
     exit(0);
   }
 }
-
-static void
-setup_listen_endpoint(char service[]) {
-
-  struct sockaddr  name;
-  struct sockaddr *peeraddr     = &name;
-  int              namelen      = sizeof(name);
-  int              peerlen      = namelen;
-  int              peeraddr_len = namelen;
-  int              sock;
-  int              rc;
-  int              listenfd     = 0;
-
-  NETPERF_DEBUG_ENTRY(debug,where);
-
-  /*
-     if we were given a port number on the command line open a socket.
-     Otherwise, if fd 0 is a socket then assume netserver was called by
-     inetd and the socket and connection where created by inetd.
-     Otherwise, use the default service name to open a socket.
-   */
-
-  if (service != NULL) {
-    /* we are not a child of inetd start a listen socket */
-    listenfd = establish_listen(local_host_name,
-                                service,
-                                local_address_family,
-                                &peerlen);
-
-    if (listenfd == -1) {
-      fprintf(where,"setup_listen_endpoint: failed to open listen socket\n");
-      fflush(where);
-      exit(1);
-    }
-
-    if (peerlen > namelen) {
-      peeraddr = (struct sockaddr *)malloc (peerlen);
-      peeraddr_len = peerlen;
-    }
-
-    if (!forground) {
-      daemonize();
-    }
-
-    if ((sock = accept(listenfd,peeraddr,&peerlen)) == -1) {
-      fprintf(where,"setup_listen_endpoint: accept failed\n");
-      fflush(where);
-      exit(1);
-    }
-    if (debug) {
-      fprintf(where,
-	      "setup_listen_endpoint: accepted connection on sock %d\n",
-	      sock);
-      fflush(where);
-    }
-    
-    rc = instantiate_netperf(sock);
-    if (rc != NPE_SUCCESS) {
-      fprintf(where, "setup_listen_endpoint: instantiate_netperf  error %d\n",rc);
-      fflush(where);
-      exit;
-    }
-  }
-}
-
-
-/* Netserver initialization */
-static void
-netserver_init()
-{
-  int   i;
-  int   rc;
-  int   sock;
-
-  struct sockaddr  name;
-  struct sockaddr *peeraddr     = &name;
-  int              namelen      = sizeof(name);
-  int              peerlen      = namelen;
-  int              peeraddr_len = namelen;
-
-  NETPERF_DEBUG_ENTRY(debug,where);
-
-  char *service = NULL;
-
-  for (i = 0; i < NETPERF_HASH_BUCKETS; i++) {
-    netperf_hash[i].server = NULL;
-    rc = pthread_mutex_init(&(netperf_hash[i].hash_lock), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
-      fflush(where);
-      exit;
-    }
-    rc = pthread_cond_init(&(netperf_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit;
-    }
-  }
- 
-  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
-    test_hash[i].test = NULL;
-    rc = pthread_mutex_init(&(test_hash[i].hash_lock), NULL);
-    if (rc) {
-      fprintf(where, "netserver_init: pthread_mutex_init error %d\n",rc);
-      fflush(where);
-      exit;
-    }
-    rc = pthread_cond_init(&(test_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "server_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit;
-    }
-  }
-
-  netlib_init();
-
-#ifdef NOTDEF
-  /* stick this here for now, but will be moving elsewhere later. raj
-     2005-11-10 */
-  setup_listen_endpoint(listen_port);
-#endif
-}
 
 
 static void
@@ -622,13 +498,6 @@ check_test_state()
        netserver thread looks at these data structures sgb */
   }
 }
-
-
-static void
-accept_netperf_connections()
-{
-}
-
 
 static void
 handle_netperf_requests()
@@ -699,6 +568,191 @@ handle_netperf_requests()
   /* mutex unlocking is not required because only one 
      netserver thread looks at these data structures sgb */
 }
+
+static void
+setup_listen_endpoint(char service[]) {
+
+  struct sockaddr  name;
+  struct sockaddr *peeraddr     = &name;
+  int              namelen      = sizeof(name);
+  int              peerlen      = namelen;
+  int              peeraddr_len = namelen;
+  int              sock;
+  int              rc;
+  int              listenfd     = 0;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  /*
+     if we were given a port number on the command line open a socket.
+     Otherwise, if fd 0 is a socket then assume netserver was called by
+     inetd and the socket and connection where created by inetd.
+     Otherwise, use the default service name to open a socket.
+   */
+
+  if (service != NULL) {
+    /* we are not a child of inetd start a listen socket */
+    listenfd = establish_listen(local_host_name,
+                                service,
+                                local_address_family,
+                                &peerlen);
+
+    if (listenfd == -1) {
+      fprintf(where,"setup_listen_endpoint: failed to open listen socket\n");
+      fflush(where);
+      exit(1);
+    }
+
+    if (peerlen > namelen) {
+      peeraddr = (struct sockaddr *)malloc (peerlen);
+      peeraddr_len = peerlen;
+    }
+
+    if (!forground) {
+      daemonize();
+    }
+
+    /* loopdeloop */
+
+    for (;;) {
+      printf("about to accept\n");
+      if ((sock = accept(listenfd,peeraddr,&peerlen)) == -1) {
+	fprintf(where,
+		"setup_listen_endpoint: accept failed errno %d %s\n",
+		errno,
+		strerror(errno));
+	fflush(where);
+	exit(1);
+      }
+      if (debug) {
+	fprintf(where,
+		"setup_listen_endpoint: accepted connection on sock %d\n",
+		sock);
+	fflush(where);
+      }
+
+      /* OK, do we fork or not? */
+
+      if (forground < 2) {
+	/* no fork please, eat with our fingers */
+	printf("forground instantiation\n");
+	rc = instantiate_netperf(sock);
+	if (rc != NPE_SUCCESS) {
+	  fprintf(where,
+		  "setup_listen_endpoint: instantiate_netperf  error %d\n",
+		  rc);
+	  fflush(where);
+	  exit;
+	}
+	/* if we get here, before we go back to call accept again,
+	   probably a good idea to close the sock. of course, I'm not
+	   even sure we will ever get here, but hey, what the heck.
+	   raj 2005-11-10 */
+	handle_netperf_requests();
+	printf("closing sock %d\n",sock);
+	close(sock);
+      }
+      else {
+	/* we would like a fork please */
+	printf("please hand me a fork\n");
+	switch(fork()) {
+	case -1:
+	  /* not enough tines on our fork I suppose */
+	  perror("netserver fork failure");
+	  exit(-1);
+	case 0:
+	  /* we are the child, go ahead and instantiate_netserver,
+	     however, we really don't need the listenfd to be open, so
+	     go ahead and close it */
+	  printf("child closing %d\n",listenfd);
+	  close(listenfd);
+	  rc = instantiate_netperf(sock);
+	  if (rc != NPE_SUCCESS) {
+	    fprintf(where,
+		    "setup_listen_endpoint: instantiate_netperf  error %d\n",
+		    rc);
+	    fflush(where);
+	    exit;
+	  }
+	  handle_netperf_requests();
+	  /* if we get here, before we go back to call accept again,
+	     probably a good idea to close the sock. of course, I'm not
+	     even sure we will ever get here, but hey, what the heck.
+	     raj 2005-11-10 */
+	  printf("server closing sock %d\n",sock);
+	  close(sock);
+	  break;
+	default:
+	  /* we are the parent, close the socket we just accept()ed
+	     and let things loop around again. raj 2005-11-10 */
+	  close(sock);
+	}
+      }
+    }
+  }
+}
+
+
+/* Netserver initialization */
+static void
+netserver_init()
+{
+  int   i;
+  int   rc;
+  int   sock;
+
+  struct sockaddr  name;
+  struct sockaddr *peeraddr     = &name;
+  int              namelen      = sizeof(name);
+  int              peerlen      = namelen;
+  int              peeraddr_len = namelen;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  char *service = NULL;
+
+  for (i = 0; i < NETPERF_HASH_BUCKETS; i++) {
+    netperf_hash[i].server = NULL;
+    rc = pthread_mutex_init(&(netperf_hash[i].hash_lock), NULL);
+    if (rc) {
+      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
+      fflush(where);
+      exit;
+    }
+    rc = pthread_cond_init(&(netperf_hash[i].condition), NULL);
+    if (rc) {
+      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
+      fflush(where);
+      exit;
+    }
+  }
+ 
+  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
+    test_hash[i].test = NULL;
+    rc = pthread_mutex_init(&(test_hash[i].hash_lock), NULL);
+    if (rc) {
+      fprintf(where, "netserver_init: pthread_mutex_init error %d\n",rc);
+      fflush(where);
+      exit;
+    }
+    rc = pthread_cond_init(&(test_hash[i].condition), NULL);
+    if (rc) {
+      fprintf(where, "server_init: pthread_cond_init error %d\n",rc);
+      fflush(where);
+      exit;
+    }
+  }
+
+  netlib_init();
+
+}
+
+
+static void
+accept_netperf_connections()
+{
+}
+
 
 
 int
