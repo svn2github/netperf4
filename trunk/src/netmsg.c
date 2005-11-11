@@ -827,7 +827,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (rc != NPE_SUCCESS) {
       new_test->state  = TEST_ERROR;
       new_test->err_rc = rc;
-      new_test->err_fn = "test_message";
+      new_test->err_fn = "__func__";
       rc = NPE_TEST_INIT_FAILED;
       break;
     }
@@ -879,7 +879,7 @@ sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (stats == NULL) {
       test->state  = TEST_ERROR;
       test->err_rc = NPE_SYS_STATS_DROPPED;
-      test->err_fn = "sys_stats_message";
+      test->err_fn = "__func__";
     }
   }
   return(rc);
@@ -911,7 +911,7 @@ test_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (stats == NULL) {
       test->state  = TEST_ERROR;
       test->err_rc = NPE_TEST_STATS_DROPPED;
-      test->err_fn = "test_stats_message";
+      test->err_fn = "__func__";
     }
   }
   return(rc);

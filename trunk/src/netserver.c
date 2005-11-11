@@ -537,7 +537,7 @@ handle_netperf_requests()
         }
       } else {
         netperf->state = NSRV_ERROR;
-        netperf->err_fn = "handle_netperf_requests";
+        netperf->err_fn = "__func__";
         if (rc == 0) {
           netperf->err_rc = NPE_REMOTE_CLOSE;
         } else {
@@ -558,7 +558,7 @@ handle_netperf_requests()
     if (rc != NPE_SUCCESS) {
       netperf->state  = NSRV_ERROR;
       netperf->err_rc = rc;
-      netperf->err_fn = "handle_netperf_requests";
+      netperf->err_fn = "__func__";
     }
   }
 
@@ -615,7 +615,7 @@ setup_listen_endpoint(char service[]) {
     /* loopdeloop */
 
     for (;;) {
-      printf("about to accept\n");
+      printf("about to accept on socket %d\n",listenfd);
       if ((sock = accept(listenfd,peeraddr,&peerlen)) == -1) {
 	fprintf(where,
 		"setup_listen_endpoint: accept failed errno %d %s\n",
@@ -632,8 +632,8 @@ setup_listen_endpoint(char service[]) {
       }
 
       /* OK, do we fork or not? */
-
-      if (forground < 2) {
+      printf("at the fork in the road, forground was %d\n",forground);
+      if (forground >= 2) {
 	/* no fork please, eat with our fingers */
 	printf("forground instantiation\n");
 	rc = instantiate_netperf(sock);

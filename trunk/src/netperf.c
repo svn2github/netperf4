@@ -688,7 +688,7 @@ wait_for_version_response(server_t *server)
       } else {
         pthread_mutex_lock(server->lock);
         server->state  = NSRV_ERROR;
-        server->err_fn = "wait_for_version_response";
+        server->err_fn = "__func__";
         if (rc == 0) {
           server->err_rc = NPE_REMOTE_CLOSE;
         } else {
@@ -709,7 +709,7 @@ wait_for_version_response(server_t *server)
       server->state_req = NSRV_WORK;
     } else {
       server->state  = NSRV_ERROR;
-      server->err_fn = "wait_for_version_response";
+      server->err_fn = "__func__";
       server->err_rc = rc;
     }
   }
@@ -718,10 +718,9 @@ wait_for_version_response(server_t *server)
     report_server_error(server);
   }
   pthread_mutex_unlock(server->lock);
-  if (debug) {
-    fprintf(where,"exiting wait_for_version_response\n");
-    fflush(where);
-  }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
   return rc;
 }
 
@@ -765,7 +764,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
-          test->err_fn = "resolve_dependency";
+          test->err_fn = "__func__";
           rc = NPE_DEPENDENCY_NOT_PRESENT;
           break;
         } 
@@ -881,13 +880,12 @@ initialize_test(void *data)
   if (rc != NPE_SUCCESS) {
     test->state  = TEST_ERROR;
     test->err_rc = rc;
-    test->err_fn = "initialize_test";
+    test->err_fn = "__func__";
   }
 
-  if (debug) {
-    fprintf(where,"exiting initialize_test\n");
-    fflush(where);
-  }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
 }
 
 
@@ -921,7 +919,7 @@ initialize_tests(server_t *server)
           if (rc != NPE_SUCCESS) {
             test->state = TEST_ERROR;
             test->err_rc = rc;
-            test->err_fn = "initialize_tests";
+            test->err_fn = "__func__";
           };
         }
         /* should we restart the chain just incase an entry was inserted
@@ -936,14 +934,13 @@ initialize_tests(server_t *server)
     pthread_mutex_unlock(&h->hash_lock);
   }
 
-  if (debug) {
-    fprintf(where,"exiting initialize_tests\n");
-    fflush(where);
-  }
+  NETPERF_DEBUG_EXIT(debug,where);
+
 }
 
 
-static void *netperf_worker(void *data)
+static void *
+netperf_worker(void *data)
 {
   int rc;
   server_t     *server = data;
@@ -986,7 +983,7 @@ static void *netperf_worker(void *data)
     if (rc != NPE_SUCCESS) {
       server->state  = NSRV_ERROR;
       server->err_rc = rc;
-      server->err_fn = "netperf_worker";
+      server->err_fn = "__func__";
     }
   }
 
@@ -1034,17 +1031,16 @@ launch_worker_threads()
         if (rc != NPE_SUCCESS) {
           server->state = NSRV_ERROR;
           server->err_rc = rc;
-          server->err_fn = "launch_worker_threads";
+          server->err_fn = "__func__";
         }
       }
       server = server->next;
     }
     pthread_mutex_unlock(&h->hash_lock);
   }
-  if (debug) {
-    fprintf(where,"exiting launch_worker_treads\n");
-    fflush(where);
-  }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
 }
 
 
@@ -1107,6 +1103,8 @@ wait_for_tests_to_initialize()
     fprintf(where,"exiting wait_for_tests_to_initialize rc = %d\n",rc);
     fflush(where);
   }
+
+  return(rc);
 }
 
 
@@ -1195,7 +1193,7 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
-          test->err_fn = "reqeust_state_change";
+          test->err_fn = "__func__";
         }
       }
       set_elt = set_elt->next;
@@ -1218,14 +1216,13 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
-        test->err_fn = "reqeust_state_change";
+        test->err_fn = "__func__";
       }
     }
   }
-  if (debug) {
-    fprintf(where,"request_state_change: exiting\n");
-    fflush(where);
-  }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
   return(rc);
 }
 
@@ -1363,10 +1360,7 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
     rc = NPE_TEST_SET_NOT_FOUND;
   }
 
-  if (debug) {
-    fprintf(where,"report_stats_command: exiting\n");
-    fflush(where);
-  }
+  NETPERF_DEBUG_EXIT(debug,where);
   
   return(rc);
 }
@@ -1534,10 +1528,8 @@ delete_test_set(xmlNodePtr cmd, uint32_t junk)
     free(test_set);
   }
   
-  if (debug) {
-    fprintf(where,"delete_test_set: exiting\n");
-    fflush(where);
-  }
+  NETPERF_DEBUG_EXIT(debug,where);
+
   return(rc);
 }
 
@@ -1630,7 +1622,7 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
-          test->err_fn = "stats_command";
+          test->err_fn = "__func__";
         }
       }
       set_elt = set_elt->next;
@@ -1652,14 +1644,12 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
-        test->err_fn = "stats_command";
+        test->err_fn = "__func__";
       }
     }
   }
-  if (debug) {
-    fprintf(where,"stats_command: exiting\n");
-    fflush(where);
-  }
+  
+  NETPERF_DEBUG_EXIT(debug,where);
 
   return(rc);
 }
@@ -1831,10 +1821,9 @@ process_commands_and_events()
     cmd = cmd->next;
   }
   xmlFreeDoc(doc);
-  if (debug) {
-    fprintf(where,"process_commands_and_events: exiting\n");
-    fflush(where);
-  }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
   return(rc);
 }
 

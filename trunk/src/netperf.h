@@ -23,6 +23,15 @@
     fflush(w); \
   }
 
+#define NETPERF_DEBUG_EXIT(d,w) \
+  if (d) { \
+    fprintf(w,\
+	    "DEBUG exiting function %s file %s \n",\
+	    __func__, \
+	    __FILE__); \
+    fflush(w); \
+  }
+
 #ifndef WIN32
 #define NETPERF_PATH_SEP "/"
 #else
