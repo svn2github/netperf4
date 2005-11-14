@@ -104,7 +104,7 @@ FILE      *ofile;
 int        want_quiet;                                  /* --quiet, --silent */
 int        want_brief;                                  /* --brief */
 int        want_verbose;                                /* --verbose */
-int        forground = 1;
+int        forground = 0;
 char      *listen_port = NETPERF_DEFAULT_SERVICE_NAME;  /* --port */
 uint16_t   listen_port_num = 0;                         /* --port */
 char      *local_host_name       = NULL;
