@@ -268,6 +268,11 @@ typedef struct test_set_instance {
   int            num_tests;        /* the number of tests linked into
                                       this test set */
   
+  uint32_t       debug;            /* should the report generation routine
+                                      produce debug output */
+
+  FILE          *where;            /* where that debug output should go */
+
   void          *report_data;      /* data buffer to hold report generation
                                       specific data between invocations of
                                       the same report generation routine */

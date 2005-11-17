@@ -1198,6 +1198,7 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
       }
       set_elt = set_elt->next;
     }
+    xmlSetProp(cmd,(const xmlChar *)"tid", test_set->id);
   } else {
     test = find_test_in_hash(tid);
     if (test) {
@@ -1248,7 +1249,6 @@ static int
 report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
 {
   int            rc   = NPE_SUCCESS;
-  xmlChar       *string;
   xmlDocPtr      doc;
   xmlNodePtr     commands;
   xmlNodePtr     cmd;
@@ -1257,6 +1257,7 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
   char          *output_file;
   char          *report_flags;
   xmlChar       *set_name;
+  xmlChar       *string;
   char          *desired_level;
   char          *dsrd_interval;
   tset_t        *test_set;
@@ -1296,15 +1297,33 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
 
   if (commands == NULL) {
     max_count = 1;
+    min_count = 1;
   }
 
   test_set = find_test_set_in_hash(set_name);
+  if (debug) {
+    fprintf(where,
+            "report_stats_command: found test_set = '%p'\n",
+            test_set);
+    fprintf(where,
+            "report_stats_command: max_count = %d   min_count = %d\n",
+            max_count, min_count);
+    fflush(where);
+  }
   
   if (test_set) {
+    if (debug) {
+      fprintf(where,
+              "report_stats_command: test_set = '%s'\n",
+              test_set->id);
+      fflush(where);
+    }
     test_set->confidence.max_count = max_count;
     test_set->confidence.min_count = min_count;
     test_set->confidence.value     = -100.0;
     test_set->report_data          = NULL;
+    test_set->debug                = debug;
+    test_set->where                = where;
     /* The report function is responsible for the allocation and clean up
        of any report_data structures that are required across the multiple
        invocations that occur during the loop.  */
@@ -1326,6 +1345,8 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
       while (cmd != NULL && rc == NPE_SUCCESS) {
         if (debug) {
           fprintf(where,"report_stats_command: calling process_command\n");
+          fprintf(where,"report_stats_command: name '%s' tid '%s'\n",
+                  cmd->name, xmlGetProp(cmd,(const xmlChar *)"tid"));
           fflush(where);
         }
         rc = process_command(cmd);
@@ -1627,6 +1648,7 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
       }
       set_elt = set_elt->next;
     }
+    xmlSetProp(cmd,(const xmlChar *)"tid", test_set->id);
   } else {
     test = find_test_in_hash(tid);
     if (test) {

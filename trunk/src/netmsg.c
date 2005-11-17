@@ -132,6 +132,10 @@ process_message(server_t *server, xmlDocPtr doc)
   xmlNodePtr cur;
   struct msgs *which_msg;
 
+  if (debug) {
+    fprintf(where,"process_message: entered\n");
+    fflush(where);
+  }
 
   msg = xmlDocGetRootElement(doc);
   if (msg == NULL) {
@@ -185,6 +189,10 @@ process_message(server_t *server, xmlDocPtr doc)
     }
   }
   xmlFreeDoc(doc);
+  if (debug) {
+    fprintf(where,"process_message: exiting\n");
+    fflush(where);
+  }
   return(rc);
 }
 
@@ -356,9 +364,9 @@ clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   if (test != NULL) {
     if (debug) {
       fprintf(where,
-	      "clear_stats_message: test_state = %d calling %p\n",
-	      test->state,
-	      test->test_clear);
+            "clear_stats_message: test_state = %d calling %p\n",
+            test->state,
+            test->test_clear);
       fflush(where);
     }
     rc = (test->test_clear)(test);
@@ -388,10 +396,10 @@ clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   if (test != NULL) {
     if (debug) {
       fprintf(where,
-	      "clear_sys_stats_message: test %p test_state = %d calling %p\n",
-	      test,
-	      test->state,
-	      test->test_clear);
+            "clear_sys_stats_message: test %p test_state = %d calling %p\n",
+            test,
+            test->state,
+            test->test_clear);
       fflush(where);
     }
     rc = (test->test_clear)(test);
@@ -715,7 +723,6 @@ measuring_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   test_t    *test;
 
-
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
   if (test != NULL) {
@@ -745,6 +752,10 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
 
 
+  if (debug) {
+    fprintf(where,"entering test_message\n");
+    fflush(where);
+  }
   if (server->state != server->state_req) {
     /* set netserver state to NSRV_WORK because receiving a test message
        shows that netperf accepted our version message */
@@ -755,7 +766,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (xmlStrcmp(test_node->name,(const xmlChar *)"test")) {
       if (debug) {
         fprintf(where,"test_message: skipped a non-test node\n");
-	fflush(where);
+        fflush(where);
       }
       test_node = test_node->next;
       continue;
@@ -794,7 +805,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
         fprintf(where,
                 "test_message: about to launch thread for test %d using func %p\n",
                 new_test->tid,
-		new_test->test_func);
+                new_test->test_func);
         fflush(where);
       }
       rc = launch_thread(&new_test->tid,new_test->test_func,new_test);
@@ -850,7 +861,6 @@ sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar     *testid;
   test_t      *test;
   xmlNodePtr  stats;
-
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);

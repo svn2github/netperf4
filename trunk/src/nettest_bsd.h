@@ -56,8 +56,11 @@ enum {
 
 typedef struct  bsd_test_data {
   /* address information */
-  struct addrinfo *locaddr;         /* local address informtion */
-  struct addrinfo *remaddr;         /* remote address informtion */
+  struct addrinfo *locaddr;        /* local address informtion */
+  struct addrinfo *remaddr;        /* remote address informtion */
+
+  int              s_listen;       /* listen sockets for catching type tests */
+  int              s_data;         /* data socket for executing tests */
 
   struct ring_elt *send_ring;      /* address of the send_ring */
   struct ring_elt *recv_ring;      /* address of the recv_ring */
@@ -122,18 +125,33 @@ typedef struct  bsd_test_data {
 
 typedef struct  bsd_results_data {
   int     max_count;
+  int     print_test;
+  int     print_run;
   FILE   *outfd;
   double *results;
   double *xmit_results;
   double *recv_results;
+  double *trans_results;
   double *utilization;
   double *servdemand;
   double *run_time;
-  double results_start;
+  double ave_time;
+  double result_measured_mean;
+  double result_confidence;
+  double result_minimum;
+  double result_maximum;
+  double cpu_util_measured_mean;
+  double cpu_util_confidence;
+  double service_demand_measured_mean;
+  double service_demand_confidence;
+  double confidence;
+  double sd_denominator;
+  double results_start;  /* must be the last field in structure */
 } bsd_results_t;
 
 /* Error codes to be used within nettest_bsd */
 enum {
+  BSDE_MAX_ERROR = -32,
   BSDE_SOCKET_SHUTDOWN_FAILED,
   BSDE_BIND_FAILED,
   BSDE_GETADDRINFO_ERROR,
@@ -149,6 +167,7 @@ enum {
   BSDE_DATA_RECV_ERROR,
   BSDE_TEST_STATE_CORRUPTED,
   BSDE_CONNECT_FAILED,
+  BSDE_DATA_CONNECTION_CLOSED_ERROR,
   BSDE_DATA_SEND_ERROR=-1,
   BSDE_SUCCESS = 0
 };
