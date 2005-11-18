@@ -34,7 +34,6 @@ char    nettest_id[]="\
 #else
 #define DIRTY
 #define HISTOGRAM
-#define INTERVALS
 #endif /* lint */
 
 #ifdef DIRTY
@@ -56,12 +55,6 @@ char    nettest_id[]="\
 /****************************************************************/
 /*                                                              */
 /*      nettest_bsd.c                                           */
-/*                                                              */
-/*      the BSD sockets parsing routine...                      */
-/*       ...with the addition of Windows NT, this is now also   */
-/*          a Winsock test... sigh :)                           */
-/*                                                              */
-/*      scan_sockets_args()                                     */
 /*                                                              */
 /*      the actual test routines...                             */
 /*                                                              */

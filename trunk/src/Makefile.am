@@ -22,10 +22,13 @@ netserver_SOURCES = netserver.c $(COMMON_SRC)
 include_HEADERS = netperf.h netconfidence.h
 
 # in theory, the stuff below should deal with creating the requisite libs
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_dns.la
 
 nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
 nettest_bsd_la_LDFLAGS = -module
+
+nettest_dns_la_SOURCES = nettest_dns.c nettest_dns.h
+nettest_dns_la_LDFLAGS = -module
 
 # the USE_CPU_SOURCE will pick the apropriate file based on the platform
 netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)

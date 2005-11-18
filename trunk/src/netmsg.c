@@ -132,10 +132,7 @@ process_message(server_t *server, xmlDocPtr doc)
   xmlNodePtr cur;
   struct msgs *which_msg;
 
-  if (debug) {
-    fprintf(where,"process_message: entered\n");
-    fflush(where);
-  }
+  NETPERF_DEBUG_ENTRY(debug,where);
 
   msg = xmlDocGetRootElement(doc);
   if (msg == NULL) {
@@ -189,10 +186,9 @@ process_message(server_t *server, xmlDocPtr doc)
     }
   }
   xmlFreeDoc(doc);
-  if (debug) {
-    fprintf(where,"process_message: exiting\n");
-    fflush(where);
-  }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
   return(rc);
 }
 
@@ -752,10 +748,8 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
 
 
-  if (debug) {
-    fprintf(where,"entering test_message\n");
-    fflush(where);
-  }
+  NETPERF_DEBUG_ENTRY(debug,where);
+
   if (server->state != server->state_req) {
     /* set netserver state to NSRV_WORK because receiving a test message
        shows that netperf accepted our version message */
@@ -845,10 +839,8 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     test_node = test_node->next;
   }
 
-  if (debug) {
-    fprintf(where,"exiting test_message\n");
-    fflush(where);
-  }
+  NETPERF_DEBUG_EXIT(debug,where);
+
   return(rc);
 }
 

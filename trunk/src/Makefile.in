@@ -161,10 +161,13 @@ netserver_SOURCES = netserver.c $(COMMON_SRC)
 include_HEADERS = netperf.h netconfidence.h
 
 # in theory, the stuff below should deal with creating the requisite libs
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_dns.la
 
 nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
 nettest_bsd_la_LDFLAGS = -module
+
+nettest_dns_la_SOURCES = nettest_dns.c nettest_dns.h
+nettest_dns_la_LDFLAGS = -module
 
 # the USE_CPU_SOURCE will pick the apropriate file based on the platform
 netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)
@@ -190,6 +193,9 @@ netsysstats_la_OBJECTS = $(am_netsysstats_la_OBJECTS)
 nettest_bsd_la_LIBADD =
 am_nettest_bsd_la_OBJECTS = nettest_bsd.lo
 nettest_bsd_la_OBJECTS = $(am_nettest_bsd_la_OBJECTS)
+nettest_dns_la_LIBADD =
+am_nettest_dns_la_OBJECTS = nettest_dns.lo
+nettest_dns_la_OBJECTS = $(am_nettest_dns_la_OBJECTS)
 bin_PROGRAMS = netperf$(EXEEXT) netserver$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
 
@@ -216,7 +222,8 @@ am__depfiles_maybe = depfiles
 @AMDEP_TRUE@	./$(DEPDIR)/netserver.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_common.Plo \
-@AMDEP_TRUE@	./$(DEPDIR)/nettest_bsd.Plo
+@AMDEP_TRUE@	./$(DEPDIR)/nettest_bsd.Plo \
+@AMDEP_TRUE@	./$(DEPDIR)/nettest_dns.Plo
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 LTCOMPILE = $(LIBTOOL) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) \
@@ -225,13 +232,14 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
 DIST_SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) \
-	$(netperf_SOURCES) $(netserver_SOURCES)
+	$(nettest_dns_la_SOURCES) $(netperf_SOURCES) \
+	$(netserver_SOURCES)
 HEADERS = $(include_HEADERS)
 
 DIST_COMMON = $(include_HEADERS) $(srcdir)/Makefile.in Makefile.am \
 	missing/get_expiration_time.c missing/getaddrinfo.c \
 	missing/getopt.c missing/getopt1.c missing/inet_ntop.c
-SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
+SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(nettest_dns_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
 
 all: all-am
 
@@ -274,6 +282,8 @@ netsysstats.la: $(netsysstats_la_OBJECTS) $(netsysstats_la_DEPENDENCIES)
 	$(LINK) -rpath $(libdir) $(netsysstats_la_LDFLAGS) $(netsysstats_la_OBJECTS) $(netsysstats_la_LIBADD) $(LIBS)
 nettest_bsd.la: $(nettest_bsd_la_OBJECTS) $(nettest_bsd_la_DEPENDENCIES) 
 	$(LINK) -rpath $(libdir) $(nettest_bsd_la_LDFLAGS) $(nettest_bsd_la_OBJECTS) $(nettest_bsd_la_LIBADD) $(LIBS)
+nettest_dns.la: $(nettest_dns_la_OBJECTS) $(nettest_dns_la_DEPENDENCIES) 
+	$(LINK) -rpath $(libdir) $(nettest_dns_la_LDFLAGS) $(nettest_dns_la_OBJECTS) $(nettest_dns_la_LIBADD) $(LIBS)
 binPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
 install-binPROGRAMS: $(bin_PROGRAMS)
 	@$(NORMAL_INSTALL)
@@ -329,6 +339,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_bsd.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_dns.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	if $(COMPILE) -MT $@ -MD -MP -MF "$(DEPDIR)/$*.Tpo" \
