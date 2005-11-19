@@ -223,6 +223,7 @@
   family        (AF_INET|AF_INET6|AF_UNSPEC)  "AF_INET"
   remote_port   CDATA                         #REQUIRED
   remote_host   CDATA                         #REQUIRED
+  use_tcp       (yes | no | true | false)     #IMPLIED
 >
 
 

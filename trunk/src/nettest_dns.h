@@ -101,7 +101,10 @@ typedef struct  dns_test_data {
       uint64_t  responses_received; /* the number of responses
 				       received */
       uint64_t  response_bytes_received; /* their byte count */
+      uint64_t  trans_sent;
+      uint64_t  trans_received;
       uint64_t  connect_calls;
+      uint64_t  accepts;
     } named;
   } stats;
   struct timeval  elapsed_time;

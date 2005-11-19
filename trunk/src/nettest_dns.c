@@ -94,6 +94,14 @@ char    nettest_dns_id[]="\
 #include <poll.h>
 #endif
 
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
+
+#ifdef HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
+
 #include "netperf.h"
 
 #ifdef HISTOGRAM
@@ -255,10 +263,39 @@ get_dependency_data(test_t *test, int type, int protocol)
   remotefam   = strtofam(string);
   memset(&hints, 0, sizeof(hints));
   hints.ai_family   = remotefam;
-  hints.ai_socktype = type;
-  hints.ai_protocol = protocol;
-  hints.ai_flags    = 0;
 
+  if ((-1 == type) &&
+      (-1 == protocol)) {
+    /* that means we retrieve type and protocol based on dependency
+       data if there is a use_tcp attribute _and_ it says yes or true,
+       then we will use TCP. otherwise we will use UDP. raj 2005-11-18
+      */
+    string = xmlGetProp(test->dependency_data,(const xmlChar *)"use_tcp");
+    if (NULL == string) {
+      hints.ai_socktype = SOCK_DGRAM;
+      hints.ai_protocol = IPPROTO_UDP;
+      my_data->use_tcp = 0;
+    }
+    else {
+      if (!strcasecmp(string,"true") ||
+	  !strcasecmp(string,"yes")) {
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	my_data->use_tcp = 1;
+      }
+      else {
+      hints.ai_socktype = SOCK_DGRAM;
+      hints.ai_protocol = IPPROTO_UDP;
+      my_data->use_tcp = 0;
+      }	
+    }
+  }
+  else {
+  }
+  hints.ai_flags    = AI_ADDRCONFIG;
+
+  /* we depend on the parser making sure these were actually
+     present... */
   remoteport = xmlGetProp(test->dependency_data,(const xmlChar *)"remote_port");
   remotehost = xmlGetProp(test->dependency_data,(const xmlChar *)"remote_host");
   count = 0;
@@ -598,7 +635,7 @@ strtoclass(char class_string[]){
 
 static int
 strtotype(char type_string[]){
-  if (!stracasecmp(type_string,"T_A")) return(T_A);
+  if (!strcasecmp(type_string,"T_A")) return(T_A);
   else if (!strcasecmp(type_string,"T_NS")) return(T_NS);
   else if (!strcasecmp(type_string,"T_MD")) return(T_MD);
   else if (!strcasecmp(type_string,"T_MF")) return(T_MF);
@@ -725,6 +762,9 @@ dns_test_init(test_t *test, int type, int protocol)
     /* zero the dns test specific data structure */
     test_specific_data_init(new_data);
 
+    /* while we are not using it as a means to fill buffers with data,
+       we do use "fill_file" as the way to tell where the list of
+       dns_requests happen to be */
     string =  xmlGetProp(args,(const xmlChar *)"fill_file");
     /* fopen the fill file it will be used when allocating buffer rings */
     if (string) {
@@ -742,8 +782,9 @@ dns_test_init(test_t *test, int type, int protocol)
     units  =  xmlGetProp(args,(const xmlChar *)"recv_buffer_units");
     new_data->recv_buf_size = convert(string,units);
 
-    /* we need to add code here to get stuff such as whether we should
-       use TCP, set TCP_NODELAY, keep the TCP connection open... */
+    /* we need to add code somewhere here to get stuff such as whether
+       we should use TCP, set TCP_NODELAY, keep the TCP connection
+       open... */
 
     /* we also neeed to add code to get stuff such as the name of the
        remote DNS server, the port number and what address family to
@@ -954,10 +995,13 @@ send_dns_rr_preinit(test_t *test)
 {
   dns_data_t       *my_data;
 
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   my_data   = test->test_specific_data;
 
-  /* I don't think we will be using get_dependency_data */
-  /* get_dependency_data(test, SOCK_STREAM, IPPROTO_TCP); */
+  /* let get_dependency_data know to pick type and protocol based on
+     the dependency info */
+  get_dependency_data(test, -1, -1);
   my_data->query_socket = create_data_socket(test);
 }
 
@@ -965,6 +1009,8 @@ static uint32_t
 send_dns_rr_init(test_t *test)
 {
   dns_data_t       *my_data;
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   my_data   = test->test_specific_data;
 
@@ -994,6 +1040,8 @@ send_dns_rr_idle_link(test_t *test, int last_len)
   int               len;
   uint32_t          new_state;
   dns_data_t       *my_data;
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   my_data   = test->test_specific_data;
   len       = last_len;
@@ -1039,6 +1087,7 @@ send_dns_rr_meas(test_t *test)
   uint32_t          new_state;
   int               len;
   int               ret;
+  int               i;
   int               response_len;
   int               bytes_left;
   int               req_size;
@@ -1056,6 +1105,9 @@ send_dns_rr_meas(test_t *test)
 
 
   HISTOGRAM_VARS;
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   my_data   = test->test_specific_data;
 
 
@@ -1076,6 +1128,7 @@ send_dns_rr_meas(test_t *test)
   status_entry = &(my_data->outstanding_requests[message_id]);
   if (status_entry->active) {
     /* this could be bad?  or is it just an expired entry? */
+    printf("Hey dummy, this entry is already active!\n");
   }
   else {
     status_entry->active = 1;
@@ -1103,8 +1156,8 @@ send_dns_rr_meas(test_t *test)
                           "data send error");
     }
   }
-  my_data->stats.named.queries_sent++;
-  my_data->stats.named.query_bytes_sent += len;
+  /* my_data->stats.named.queries_sent++; */
+  /* my_data->stats.named.query_bytes_sent += len; */
 
   /* recv the request for the test, but first we really need some sort
      of timeout on a poll call or whatnot... */
@@ -1152,7 +1205,7 @@ send_dns_rr_meas(test_t *test)
 	  break;
 	}
 	/* do we have more to read this time around? */
-	if (!my_data->use_tcp) {
+	if (my_data->use_tcp == 0) {
 	  /* we are UDP */
 	  response_len = len;
 	  bytes_left = 0;
@@ -1161,8 +1214,6 @@ send_dns_rr_meas(test_t *test)
 	  /* not quite sure what to do here - probably have to parse the
 	     packet a bit more, update response_len etc... */
 	}
-	rsp_ptr    += len;
-	bytes_left -= len;
       } 
       else {
 	/* len is 0 the connection was closed exit the while loop */
@@ -1177,13 +1228,18 @@ send_dns_rr_meas(test_t *test)
       HIST_TIMESTAMP(&time_two);
       HIST_ADD(my_data->time_hist,
 	       delta_macro(&(status_entry->sent_time),&time_two));
-      my_data->stats.named.responses_received++;
-      my_data->stats.named.response_bytes_received += response_len;
+      /* my_data->stats.named.responses_received++; */
+      /* so we can continue to "leverage" the nettest_bsd reporter for
+	 now. raj 2005-11-18 */
+      my_data->stats.named.trans_sent++;
+      my_data->stats.named.trans_received++;
+      /* my_data->stats.named.response_bytes_received += response_len; */
     }
     else {
       /* is this bad?  well, if we were in a transition from LOAD to
 	 MEAS state it could happen I suppose so for now we will simply
 	 ignore the message */
+      printf("Yo! no match on request_id, entry inactive\n");
     }
 
     if (len == 0) {
@@ -1193,6 +1249,7 @@ send_dns_rr_meas(test_t *test)
 			  DNSE_DATA_CONNECTION_CLOSED_ERROR,
 			  "data connection closed during TEST_MEASURE state");
     }
+    break;
   }
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
@@ -1208,17 +1265,21 @@ static uint32_t
 send_dns_rr_load(test_t *test)
 {
   uint32_t          new_state;
+  int               ret;
   int               len;
   int               bytes_left;
   int               req_size;
   char             *rsp_ptr;
   dns_data_t       *my_data;
+  struct pollfd     fds;
   char              request_buffer[NS_PACKETSZ];  /* that aught to be
 						     enough to hold it
 						     - modulo stuff
 						     like large
 						     requests on TCP
 						     connections... */
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   my_data   = test->test_specific_data;
 
@@ -1241,46 +1302,72 @@ send_dns_rr_load(test_t *test)
                           "data send error");
     }
   }
-  /* recv the request for the test */
-  rsp_ptr    = request_buffer;
-  bytes_left = NS_PACKETSZ;
-  while (bytes_left > 0) {
-    if ((len=recv(my_data->query_socket,
-                  rsp_ptr,
-                  bytes_left,
-                  0)) != 0) {
-      /* this macro hides windows differences */
-      if (CHECK_FOR_RECV_ERROR(len)) {
-        report_test_failure(test,
-                            __func__,
-                            DNSE_DATA_RECV_ERROR,
-                            "data_recv_error");
-        break;
-      }
-      /* do we have more to read this time around? */
-      if (!my_data->use_tcp) {
-	/* we are UDP */
-	bytes_left = 0;
+  
+    fds.fd = my_data->query_socket;
+  fds.events = POLLIN;
+  fds.revents = 0;
+
+  ret = poll(&fds,1,5000); /* magic constant alert - that is something
+			      that should come from the config
+			      file... */
+
+  switch (ret) {
+  case -1: 
+    /* something bad happened */
+    report_test_failure(test,
+			__func__,
+			DNSE_DATA_RECV_ERROR,
+			"poll_error");
+    
+    break;
+  case 0:
+    /* we had a timeout. since we are not actually measuring anything,
+       there is no status_entry to update. raj 2005-11-18 */
+    break;
+  case 1:
+    /* recv the request for the test */
+    rsp_ptr    = request_buffer;
+    bytes_left = NS_PACKETSZ;
+    while (bytes_left > 0) {
+      if ((len=recv(my_data->query_socket,
+		    rsp_ptr,
+		    bytes_left,
+		    0)) != 0) {
+	/* this macro hides windows differences */
+	if (CHECK_FOR_RECV_ERROR(len)) {
+	  report_test_failure(test,
+			      __func__,
+			      DNSE_DATA_RECV_ERROR,
+			      "data_recv_error");
+	  break;
+	}
+	/* do we have more to read this time around? */
+	if (!my_data->use_tcp) {
+	  /* we are UDP */
+	  bytes_left = 0;
+	}
+	else {
+	  /* not quite sure what to do here - probably have to parse the
+	     packet a bit more */
+	}
+	rsp_ptr    += len;
+	bytes_left -= len;
       }
       else {
-	/* not quite sure what to do here - probably have to parse the
-	   packet a bit more */
+	/* len is 0 the connection was closed exit the while loop */
+	break;
       }
-      rsp_ptr    += len;
-      bytes_left -= len;
     }
-    else {
-      /* len is 0 the connection was closed exit the while loop */
-      break;
-    }
-  }
+    break;
 
+  }
   new_state = CHECK_REQ_STATE;
   if ((len == 0) ||
       (new_state == TEST_IDLE)) {
     send_dns_rr_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  } 
+  else {
     if (new_state == TEST_MEASURE) {
       /* transitioning to measure state from loaded state
          set previous timestamp */
@@ -1341,7 +1428,14 @@ void
 send_dns_rr(test_t *test)
 {
   uint32_t state, new_state;
-  dns_test_init(test, SOCK_STREAM, IPPROTO_TCP);
+
+  /* this may be interesting as we may have to move things around a
+     bit - we may not necessarily know if we are using UDP or TCP at
+     this point in the parsing... raj 2005-11-18 */
+  dns_test_init(test, SOCK_DGRAM, IPPROTO_UDP);
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   state = GET_TEST_STATE;
   while ((state != TEST_ERROR) &&
          (state != TEST_DEAD )) {

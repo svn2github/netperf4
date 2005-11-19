@@ -233,6 +233,15 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
   xmlNodePtr root = NULL;
   xmlNsPtr   ns;
 
+  if (debug) {
+    if (fname) {
+      fprintf(where,"parse_xml_file called with fname %s\n",fname);
+    }
+    else {
+      fprintf(where,"parse_xml_file called with null fname\n");
+    fflush(where);
+    }
+  }
   if (fname == NULL) {
     if (!xmlStrcmp(doctype,(const xmlChar *)"netperf")) {
       fname = "default_config.xml";
@@ -240,6 +249,11 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
     if (!xmlStrcmp(doctype,(const xmlChar *)"commands")) {
       fname = "default_commands.xml";
     }
+  }
+
+  if (debug) {
+    fprintf(where,"%s parsing file %s\n",__func__,fname);
+    fflush(where);
   }
   
   if ((doc = xmlParseFile(fname)) != NULL) {
@@ -1850,7 +1864,7 @@ process_commands_and_events()
 }
 
 int
-main (int argc, char **argv)
+main(int argc, char **argv)
 {
   int       rc = NPE_SUCCESS;
   int       tmp;

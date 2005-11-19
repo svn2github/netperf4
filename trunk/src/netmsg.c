@@ -900,7 +900,7 @@ test_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test   = find_test_in_hash(testid);
   if (test != NULL) {
     if (debug) {
-      fprintf(where,"test_stats_message: test_state = %d ",test->state);
+      fprintf(where,"test_stats_message: test_state = %d\n",test->state);
       fflush(where);
     }
     if (test->received_stats == NULL) {

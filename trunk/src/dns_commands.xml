@@ -1,0 +1,28 @@
+<?xml version="1.0" standalone="no" ?>
+<!DOCTYPE commands SYSTEM "./netperf_docs.dtd" >        
+<commands xmlns="http://www.netperf.org/ns/netperf">
+
+<!-- 20 second DNS_RR test, details of the config in the config file
+ eg dns_config.xml or whatever you may want to use -->
+
+  <!-- cause a set of tests to be instantiated -->
+  <create_test_set set_name="s0" tests_in_set="t0,t1" />
+  <wait tid="s0" />
+  <!-- now ask that all the tests in the set go to the load state -->
+  <load tid="s0" />
+  <wait tid="s0" />
+  <!-- now ask that all the tests in the set go to the MEAS state -->
+  <measure tid="s0" />
+  <wait tid="s0" seconds="20" />
+  <load tid="s0" />
+  <wait tid="s0" />
+  <get_stats tid="t0" />
+  <get_stats tid="t1" />
+  <clear_stats tid="t0" />
+  <clear_stats tid="t1" />
+  <idle tid="s0" />
+  <wait tid="s0" />
+  <report_stats test_set="s0" 
+    library="nettest_dns.la"
+    function="report_dns_test_results" />
+</commands>

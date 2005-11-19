@@ -92,7 +92,7 @@ sys_cpu_util_init(test_t *test)
 
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
-                      struct timeval *time,
+                      struct timeval *timestamp,
 		      test_t *test)
 {
 
@@ -111,8 +111,8 @@ get_cpu_time_counters(cpu_time_counters_t *res,
      bits and then just sum-in the psc_lo value.  raj 2005/09/06 */ 
 
   if (pstat_getprocessor(psp, sizeof(*psp), num_cpus, 0) != -1) {
-    gettimeofday(time, NULL);
-    elapsed = (double)time->tv_sec + ((double)time->tv_usec / (double)1000000);
+    gettimeofday(timestamp, NULL);
+    elapsed = (double)timestamp->tv_sec + ((double)timestamp->tv_usec / (double)1000000);
     ticks   = sysconf(_SC_CLK_TCK);
     for (i = 0; i < num_cpus; i++) {
       /* we use lib_iticksperclktick in our sanity checking.  raj 2005/09/06 */
@@ -148,7 +148,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     }
     if (test->debug) {
       fprintf(test->where, "\tseconds=%d\tusec=%d\telapsed=%f\n",
-              time->tv_sec,time->tv_usec,elapsed);
+              timestamp->tv_sec,timestamp->tv_usec,elapsed);
       fflush(test->where);
     }
   }
