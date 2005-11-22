@@ -4,3 +4,9 @@ Often this is in /usr/local/lib and /usr/local/lib is not always in
 one's PATH variable.  So, it may be necessary to include
 /usr/local/lib in the PATH variable before running the configure
 script.
+
+If you want to grab the precompiled libxml2 bits from
+http://hpux.connect.org.uk/ you should grab the 2.6.18 version of
+libxml2.  The 2.6.20 and 2.6.22 versions have had troubles with
+unresolved symbols on the systems on which we've tested. (don't forget
+to retrieve the dependencies :)

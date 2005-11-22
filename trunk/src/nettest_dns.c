@@ -724,6 +724,41 @@ get_next_dns_request(test_t *test, char *request_buffer, int buflen) {
     return(-1);
   }
 }
+
+static void
+pick_random_start(test_t *test) {
+  dns_data_t *my_data;
+  char temp_name[NS_MAXDNAME]; /* from arpa/nameser.h */
+  char temp_class[64];   /* 64 seems like a bit much.  and by rights
+			    we probably should be doing stuff to make
+			    sure we don't overflow these things on the
+			    fscanf... */
+  char temp_type[64];
+  char temp_success[64];
+  
+  struct timeval foo;
+  int i;
+  
+  my_data = GET_TEST_DATA(test);
+  gettimeofday(&foo,NULL);
+  srand(foo.tv_usec);
+  i = rand() % 65536;
+  for (;i>0;i--) {
+    if (my_data->request_source) {
+      /* ah, good, we do have a file */
+      if (fscanf(my_data->request_source,
+		 "%s %s %s %d\n",
+		 temp_name,
+		 temp_class,
+		 temp_type,
+		 temp_success) == EOF) {
+	rewind(my_data->request_source);
+      }
+    }
+  }
+}
+
+
 dns_data_t *
 dns_test_init(test_t *test, int type, int protocol)
 {
@@ -766,9 +801,10 @@ dns_test_init(test_t *test, int type, int protocol)
        we do use "fill_file" as the way to tell where the list of
        dns_requests happen to be */
     string =  xmlGetProp(args,(const xmlChar *)"fill_file");
-    /* fopen the fill file it will be used when allocating buffer rings */
+    /* fopen the fill file it will be used when finding work to do */
     if (string) {
       new_data->request_source = fopen((char *)string,"r");
+      pick_random_start(test);
     }
 
     /* we are relying on the good graces of the validating and
@@ -1093,6 +1129,7 @@ send_dns_rr_meas(test_t *test)
   int               req_size;
   uint16_t         *rsp_ptr;
   uint16_t          message_id;
+  uint16_t          response_id;
   dns_data_t       *my_data;
   dns_request_status_t *status_entry;
   struct pollfd     fds;
@@ -1128,7 +1165,7 @@ send_dns_rr_meas(test_t *test)
   status_entry = &(my_data->outstanding_requests[message_id]);
   if (status_entry->active) {
     /* this could be bad?  or is it just an expired entry? */
-    printf("Hey dummy, this entry is already active!\n");
+    printf("Hey dummy, this entry %d is already active!\n",message_id);
   }
   else {
     status_entry->active = 1;
@@ -1183,7 +1220,7 @@ send_dns_rr_meas(test_t *test)
     /* we had a timeout. invalidate the existing request so we will
        ignore it if it was simply delayed. status_entry should still
        be valid*/
-    memset(&status_entry,0,sizeof(status_entry));
+    memset(status_entry,0,sizeof(status_entry));
     break;
   case 1:
   
@@ -1220,8 +1257,8 @@ send_dns_rr_meas(test_t *test)
 	break;
       }
     }
-    message_id = rsp_ptr[0];
-    status_entry  = &(my_data->outstanding_requests[message_id]);
+    response_id = rsp_ptr[0];
+    status_entry  = &(my_data->outstanding_requests[response_id]);
     if (status_entry->active) {
       /* this is what we want to see */
       /* code to timestamp enabled by HISTOGRAM */
@@ -1234,6 +1271,8 @@ send_dns_rr_meas(test_t *test)
       my_data->stats.named.trans_sent++;
       my_data->stats.named.trans_received++;
       /* my_data->stats.named.response_bytes_received += response_len; */
+      /* hey dummy, don't forget to clear the entry... raj 2005-11-22 */
+      memset(status_entry,0,sizeof(status_entry));
     }
     else {
       /* is this bad?  well, if we were in a transition from LOAD to
