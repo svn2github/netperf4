@@ -451,4 +451,37 @@
 >
 
                       
+<!-- Element definitions for variable sized data tests  -->
+
+<!ELEMENT work_load_description (pattern, distribution?)* >
+<!ATTLIST work_load_description
+  name              CDATA    #REQUIRED
+>
+
+
+<!ELEMENT pattern (pattern_entry)* >
+<!ATTLIST pattern
+  index             CDATA    #REQUIRED
+>
+
+
+<!ELEMENT pattern_entry EMPTY >
+<!ATTLIST pattern_entry
+  req_size          CDATA    #IMPLIED
+  rsp_size          CDATA    #IMPLIED
+>
+
+
+<!ELEMENT distribution (distribution_entry)* >
+<!ATTLIST distribution
+  dist_key          CDATA    #IMPLIED
+>
+
+
+<!ELEMENT distribution_entry EMPTY >
+<!ATTLIST distribution_entry
+  next_pattern      CDATA    #IMPLIED
+  number            CDATA    #IMPLIED
+>
+
 
