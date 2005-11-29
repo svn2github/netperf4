@@ -32,6 +32,13 @@
     fflush(w); \
   }
 
+/* Macros for accessing fields in the global netperf structures. */
+#define SET_TEST_STATE(state)             test->new_state = state
+#define GET_TEST_STATE                    test->new_state
+#define CHECK_REQ_STATE                   test->state_req 
+#define GET_TEST_DATA(test)               test->test_specific_data
+#define NO_STATE_CHANGE(test)             (test->state_req == test->new_state)
+
 #ifndef WIN32
 #define NETPERF_PATH_SEP "/"
 #else

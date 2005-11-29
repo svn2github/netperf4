@@ -124,13 +124,6 @@ char    nettest_dns_id[]="\
 #define GET_ERRNO errno
 #endif
 
-/* Macros for accessing fields in the global netperf structures. */
-#define SET_TEST_STATE(state)             test->new_state = state
-#define GET_TEST_STATE                    test->new_state
-#define CHECK_REQ_STATE                   test->state_req 
-#define GET_TEST_DATA(test)               test->test_specific_data
-
-
 static void
 report_test_failure(test, function, err_code, err_string)
   test_t *test;
@@ -1133,6 +1126,7 @@ send_dns_rr_meas(test_t *test)
   dns_data_t       *my_data;
   dns_request_status_t *status_entry;
   struct pollfd     fds;
+  int               keep_going=1;
 
   /* this aught to be enough to hold it - modulo stuff like large
      requests on TCP connections... and we make it of type uint16_t so
@@ -1147,148 +1141,157 @@ send_dns_rr_meas(test_t *test)
 
   my_data   = test->test_specific_data;
 
+  while (NO_STATE_CHANGE(test) &&
+	 keep_going) {
+    /* go through and build the next request to send */
+    req_size = get_next_dns_request(test, 
+				    (char *)request_buffer, 
+				    sizeof(request_buffer));
 
-  /* go through and build the next request to send */
-  req_size = get_next_dns_request(test, 
-				  (char *)request_buffer, 
-				  sizeof(request_buffer));
+    /* set the ID as apropriate since it is a uint16_t, we'll not worry
+       about "overflow" as it will just be dealt with "naturally. we use
+       the magic number of "0" based on "knowing" that the ID is the
+       first thing in the message, and it seems there is no commonly
+       defined structure for a DNS reqeust header?  raj 2005-11-18 */
 
-  /* set the ID as apropriate since it is a uint16_t, we'll not worry
-    about "overflow" as it will just be dealt with "naturally. we use
-    the magic number of "0" based on "knowing" that the ID is the
-    first thing in the message, and it seems there is no commonly
-    defined structure for a DNS reqeust header?  raj 2005-11-18 */
+    message_id = request_buffer[0] = my_data->request_id++; 
 
-  message_id = request_buffer[0] = my_data->request_id++; 
-
-  /* now stash some state away so we can deal with the response */
-  status_entry = &(my_data->outstanding_requests[message_id]);
-  if (status_entry->active) {
-    /* this could be bad?  or is it just an expired entry? */
-    printf("Hey dummy, this entry %d is already active!\n",message_id);
-  }
-  else {
-    status_entry->active = 1;
-    status_entry->success = 1;
-    NETPERF_TIME_STAMP(status_entry->sent_time);
-  }
-  /* send data for the test. we can use send() rather than sendto()
-     because in _init we will have called connect() on the socket.
-     now, if we are using UDP and the server happens to reply from a
-     source IP address other than the one to which we have
-     connected... well...  raj 2005-11-18 */
-
-  /* if we are ever going to pace these things, we need logic to
-     decide if it is time to send another request or not */
-
-  if((len=send(my_data->query_socket,
-	       request_buffer,
-	       req_size,
-               0)) != req_size) {
-    /* this macro hides windows differences */
-    if (CHECK_FOR_SEND_ERROR(len)) {
-      report_test_failure(test,
-                          __func__,
-                          DNSE_DATA_SEND_ERROR,
-                          "data send error");
-    }
-  }
-  /* my_data->stats.named.queries_sent++; */
-  /* my_data->stats.named.query_bytes_sent += len; */
-
-  /* recv the request for the test, but first we really need some sort
-     of timeout on a poll call or whatnot... */
-
-  fds.fd = my_data->query_socket;
-  fds.events = POLLIN;
-  fds.revents = 0;
-
-  ret = poll(&fds,1,5000); /* magic constant alert - that is something
-			      that should come from the config
-			      file... */
-
-  switch (ret) {
-  case -1: 
-    /* something bad happened */
-    report_test_failure(test,
-			__func__,
-			DNSE_DATA_RECV_ERROR,
-			"poll_error");
-    
-    break;
-  case 0:
-    /* we had a timeout. invalidate the existing request so we will
-       ignore it if it was simply delayed. status_entry should still
-       be valid*/
-    memset(status_entry,0,sizeof(status_entry));
-    break;
-  case 1:
-  
-    bytes_left = NS_PACKETSZ; /* we'll do something clever inside the
-				 loop to handle UDP vs TCP. */
-    rsp_ptr = request_buffer;  /* until we discover it is a bug, re-use
-				  the reqeust buffer */
-    while (bytes_left > 0) {
-      if ((len=recv(my_data->query_socket,
-		    rsp_ptr,
-		    bytes_left,
-		    0)) != 0) {
-	/* this macro hides windows differences */
-	if (CHECK_FOR_RECV_ERROR(len)) {
-	  report_test_failure(test,
-			      __func__,
-			      DNSE_DATA_RECV_ERROR,
-			      "data_recv_error");
-	  break;
-	}
-	/* do we have more to read this time around? */
-	if (my_data->use_tcp == 0) {
-	  /* we are UDP */
-	  response_len = len;
-	  bytes_left = 0;
-	}
-	else {
-	  /* not quite sure what to do here - probably have to parse the
-	     packet a bit more, update response_len etc... */
-	}
-      } 
-      else {
-	/* len is 0 the connection was closed exit the while loop */
-	break;
-      }
-    }
-    response_id = rsp_ptr[0];
-    status_entry  = &(my_data->outstanding_requests[response_id]);
+    /* now stash some state away so we can deal with the response */
+    status_entry = &(my_data->outstanding_requests[message_id]);
     if (status_entry->active) {
-      /* this is what we want to see */
-      /* code to timestamp enabled by HISTOGRAM */
-      HIST_TIMESTAMP(&time_two);
-      HIST_ADD(my_data->time_hist,
-	       delta_macro(&(status_entry->sent_time),&time_two));
-      /* my_data->stats.named.responses_received++; */
-      /* so we can continue to "leverage" the nettest_bsd reporter for
-	 now. raj 2005-11-18 */
-      my_data->stats.named.trans_sent++;
-      my_data->stats.named.trans_received++;
-      /* my_data->stats.named.response_bytes_received += response_len; */
-      /* hey dummy, don't forget to clear the entry... raj 2005-11-22 */
-      memset(status_entry,0,sizeof(status_entry));
+      /* this could be bad?  or is it just an expired entry? */
+      printf("Hey dummy, this entry %d is already active!\n",message_id);
     }
     else {
-      /* is this bad?  well, if we were in a transition from LOAD to
-	 MEAS state it could happen I suppose so for now we will simply
-	 ignore the message */
-      printf("Yo! no match on request_id, entry inactive\n");
+      status_entry->active = 1;
+      status_entry->success = 1;
+      NETPERF_TIME_STAMP(status_entry->sent_time);
     }
+    /* send data for the test. we can use send() rather than sendto()
+       because in _init we will have called connect() on the socket.
+       now, if we are using UDP and the server happens to reply from a
+       source IP address other than the one to which we have
+       connected... well...  raj 2005-11-18 */
 
-    if (len == 0) {
-      /* how do we deal with a closed connection in the measured state */
+    /* if we are ever going to pace these things, we need logic to
+       decide if it is time to send another request or not */
+
+    if((len=send(my_data->query_socket,
+		 request_buffer,
+		 req_size,
+		 0)) != req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+	keep_going = 0;
+	report_test_failure(test,
+			    __func__,
+			    DNSE_DATA_SEND_ERROR,
+			    "data send error");
+      }
+    }
+    /* my_data->stats.named.queries_sent++; */
+    /* my_data->stats.named.query_bytes_sent += len; */
+
+    /* recv the request for the test, but first we really need some sort
+       of timeout on a poll call or whatnot... */
+
+    fds.fd = my_data->query_socket;
+    fds.events = POLLIN;
+    fds.revents = 0;
+
+    ret = poll(&fds,1,5000); /* magic constant alert - that is something
+				that should come from the config
+				file... */
+
+    switch (ret) {
+    case -1: 
+      /* something bad happened */
+      keep_going = 0;
       report_test_failure(test,
 			  __func__,
-			  DNSE_DATA_CONNECTION_CLOSED_ERROR,
-			  "data connection closed during TEST_MEASURE state");
+			  DNSE_DATA_RECV_ERROR,
+			  "poll_error");
+    
+      break;
+    case 0:
+      /* we had a timeout. invalidate the existing request so we will
+	 ignore it if it was simply delayed. status_entry should still
+	 be valid*/
+      memset(status_entry,0,sizeof(status_entry));
+      break;
+    case 1:
+  
+      bytes_left = NS_PACKETSZ; /* we'll do something clever inside the
+				   loop to handle UDP vs TCP. */
+      rsp_ptr = request_buffer;  /* until we discover it is a bug, re-use
+				    the reqeust buffer */
+      while (bytes_left > 0) {
+	if ((len=recv(my_data->query_socket,
+		      rsp_ptr,
+		      bytes_left,
+		      0)) != 0) {
+	  /* this macro hides windows differences */
+	  if (CHECK_FOR_RECV_ERROR(len)) {
+	    keep_going = 0;
+	    report_test_failure(test,
+				__func__,
+				DNSE_DATA_RECV_ERROR,
+				"data_recv_error");
+	    break;
+	  }
+	  /* do we have more to read this time around? */
+	  if (my_data->use_tcp == 0) {
+	    /* we are UDP */
+	    response_len = len;
+	    bytes_left = 0;
+	  }
+	  else {
+	    /* not quite sure what to do here - probably have to parse the
+	       packet a bit more, update response_len etc... */
+	  }
+	} 
+	else {
+	  /* len is 0 the connection was closed exit the while loop */
+	  keep_going = 0;
+	  break;
+	}
+      }
+      response_id = rsp_ptr[0];
+      status_entry  = &(my_data->outstanding_requests[response_id]);
+      if (status_entry->active) {
+	/* this is what we want to see */
+	/* code to timestamp enabled by HISTOGRAM */
+	HIST_TIMESTAMP(&time_two);
+	HIST_ADD(my_data->time_hist,
+		 delta_macro(&(status_entry->sent_time),&time_two));
+	/* my_data->stats.named.responses_received++; */
+	/* so we can continue to "leverage" the nettest_bsd reporter for
+	   now. raj 2005-11-18 */
+	my_data->stats.named.trans_sent++;
+	my_data->stats.named.trans_received++;
+	/* my_data->stats.named.response_bytes_received += response_len; */
+	/* hey dummy, don't forget to clear the entry... raj 2005-11-22 */
+	memset(status_entry,0,sizeof(status_entry));
+      }
+      else {
+	/* is this bad?  well, if we were in a transition from LOAD to
+	   MEAS state it could happen I suppose so for now we will simply
+	   ignore the message */
+	printf("Yo! no match on request_id, entry inactive\n");
+      }
+
+      if (len == 0) {
+	/* how do we deal with a closed connection in the measured
+	   state?  well, we'll deal with that when we actually start
+	   doing requests over TCP. raj 2005-11-29 */
+	keep_going = 0;
+	report_test_failure(test,
+			    __func__,
+			    DNSE_DATA_CONNECTION_CLOSED_ERROR,
+			    "data connection closed during TEST_MEASURE state");
+      }
+      break;
     }
-    break;
   }
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
@@ -1311,6 +1314,7 @@ send_dns_rr_load(test_t *test)
   char             *rsp_ptr;
   dns_data_t       *my_data;
   struct pollfd     fds;
+  int               keep_going=1;
   char              request_buffer[NS_PACKETSZ];  /* that aught to be
 						     enough to hold it
 						     - modulo stuff
@@ -1322,83 +1326,90 @@ send_dns_rr_load(test_t *test)
 
   my_data   = test->test_specific_data;
 
-  /* go through and build the next request to send */
-  req_size = get_next_dns_request(test, 
-				  request_buffer, 
-				  sizeof(request_buffer));
+  while (NO_STATE_CHANGE(test) &&
+	 keep_going) {
+    /* go through and build the next request to send */
+    req_size = get_next_dns_request(test, 
+				    request_buffer, 
+				    sizeof(request_buffer));
 
 
-  /* send data for the test */
-  if((len=send(my_data->query_socket,
-	       request_buffer,
-               req_size,
-               0)) != req_size) {
-    /* this macro hides windows differences */
-    if (CHECK_FOR_SEND_ERROR(len)) {
-      report_test_failure(test,
-                          __func__,
-                          DNSE_DATA_SEND_ERROR,
-                          "data send error");
+    /* send data for the test */
+    if((len=send(my_data->query_socket,
+		 request_buffer,
+		 req_size,
+		 0)) != req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+	keep_going = 0;
+	report_test_failure(test,
+			    __func__,
+			    DNSE_DATA_SEND_ERROR,
+			    "data send error");
+      }
     }
-  }
   
     fds.fd = my_data->query_socket;
-  fds.events = POLLIN;
-  fds.revents = 0;
+    fds.events = POLLIN;
+    fds.revents = 0;
 
-  ret = poll(&fds,1,5000); /* magic constant alert - that is something
-			      that should come from the config
-			      file... */
+    ret = poll(&fds,1,5000); /* magic constant alert - that is something
+				that should come from the config
+				file... */
 
-  switch (ret) {
-  case -1: 
-    /* something bad happened */
-    report_test_failure(test,
-			__func__,
-			DNSE_DATA_RECV_ERROR,
-			"poll_error");
+    switch (ret) {
+    case -1: 
+      /* something bad happened */
+      keep_going = 0;
+      report_test_failure(test,
+			  __func__,
+			  DNSE_DATA_RECV_ERROR,
+			  "poll_error");
     
-    break;
-  case 0:
-    /* we had a timeout. since we are not actually measuring anything,
-       there is no status_entry to update. raj 2005-11-18 */
-    break;
-  case 1:
-    /* recv the request for the test */
-    rsp_ptr    = request_buffer;
-    bytes_left = NS_PACKETSZ;
-    while (bytes_left > 0) {
-      if ((len=recv(my_data->query_socket,
-		    rsp_ptr,
-		    bytes_left,
-		    0)) != 0) {
-	/* this macro hides windows differences */
-	if (CHECK_FOR_RECV_ERROR(len)) {
-	  report_test_failure(test,
-			      __func__,
-			      DNSE_DATA_RECV_ERROR,
-			      "data_recv_error");
-	  break;
-	}
-	/* do we have more to read this time around? */
-	if (!my_data->use_tcp) {
-	  /* we are UDP */
-	  bytes_left = 0;
+      break;
+    case 0:
+      /* we had a timeout. since we are not actually measuring anything,
+	 there is no status_entry to update. raj 2005-11-18 */
+      break;
+    case 1:
+      /* recv the request for the test */
+      rsp_ptr    = request_buffer;
+      bytes_left = NS_PACKETSZ;
+      while (bytes_left > 0) {
+	if ((len=recv(my_data->query_socket,
+		      rsp_ptr,
+		      bytes_left,
+		      0)) != 0) {
+	  /* this macro hides windows differences */
+	  if (CHECK_FOR_RECV_ERROR(len)) {
+	    keep_going = 0;
+	    report_test_failure(test,
+				__func__,
+				DNSE_DATA_RECV_ERROR,
+				"data_recv_error");
+	    break;
+	  }
+	  /* do we have more to read this time around? */
+	  if (!my_data->use_tcp) {
+	    /* we are UDP */
+	    bytes_left = 0;
+	  }
+	  else {
+	    /* not quite sure what to do here - probably have to parse the
+	       packet a bit more */
+	  }
+	  rsp_ptr    += len;
+	  bytes_left -= len;
 	}
 	else {
-	  /* not quite sure what to do here - probably have to parse the
-	     packet a bit more */
+	  /* len is 0 the connection was closed exit the while loop */
+	  keep_going = 0;
+	  break;
 	}
-	rsp_ptr    += len;
-	bytes_left -= len;
       }
-      else {
-	/* len is 0 the connection was closed exit the while loop */
-	break;
-      }
-    }
-    break;
+      break;
 
+    }
   }
   new_state = CHECK_REQ_STATE;
   if ((len == 0) ||

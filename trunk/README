@@ -28,7 +28,7 @@ exception for OpenSSL...) it is likely an exception will be added for
 them as well.
 
 Feel free to report results in public forums, but please be
-excruciatingly complete in your description of the test envorinment.
+excruciatingly complete in your description of the test environment.
 At some point it is hoped there will be a public netperf4 database to
 which people can submit results.
 

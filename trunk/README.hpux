@@ -1,6 +1,6 @@
 The configure script will try to use a command called xml2-config to
-get the apripriate compiler and linker switches to include libxml2.
-Often this is in /usr/local/lib and /usr/local/lib is not always in
+get the appropriate compiler and linker switches to include libxml2.
+Often this is in /usr/local/bin and /usr/local/bin is not always in
 one's PATH variable.  So, it may be necessary to include
 /usr/local/lib in the PATH variable before running the configure
 script.
