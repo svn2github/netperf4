@@ -162,7 +162,8 @@
   port		CDATA	#REQUIRED
 >
 
-<!ELEMENT test ((dependson | dependency_data)?, (socket_args | unknown )?) >
+<!ELEMENT test ((dependson | dependency_data)?, (socket_args | unknown )?,
+                 (dns_args)? ) >
 <!ATTLIST test
   xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
   tid           ID      #REQUIRED
@@ -450,6 +451,11 @@
   recv_offset       CDATA    %default.offset;
 >
 
+<!ELEMENT dns_args EMPTY >
+<!ATTLIST dns_args
+  max_outstanding   CDATA    #IMPLIED
+  timeout           CDATA    #IMPLIED
+>
                       
 <!-- Element definitions for variable sized data tests  -->
 

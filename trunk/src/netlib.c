@@ -92,6 +92,54 @@ extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 
 #include "nettest_bsd.h"
 
+#ifdef HAVE_GETHRTIME
+
+void
+netperf_timestamp(hrtime_t *timestamp)
+{
+  *timestamp = gethrtime();
+}
+
+int
+delta_micro(hrtime_t *begin, hrtime_t *end)
+{
+  long nsecs;
+  nsecs = (*end) - (*begin);
+  return(nsecs/1000);
+}
+
+#else
+
+void
+netperf_timestamp(struct timeval *timestamp)
+{
+  gettimeofday(timestamp,NULL);
+}
+
+ /* return the difference (in micro seconds) between two timeval */
+ /* timestamps */
+int
+delta_micro(struct timeval *begin,struct timeval *end)
+
+{
+
+  int usecs, secs;
+
+  if (end->tv_usec < begin->tv_usec) {
+    /* borrow a second from the tv_sec */
+    end->tv_usec += 1000000;
+    end->tv_sec--;
+  }
+  usecs = end->tv_usec - begin->tv_usec;
+  secs  = end->tv_sec - begin->tv_sec;
+
+  usecs += (secs * 1000000);
+
+  return(usecs);
+
+}
+#endif /* HAVE_GETHRTIME */
+
 /* This routine will return the two arguments to the calling routine. */
 /* If the second argument is not specified, and there is no comma, */
 /* then the value of the second argument will be the same as the */

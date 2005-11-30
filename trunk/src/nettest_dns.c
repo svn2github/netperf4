@@ -757,6 +757,7 @@ dns_test_init(test_t *test, int type, int protocol)
 {
   dns_data_t *new_data;
   xmlNodePtr  args;
+  xmlNodePtr  dns_args = NULL;
   xmlChar    *string;
   xmlChar    *units;
   xmlChar    *localhost;
@@ -776,6 +777,9 @@ dns_test_init(test_t *test, int type, int protocol)
   while (args != NULL) {
     if (!xmlStrcmp(args->name,(const xmlChar *)"dependency_data")) {
       test->dependency_data = args;
+    }
+    if (!xmlStrcmp(args->name,(const xmlChar *)"dns_args")) {
+      dns_args = args;
     }
     if (xmlStrcmp(args->name,(const xmlChar *)"socket_args")) {
       args = args->next;
@@ -815,12 +819,6 @@ dns_test_init(test_t *test, int type, int protocol)
        we should use TCP, set TCP_NODELAY, keep the TCP connection
        open... */
 
-    /* we also neeed to add code to get stuff such as the name of the
-       remote DNS server, the port number and what address family to
-       use. this should be in this message rather than some dependent
-       data bit since there will really be no corresponding "recv_"
-       test.  raj 2005-11-17 */
-
     /* now get and initialize the local addressing info */
     string   =  xmlGetProp(args,(const xmlChar *)"family");
     localfam = strtofam(string);
@@ -857,7 +855,8 @@ dns_test_init(test_t *test, int type, int protocol)
 	 than assign here so we can do a freeaddrinfo()?  raj
 	 2005-11-17 */
       new_data->locaddr = local_ai;
-    } else {
+    } 
+    else {
       if (test->debug) {
         fprintf(test->where,
 		"%s: getaddrinfo returned %d %s\n",
@@ -871,7 +870,30 @@ dns_test_init(test_t *test, int type, int protocol)
                           DNSE_GETADDRINFO_ERROR,
                           gai_strerror(error));
     }
-  } else {
+    if (dns_args) {
+      string =  xmlGetProp(args,(const xmlChar *)"max_outstanding");
+      if (string) {
+	new_data->max_outstanding = atoi(string);
+      }
+      else {
+	new_data->max_outstanding = 1;
+      }
+      string =  xmlGetProp(args,(const xmlChar *)"timeout");
+      if (string) {
+	new_data->timeout = atoi(string);
+      }
+      else {
+	new_data->timeout = 5000;
+      }
+    }
+    else {
+      /* there was no dns_args element in the test element, so use the
+	 program defaults. raj 2005-11-29 */
+      new_data->max_outstanding = 1;
+      new_data->timeout = 5000;
+    }
+  }
+  else {
     report_test_failure(test,
                         (char *) __func__,
                         DNSE_NO_SOCKET_ARGS,
@@ -1123,10 +1145,12 @@ send_dns_rr_meas(test_t *test)
   uint16_t         *rsp_ptr;
   uint16_t          message_id;
   uint16_t          response_id;
+  int               num_to_check;
   dns_data_t       *my_data;
   dns_request_status_t *status_entry;
   struct pollfd     fds;
   int               keep_going=1;
+  NETPERF_TIMESTAMP_T    now;
 
   /* this aught to be enough to hold it - modulo stuff like large
      requests on TCP connections... and we make it of type uint16_t so
@@ -1143,55 +1167,59 @@ send_dns_rr_meas(test_t *test)
 
   while (NO_STATE_CHANGE(test) &&
 	 keep_going) {
-    /* go through and build the next request to send */
-    req_size = get_next_dns_request(test, 
-				    (char *)request_buffer, 
-				    sizeof(request_buffer));
-
-    /* set the ID as apropriate since it is a uint16_t, we'll not worry
-       about "overflow" as it will just be dealt with "naturally. we use
-       the magic number of "0" based on "knowing" that the ID is the
-       first thing in the message, and it seems there is no commonly
-       defined structure for a DNS reqeust header?  raj 2005-11-18 */
-
-    message_id = request_buffer[0] = my_data->request_id++; 
-
-    /* now stash some state away so we can deal with the response */
-    status_entry = &(my_data->outstanding_requests[message_id]);
-    if (status_entry->active) {
-      /* this could be bad?  or is it just an expired entry? */
-      printf("Hey dummy, this entry %d is already active!\n",message_id);
-    }
-    else {
-      status_entry->active = 1;
-      status_entry->success = 1;
-      NETPERF_TIME_STAMP(status_entry->sent_time);
-    }
-    /* send data for the test. we can use send() rather than sendto()
-       because in _init we will have called connect() on the socket.
-       now, if we are using UDP and the server happens to reply from a
-       source IP address other than the one to which we have
-       connected... well...  raj 2005-11-18 */
-
-    /* if we are ever going to pace these things, we need logic to
-       decide if it is time to send another request or not */
-
-    if((len=send(my_data->query_socket,
-		 request_buffer,
-		 req_size,
-		 0)) != req_size) {
-      /* this macro hides windows differences */
-      if (CHECK_FOR_SEND_ERROR(len)) {
-	keep_going = 0;
-	report_test_failure(test,
-			    __func__,
-			    DNSE_DATA_SEND_ERROR,
-			    "data send error");
+    while (my_data->num_outstanding < my_data->max_outstanding ) {
+      /* go through and build the next request to send */
+      req_size = get_next_dns_request(test, 
+				      (char *)request_buffer, 
+				      sizeof(request_buffer));
+      
+      /* set the ID as apropriate since it is a uint16_t, we'll not
+	 worry about "overflow" as it will just be dealt with
+	 "naturally. we use the magic number of "0" based on "knowing"
+	 that the ID is the first thing in the message, and it seems
+	 there is no commonly defined structure for a DNS reqeust
+	 header?  raj 2005-11-18 */
+      
+      message_id = request_buffer[0] = my_data->request_id++; 
+      
+      /* now stash some state away so we can deal with the response */
+      status_entry = &(my_data->outstanding_requests[message_id]);
+      if (status_entry->active) {
+	/* this could be bad?  or is it just an expired entry? */
+	printf("Hey dummy, this entry %d is already active!\n",message_id);
       }
+      else {
+	status_entry->active = 1;
+	status_entry->success = 1;
+	netperf_timestamp(&(status_entry->sent_time));
+      }
+      /* send data for the test. we can use send() rather than
+	 sendto() because in _init we will have called connect() on
+	 the socket.  now, if we are using UDP and the server happens
+	 to reply from a source IP address other than the one to which
+	 we have connected... well...  raj 2005-11-18 */
+      
+      /* if we are ever going to _really_ pace these things, we need
+	 logic to decide if it is time to send another request or
+	 not */
+      
+      if((len=send(my_data->query_socket,
+		   request_buffer,
+		   req_size,
+		   0)) != req_size) {
+	/* this macro hides windows differences */
+	if (CHECK_FOR_SEND_ERROR(len)) {
+	  keep_going = 0;
+	  report_test_failure(test,
+			      __func__,
+			      DNSE_DATA_SEND_ERROR,
+			      "data send error");
+	}
+      }
+      /* my_data->stats.named.queries_sent++; */
+      /* my_data->stats.named.query_bytes_sent += len; */
+      my_data->num_outstanding++;
     }
-    /* my_data->stats.named.queries_sent++; */
-    /* my_data->stats.named.query_bytes_sent += len; */
-
     /* recv the request for the test, but first we really need some sort
        of timeout on a poll call or whatnot... */
 
@@ -1199,9 +1227,7 @@ send_dns_rr_meas(test_t *test)
     fds.events = POLLIN;
     fds.revents = 0;
 
-    ret = poll(&fds,1,5000); /* magic constant alert - that is something
-				that should come from the config
-				file... */
+    ret = poll(&fds,1,my_data->timeout);
 
     switch (ret) {
     case -1: 
@@ -1214,10 +1240,27 @@ send_dns_rr_meas(test_t *test)
     
       break;
     case 0:
-      /* we had a timeout. invalidate the existing request so we will
-	 ignore it if it was simply delayed. status_entry should still
-	 be valid*/
-      memset(status_entry,0,sizeof(status_entry));
+      /* we had a timeout. invalidate the existing request(s) as
+	 apropriate so we will ignore it if it was simply
+	 delayed. status_entry should still be valid.  we only need to
+	 go back at most num_outstanding requests */
+      num_to_check = my_data->num_outstanding;
+      netperf_timestamp(&now);
+      message_id = my_data->request_id;
+      message_id--;   /* my_data->request_id is actually one more than
+			 we sent */
+      while (num_to_check) {
+	status_entry = &(my_data->outstanding_requests[message_id]);
+	if ((status_entry->active) &&
+	    (delta_micro(&(status_entry->sent_time),&now) >= 
+	     my_data->timeout * 1000)) {
+	  my_data->num_outstanding--;
+	  memset(status_entry,0,sizeof(status_entry));
+	}
+	message_id--;  /* wrap-around is handled automagically since
+			  this is a uint16_t */
+	num_to_check--;
+      }
       break;
     case 1:
   
@@ -1263,10 +1306,11 @@ send_dns_rr_meas(test_t *test)
 	/* code to timestamp enabled by HISTOGRAM */
 	HIST_TIMESTAMP(&time_two);
 	HIST_ADD(my_data->time_hist,
-		 delta_macro(&(status_entry->sent_time),&time_two));
+		 delta_micro(&(status_entry->sent_time),&time_two));
 	/* my_data->stats.named.responses_received++; */
 	/* so we can continue to "leverage" the nettest_bsd reporter for
 	   now. raj 2005-11-18 */
+	my_data->num_outstanding--;
 	my_data->stats.named.trans_sent++;
 	my_data->stats.named.trans_received++;
 	/* my_data->stats.named.response_bytes_received += response_len; */
@@ -1353,9 +1397,7 @@ send_dns_rr_load(test_t *test)
     fds.events = POLLIN;
     fds.revents = 0;
 
-    ret = poll(&fds,1,5000); /* magic constant alert - that is something
-				that should come from the config
-				file... */
+    ret = poll(&fds,1,my_data->timeout); 
 
     switch (ret) {
     case -1: 

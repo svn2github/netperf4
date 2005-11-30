@@ -45,6 +45,12 @@
 #define NETPERF_PATH_SEP "\\"
 #endif
 
+#ifdef HAVE_GETHRTIME
+#define NETPERF_TIMESTAMP_T hrtime_t
+#else
+#define NETPERF_TIMESTAMP_T struct timeval
+#endif
+
 /* a set of server_t's will exist in the netperf process and will
    describe everything that netperf needs to know about a server
    instance (ie remote netserver). */

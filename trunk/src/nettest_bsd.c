@@ -1276,7 +1276,7 @@ recv_tcp_stream_meas(test_t *test)
   }
   /* code to timestamp enabled by HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
     /* transitioning to loaded state from measure state
@@ -1463,7 +1463,7 @@ send_tcp_stream_meas(test_t *test)
   my_data->send_ring = my_data->send_ring->next;
   /* code to timestamp enabled by HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
     /* transitioning to loaded state from measure state
@@ -1879,7 +1879,7 @@ recv_tcp_rr_meas(test_t *test)
   }
   /* code to timestamp enabled by HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   my_data->recv_ring = my_data->recv_ring->next;
   my_data->send_ring = my_data->send_ring->next;
   new_state = CHECK_REQ_STATE;
@@ -2130,7 +2130,7 @@ send_tcp_rr_meas(test_t *test)
   }
   /* code to timestamp enabled by HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   my_data->stats.named.trans_sent++;
   my_data->recv_ring = my_data->recv_ring->next;
   my_data->send_ring = my_data->send_ring->next;

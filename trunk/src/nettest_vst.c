@@ -1570,7 +1570,7 @@ recv_vst_rr_meas(test_t *test)
   }
   /* code to timestamp enabled by HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   get_next_vst_transaction(test);
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
@@ -1826,7 +1826,7 @@ send_vst_rr_meas(test_t *test)
   }
   /* code to timestamp enabled by HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   my_data->stats.named.trans_sent++;
   get_next_vst_transaction(test);
   if (len == 0) {

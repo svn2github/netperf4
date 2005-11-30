@@ -54,11 +54,6 @@ enum {
    sufficient or if we need to also check against stuff like the type
    and the class? raj 2005-11-17 */
 
-  /* until we get the gethrtime() stuff done, this will be a struct
-     timeval and... this should probably really be in netperf.h... */
-#define NETPERF_TIMESTAMP_T struct timeval
-#define NETPERF_TIME_STAMP(s) gettimeofday(&(s),NULL);
-
 typedef struct dns_request_status {
   unsigned short active; /* was there a query sent with this id for
 		 which we are awaiting a response */
@@ -85,7 +80,9 @@ typedef struct  dns_test_data {
   int   send_buf_size;  /* send socket buffer size */
   int   rbuf_size_ret;  /* receive socket buffer size returned on creation */
   int   recv_buf_size;  /* receive socket buffer size */
-
+  int   max_outstanding; /* max number of outstanding requests */
+  int   num_outstanding; /* present number of requests outstanding */
+  int   timeout;         /* request timeout in milliseconds */
   uint16_t  request_id; /* this is used to match requests with
 			   responses and serves as the index into the
 			   outstanding queries array */
