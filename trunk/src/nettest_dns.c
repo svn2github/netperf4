@@ -778,7 +778,6 @@ dns_test_init(test_t *test, int type, int protocol)
   /* make sure we go though everything, and do not assume anything
      about the order of the elements. raj 2005-11-30 */
   while (args != NULL) {
-    printf("NAME %s\n",args->name);
     if (!xmlStrcmp(args->name,(const xmlChar *)"dependency_data")) {
       test->dependency_data = args;
     }
@@ -842,7 +841,7 @@ dns_test_init(test_t *test, int type, int protocol)
         if (test->debug) {
           fprintf(test->where,
 		  "%s sleeping on getaddrinfo EAI_AGAIN\n",
-		  __func__);
+		  (char *)__func__);
           fflush(test->where);
         }
         sleep(1);
@@ -863,7 +862,7 @@ dns_test_init(test_t *test, int type, int protocol)
       if (test->debug) {
         fprintf(test->where,
 		"%s: getaddrinfo returned %d %s\n",
-		__func__,
+		(char *)__func__,
                 error, 
 		gai_strerror(error));
         fflush(test->where);
@@ -876,11 +875,9 @@ dns_test_init(test_t *test, int type, int protocol)
     if (dns_args) {
       string =  xmlGetProp(dns_args,(const xmlChar *)"max_outstanding");
       if (string) {
-	printf("GOT max_outstanding\n");
 	new_data->max_outstanding = atoi((char *)string);
       }
       else {
-	printf("NO max_outstanding\n");
 	new_data->max_outstanding = 1;
       }
       string =  xmlGetProp(dns_args,(const xmlChar *)"timeout");
@@ -894,7 +891,6 @@ dns_test_init(test_t *test, int type, int protocol)
     else {
       /* there was no dns_args element in the test element, so use the
 	 program defaults. raj 2005-11-29 */
-      printf("NO dns_args\n");
       new_data->max_outstanding = 1;
       new_data->timeout = 5000;
     }
@@ -1299,8 +1295,13 @@ send_dns_requests(test_t *test)
   my_data = GET_TEST_DATA(test);
 
   while (my_data->num_outstanding < my_data->max_outstanding ) {
-    printf("MAX %d OUTSTANDING %d\n",my_data->max_outstanding,
-	   my_data->num_outstanding);
+    if (test->debug) {
+      fprintf(test->where,"MAX %d OUTSTANDING %d in %s\n",
+	      my_data->max_outstanding,
+	      my_data->num_outstanding,
+	      (char *)__func__);
+      fflush(test->where);
+    }
     /* go through and build the next request to send */
     req_size = get_next_dns_request(test, 
 				    (char *)request_buffer, 
@@ -1351,7 +1352,7 @@ send_dns_requests(test_t *test)
       /* this macro hides Windows differences */
       if (CHECK_FOR_SEND_ERROR(len)) {
 	report_test_failure(test,
-			    __func__,
+			    (char *)__func__,
 			    DNSE_DATA_SEND_ERROR,
 			    "data send error");
 	/* do we need to do something additional here? probably */
@@ -1436,7 +1437,7 @@ send_dns_rr_meas(test_t *test)
       /* something bad happened */
       keep_going = 0;
       report_test_failure(test,
-			  __func__,
+			  (char *)__func__,
 			  DNSE_DATA_RECV_ERROR,
 			  "poll_error");
     
@@ -1445,7 +1446,7 @@ send_dns_rr_meas(test_t *test)
       if (test->debug) {
 	fprintf(test->where,
 		"TIMEOUT in %s num_outstanding %d\n",
-		__func__,
+		(char *)__func__,
 		my_data->num_outstanding);
 	fflush(test->where);
       }
@@ -1470,7 +1471,7 @@ send_dns_rr_meas(test_t *test)
 	  if (CHECK_FOR_RECV_ERROR(len)) {
 	    keep_going = 0;
 	    report_test_failure(test,
-				__func__,
+				(char *)__func__,
 				DNSE_DATA_RECV_ERROR,
 				"data_recv_error");
 	    break;
@@ -1503,7 +1504,7 @@ send_dns_rr_meas(test_t *test)
 	  fprintf(test->where,
 		  "COMPLETING message %d in %s after %d ms\n",
 		  response_id,
-		  __func__,
+		  (char *)__func__,
 		  delta_milli(&(status_entry->sent_time),&now));
 	  fflush(test->where);
 	}
@@ -1530,7 +1531,7 @@ send_dns_rr_meas(test_t *test)
 	  fprintf(test->where,
 		  "IGNORING message %d in %s entry inactive or not present\n",
 		  response_id,
-		  __func__);
+		  (char *)__func__);
 	  fflush(test->where);
 	}
       }
@@ -1541,7 +1542,7 @@ send_dns_rr_meas(test_t *test)
 	   doing requests over TCP. raj 2005-11-29 */
 	keep_going = 0;
 	report_test_failure(test,
-			    __func__,
+			    (char *)__func__,
 			    DNSE_DATA_CONNECTION_CLOSED_ERROR,
 			    "data connection closed during TEST_MEASURE state");
       }
@@ -1600,7 +1601,7 @@ send_dns_rr_load(test_t *test)
       /* something bad happened */
       keep_going = 0;
       report_test_failure(test,
-			  __func__,
+			  (char *)__func__,
 			  DNSE_DATA_RECV_ERROR,
 			  "poll_error");
     
@@ -1610,7 +1611,7 @@ send_dns_rr_load(test_t *test)
       if (test->debug) {
 	fprintf(test->where,
 		"TIMEOUT in %s num_outstanding %d\n",
-		__func__,
+		(char *)__func__,
 		my_data->num_outstanding);
 	fflush(test->where);
       }
@@ -1629,7 +1630,7 @@ send_dns_rr_load(test_t *test)
 	  if (CHECK_FOR_RECV_ERROR(len)) {
 	    keep_going = 0;
 	    report_test_failure(test,
-				__func__,
+				(char *)__func__,
 				DNSE_DATA_RECV_ERROR,
 				"data_recv_error");
 	    break;
@@ -1664,7 +1665,7 @@ send_dns_rr_load(test_t *test)
 	  fprintf(test->where,
 		  "COMPLETING message %d in %s after %d ms\n",
 		  response_id,
-		  __func__,
+		  (char *)__func__,
 		  delta_milli(&(status_entry->sent_time),&now));
 	  fflush(test->where);
 	}
@@ -1682,7 +1683,7 @@ send_dns_rr_load(test_t *test)
 	  fprintf(test->where,
 		  "IGNORING message %d in %s entry inactive or not present\n",
 		  response_id,
-		  __func__);
+		  (char *)__func__);
 	  fflush(test->where);
 	}
       }
@@ -2128,7 +2129,7 @@ process_stats_for_run(tset_t *test_set)
   }
 
   if (test_set->debug) {
-    fprintf(test_set->where, "%s count = %d\n", __func__, count);
+    fprintf(test_set->where, "%s count = %d\n", (char *) __func__, count);
     fflush(test_set->where);
   }
 
@@ -2187,7 +2188,7 @@ process_stats_for_run(tset_t *test_set)
               stats_for_test);
       fprintf(test_set->where,
               "%s was not designed to deal with this.\n",
-              __func__);
+              (char *)__func__);
       fprintf(test_set->where,
               "exiting netperf now!!\n");
       fflush(test_set->where);
