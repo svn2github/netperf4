@@ -2423,7 +2423,7 @@ bsd_test_results_init(tset_t *test_set,char *report_flags,char *output)
   }
 }
 
-void
+static void
 process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
 {
   int            i;
@@ -2554,7 +2554,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   /* end of printing bsd per test instance results */
 }
 
-void
+static void
 process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
 {
   int            i;
@@ -2653,7 +2653,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   /* end of printing sys stats instance results */
 }
 
-void
+static void
 process_stats_for_run(tset_t *test_set)
 {
   bsd_results_t *rd;
@@ -2664,6 +2664,7 @@ process_stats_for_run(tset_t *test_set)
   xmlNodePtr     prev_stats;
   int            count; 
   int            index; 
+  int            num_of_tests;
  
   rd        = test_set->report_data;
   proc_name = "process_stats_for_run";
@@ -2690,6 +2691,7 @@ process_stats_for_run(tset_t *test_set)
   rd->servdemand[index]    =  0.0;
   rd->run_time[index]      =  0.0;
 
+  num_of_tests  = 0;
   while (set_elt != NULL) {
     int stats_for_test;
     test    = set_elt->test;
@@ -2717,6 +2719,7 @@ process_stats_for_run(tset_t *test_set)
         /* process system statistics */
         process_sys_stats(test_set, stats, test->id);
         stats_for_test++;
+        num_of_tests++;
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"test_stats")) {
         /* process test statistics */
@@ -2752,9 +2755,10 @@ process_stats_for_run(tset_t *test_set)
   if (rd->result_maximum < rd->results[index]) {
     rd->result_maximum = rd->results[index];
   }
+  rd->run_time[index] = rd->run_time[index] / (double)num_of_tests;
 }
 
-void
+static void
 update_results_and_confidence(tset_t *test_set)
 {
   bsd_results_t *rd;
@@ -2791,7 +2795,7 @@ update_results_and_confidence(tset_t *test_set)
   test_set->confidence.value = confidence;
 }
 
-void
+static void
 print_run_results(tset_t *test_set)
 {
   bsd_results_t *rd;
@@ -2867,7 +2871,7 @@ print_run_results(tset_t *test_set)
   fflush(outfd);
 }
 
-void
+static void
 print_results_summary(tset_t *test_set)
 {
   bsd_results_t *rd;

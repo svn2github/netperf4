@@ -38,6 +38,7 @@
 #define CHECK_REQ_STATE                   test->state_req 
 #define GET_TEST_DATA(test)               test->test_specific_data
 #define NO_STATE_CHANGE(test)             (test->state_req == test->new_state)
+#define SET_TEST_DATA(test,ptr)           test->test_specific_data = ptr
 
 #ifndef WIN32
 #define NETPERF_PATH_SEP "/"

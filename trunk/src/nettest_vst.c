@@ -1,7 +1,5 @@
 /*        Copyright (C) 2005 Hewlett-Packard Company */
 
-/* This file is Hewlett_Packard Company Confidental */
-
  /* This file contains the test-specific definitions for netperf4's */
  /* Hewlett-Packard Company special variable sized data tests */
 
@@ -82,12 +80,6 @@ char    nettest_id[]="\
 #define CHECK_FOR_SEND_ERROR(len) (len >=0) || (errno == EINTR)
 #define GET_ERRNO errno
 #endif
-
-/* Macros for accessing fields in the global netperf structures. */
-#define SET_TEST_STATE(state)             test->new_state = state
-#define GET_TEST_STATE                    test->new_state
-#define CHECK_REQ_STATE                   test->state_req 
-#define GET_TEST_DATA(test)               test->test_specific_data
 
 
 static void
@@ -175,11 +167,12 @@ set_test_state(test_t *test, uint32_t new_state)
       }
       if (valid) {
         test->new_state = state;
-      } else {
+      }
+      else {
         sprintf(error_msg,"bad state transition from %s state",state_name);
         report_test_failure( test,
-                             "set_test_state",
-                             BSDE_REQUESTED_STATE_INVALID,
+                             (char *)__func__,
+                             VSTE_REQUESTED_STATE_INVALID,
                              strdup(error_msg));
       }
     }
@@ -192,8 +185,8 @@ wait_to_die(test_t *test, void(*free_routine)(test_t *))
   while (GET_TEST_STATE != TEST_DEAD) {
     if (CHECK_REQ_STATE == TEST_DEAD) {
       free_routine(test);
-      free(test->test_specific_data);
-      test->test_specific_data = NULL;
+      free(GET_TEST_DATA(test));
+      SET_TEST_DATA(test, NULL);
       test->new_state = TEST_DEAD;
     }
   }
@@ -298,7 +291,8 @@ strtofam(xmlChar *familystr)
   } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET6")) {
     return(AF_INET6);
 #endif /* AF_INET6 */
-  } else {
+  }
+  else {
     /* we should never get here if the validator is doing its thing */
     return(-1);
   }
@@ -307,7 +301,7 @@ strtofam(xmlChar *familystr)
 static void
 get_dependency_data(test_t *test, int type, int protocol)
 {
-  vst_data_t *my_data = test->test_specific_data;
+  vst_data_t *my_data = GET_TEST_DATA(test);
 
   xmlChar *string;
   xmlChar *remotehost;
@@ -353,15 +347,16 @@ get_dependency_data(test_t *test, int type, int protocol)
 
   if (!error) {
     my_data->remaddr = remote_ai;
-  } else {
+  }
+  else {
     if (test->debug) {
-      fprintf(test->where,"get_dependency_data: getaddrinfo returned %d %s\n",
-              error, gai_strerror(error));
+      fprintf(test->where,"%s: getaddrinfo returned %d %s\n",
+              __func__, error, gai_strerror(error));
       fflush(test->where);
     }
     report_test_failure(test,
-                        "get_dependency_data",
-                        BSDE_GETADDRINFO_ERROR,
+                        (char *)__func__,
+                        VSTE_GETADDRINFO_ERROR,
                         gai_strerror(error));
   }
 }
@@ -372,7 +367,7 @@ set_dependent_data(test)
   test_t *test;
 {
   
-  vst_data_t  *my_data = test->test_specific_data;
+  vst_data_t  *my_data = GET_TEST_DATA(test);
   xmlChar *family;
   char port[8];
   char host[32];
@@ -405,16 +400,18 @@ set_dependent_data(test)
         (xmlSetProp(dep_data,(const xmlChar *)"remote_host",
                     (xmlChar *)host) != NULL))  {
     test->dependent_data = dep_data;
-    } else {
+    }
+    else {
       report_test_failure(test,
-                          "set_dependent_data",
-                          BSDE_XMLSETPROP_ERROR,
+                          (char *)__func__,
+                          VSTE_XMLSETPROP_ERROR,
                           "error setting properties for dependency data");
     }
-  } else {
+  }
+  else {
     report_test_failure(test,
-                        "set_dependent_data",
-                        BSDE_XMLNEWNODE_ERROR,
+                        (char *)__func__,
+                        VSTE_XMLNEWNODE_ERROR,
                         "error getting new node for dependency data");
   }
 }
@@ -475,19 +472,41 @@ allocate_fixed_buffers(test_t *test)
   int          recv_size;
   int          recv_align;
   int          recv_offset;
+  int         *send_buf;
   int          i;
+  int          send = 0;
 
+  my_data     = GET_TEST_DATA(test);
 
-  my_data     = test->test_specific_data;
+  if (!xmlStrcmp(test->test_name,(const xmlChar *)"send_vst_rr")) {
+    send = 1;
+  }
 
-  width       = my_data->send_width;
-  send_size   = my_data->send_size;
-  send_align  = my_data->send_align;
-  send_offset = my_data->send_offset;
-  recv_size   = my_data->recv_size;
-  recv_align  = my_data->recv_align;
-  recv_offset = my_data->recv_offset;
-  
+  if (send) {
+    width       = my_data->send_width;
+    send_size   = my_data->req_size;
+    send_align  = my_data->send_align;
+    send_offset = my_data->send_offset;
+    recv_size   = my_data->rsp_size;
+    recv_align  = my_data->recv_align;
+    recv_offset = my_data->recv_offset;
+    if (send_size < (sizeof(int)*3)) {
+      send_size = sizeof(int) * 3 - 1;
+    }
+  }
+  else {
+    width       = my_data->recv_width;
+    send_size   = my_data->rsp_size;
+    send_align  = my_data->send_align;
+    send_offset = my_data->send_offset;
+    recv_size   = my_data->req_size;
+    recv_align  = my_data->recv_align;
+    recv_offset = my_data->recv_offset;
+    if (recv_size < (sizeof(int)*3)) {
+      recv_size = sizeof(int) * 3 - 1;
+    }
+  }
+
   send_malloc_size = send_size + send_align + send_offset;
   recv_malloc_size = recv_size + recv_align + recv_offset;
 
@@ -499,6 +518,7 @@ allocate_fixed_buffers(test_t *test)
                               ( (long)(temp_link->send_buff_base)
                               + (long)send_align -1)
                               & ~((long)send_align -1));
+    temp_link->send_buff_ptr  += send_offset;
     temp_link->send_buff_size = send_malloc_size;
     temp_link->send_size      = send_size;
 
@@ -507,8 +527,18 @@ allocate_fixed_buffers(test_t *test)
                               ( (long)(temp_link->recv_buff_base)
                               + (long)recv_align -1)
                               & ~((long)recv_align -1));
+    temp_link->recv_buff_ptr  += recv_offset;
     temp_link->recv_buff_size = recv_malloc_size;
     temp_link->recv_size      = recv_size;
+   
+    if (send) {
+      send_buf = (int *)(
+               ( (long)(temp_link->send_buff_ptr)
+               + (long)sizeof(int) -1)
+               & ~((long)sizeof(int) -1));
+      send_buf[0] = send_size;
+      send_buf[1] = recv_size;
+    }
 
     temp_link->distribution   = NULL;
     
@@ -546,9 +576,10 @@ allocate_pattern_buffer(test_t *test)
   int          p;
   int          np;
   int          num;
+  int         *send_buf;
   
 
-  my_data = test->test_specific_data;
+  my_data = GET_TEST_DATA(test);
   wld     = my_data->wld;
 
   seed        = 0;
@@ -564,52 +595,68 @@ allocate_pattern_buffer(test_t *test)
     dist[p]          = NULL;
   }
 
-  i = 0;
-  p = 0;
+  prev_link = NULL;
   while (pattern != NULL) {
     if (!xmlStrcmp(pattern->name,(const xmlChar *)"pattern")) {
       /* build entries for this pattern */
+      string  =  (char *)xmlGetProp(pattern,(const xmlChar *)"index");
+      p       =  atoi(string);
+      i       =  0;
       entry = pattern->xmlChildrenNode;
       while (entry != NULL) {
-        temp_link = (vst_ring_ptr)malloc(sizeof(vst_ring_elt_t));
-        string    =  (char *)xmlGetProp(entry,(const xmlChar *)"req_size");
-        send_size =  atoi(string);
-        string    =  (char *)xmlGetProp(entry,(const xmlChar *)"rsp_size");
-        recv_size =  atoi(string);
+        if (!xmlStrcmp(entry->name,(const xmlChar *)"pattern_entry")) {
+          temp_link = (vst_ring_ptr)malloc(sizeof(vst_ring_elt_t));
+          string    =  (char *)xmlGetProp(entry,(const xmlChar *)"req_size");
+          send_size =  atoi(string);
+          string    =  (char *)xmlGetProp(entry,(const xmlChar *)"rsp_size");
+          recv_size =  atoi(string);
 
-        malloc_size = send_size + send_align + send_offset;
+          malloc_size = send_size + send_align + send_offset;
         
-        temp_link->send_buff_base = (char *)malloc(malloc_size);
-        temp_link->send_buff_ptr  = (char *)(
-                                  ( (long)(temp_link->send_buff_base)
-                                  + (long)send_align -1)
-                                  & ~((long)send_align -1));
-        temp_link->send_buff_size = malloc_size;
-        temp_link->send_size      = send_size;
+          temp_link->send_buff_base = (char *)malloc(malloc_size);
+          temp_link->send_buff_ptr  = (char *)(
+                                    ( (long)(temp_link->send_buff_base)
+                                    + (long)send_align -1)
+                                    & ~((long)send_align -1));
+          temp_link->send_buff_size = malloc_size;
+          temp_link->send_size      = send_size;
 
-        malloc_size = recv_size + recv_align + recv_offset;
+          malloc_size = recv_size + recv_align + recv_offset;
 
-        temp_link->recv_buff_base = (char *)malloc(malloc_size);
-        temp_link->recv_buff_ptr  = (char *)(
-                                  ( (long)(temp_link->recv_buff_base)
-                                  + (long)recv_align -1)
-                                  & ~((long)recv_align -1));
-        temp_link->recv_buff_size = malloc_size;
-        temp_link->recv_size      = recv_size;
+          temp_link->recv_buff_base = (char *)malloc(malloc_size);
+          temp_link->recv_buff_ptr  = (char *)(
+                                    ( (long)(temp_link->recv_buff_base)
+                                    + (long)recv_align -1)
+                                    & ~((long)recv_align -1));
+          temp_link->recv_buff_size = malloc_size;
+          temp_link->recv_size      = recv_size;
         
-        temp_link->distribution   = NULL;
+          send_buf = (int *)(
+                   ( (long)(temp_link->send_buff_ptr)
+                   + (long)sizeof(int) -1)
+                   & ~((long)sizeof(int) -1));
+          send_buf[0] = send_size;
+          send_buf[1] = recv_size;
 
-        if (i==0) {
-          pattern_start[p] = temp_link;
+          temp_link->distribution   = NULL;
+
+          if (test->debug) {
+            fprintf(test->where,
+                    "%s: pattern[%2d,%3d]  send_size =%6d  recv_size =%6d\n",
+                    __func__, p, i, send_size, recv_size);
+            fflush(test->where);
+          }
+          if (i==0) {
+            pattern_start[p] = temp_link;
+          }
+          if (prev_link != NULL) {
+            prev_link->next = temp_link;
+          }
+          prev_link = temp_link;
+          i++;
         }
-        if (p>0 && i>0) {
-          prev_link->next = temp_link;
-        }
-        prev_link = temp_link;
-        i++;
         entry = entry->next;
       }
-      p++;
     }
     if (!xmlStrcmp(pattern->name,(const xmlChar *)"distribution")) {
       /* build entry for the distribution after this pattern */
@@ -623,12 +670,20 @@ allocate_pattern_buffer(test_t *test)
       initstate(seed,dist[p]->random_state,VST_RAND_STATE_SIZE);
       entry = pattern->xmlChildrenNode;
       while (entry != NULL) {
-        string  =  (char *)xmlGetProp(entry,(const xmlChar *)"next_pattern");
-        np      =  atoi(string);
-        string  =  (char *)xmlGetProp(entry,(const xmlChar *)"number");
-        num     =  atoi(string);
-
-        dist[p]->dist_count[np] = num;
+        if (!xmlStrcmp(entry->name,(const xmlChar *)"distribution_entry")) {
+          string  =  (char *)xmlGetProp(entry,(const xmlChar *)"next_pattern");
+          np      =  atoi(string);
+          string  =  (char *)xmlGetProp(entry,(const xmlChar *)"number");
+          num     =  atoi(string);
+          dist[p]->dist_count[np] = num;
+          if (test->debug) {
+            fprintf(test->where,
+                    "%s: dist[%2d,%3d]  dist_number =%6d\n",
+                    __func__, p, np, num);
+            fflush(test->where);
+          }
+        }
+        entry = entry->next;
       } 
       temp_link->distribution = dist[p];
     } 
@@ -652,10 +707,29 @@ parse_wld_file(test_t *test, char *fname)
   xmlNodePtr  root;
   xmlNsPtr    ns;
   vst_data_t *my_data;
+  int         send;
 
-  my_data = test->test_specific_data;
+  my_data = GET_TEST_DATA(test);
 
-  if ((doc = xmlParseFile(fname)) != NULL) {
+  if (!xmlStrcmp(test->test_name,(const xmlChar *)"send_vst_rr")) {
+    send = 1;
+  }
+  else {
+    send = 0;
+  }
+
+  if (fname == NULL) {
+    if (send) {
+      fprintf(test->where,
+              "WARNING %s: called %s without a work load description file\n",
+              test->test_name, __func__);
+      fprintf(test->where,
+              "WARNING %s: test will be setup and run with fixed buffers\n",
+              test->test_name);
+      fflush(test->where);
+    }
+  }
+  else if ((doc = xmlParseFile(fname)) != NULL) {
     if ((root = xmlDocGetRootElement(doc)) != NULL) {
       /* now make sure that the netperf namespace is present */
       ns = xmlSearchNsByHref(doc, root,
@@ -664,7 +738,8 @@ parse_wld_file(test_t *test, char *fname)
         if (!xmlStrcmp(root->name,(const xmlChar *)"work_load_description")) {
           /* happy day valid document */
           my_data->wld = root;
-        } else {
+        }
+        else {
           /* not a correct document type*/
           fprintf(test->where,
                   "file %s is of type \"%s\" not \"%s\"\n",
@@ -673,7 +748,8 @@ parse_wld_file(test_t *test, char *fname)
           xmlFreeDoc(doc);
           doc = NULL;
         }
-      } else {
+      }
+      else {
         /* no namespace match */
         fprintf(test->where,
                 "file %s does not reference a netperf namespace\n",fname);
@@ -681,7 +757,8 @@ parse_wld_file(test_t *test, char *fname)
         xmlFreeDoc(doc);
         doc = NULL;
       }
-    } else {
+    }
+    else {
       /* empty document */
       fprintf(test->where,
               "file %s contains no root element\n",fname);
@@ -689,16 +766,15 @@ parse_wld_file(test_t *test, char *fname)
       fflush(test->where);
       doc = NULL;
     }
-  }
-  if (doc == NULL) {
-    fprintf(test->where,
-            "%s: fill file %s did not contain valid XML\n",
-            __func__,
-            fname);
-    fprintf(test->where,
-            "%s: test will be setup and fun with fixed buffers\n",
-            __func__);
-    fflush(test->where);
+    if (doc == NULL) {
+      fprintf(test->where,
+              "WARNING %s: fill file '%s' work load description invalid\n",
+              test->test_name, fname);
+      fprintf(test->where,
+              "WARNING %s: test will be setup and run with fixed buffers\n",
+              test->test_name);
+      fflush(test->where);
+    }
   }
 }
 
@@ -712,7 +788,7 @@ allocate_vst_buffers(test_t *test, char *fname)
   xmlNodePtr   wld;
   vst_data_t  *my_data;
 
-  my_data = test->test_specific_data;
+  my_data = GET_TEST_DATA(test);
 
   parse_wld_file(test, fname);
 
@@ -733,10 +809,9 @@ get_next_vst_transaction(test_t *test)
   dist_t      *dist;
   long         key;
   int          value;
-  int          orig_value;
   int          i;
 
-  my_data = test->test_specific_data;
+  my_data = GET_TEST_DATA(test);
   dist    = my_data->vst_ring->distribution;
 
   if (dist == NULL) {
@@ -749,10 +824,20 @@ get_next_vst_transaction(test_t *test)
     key   = random();
     value = key %  dist->dist_key;
     if (test->debug) {
-      orig_value = value;
+      fprintf(test->where, "**** end of pattern reached ******\n");
+      fprintf(test->where,
+              "%s:  value = %d  key = %d\n",
+              (char *)__func__, value, key);
+      fflush(test->where);
     }
     for (i=0; i< dist->num_patterns; i++) {
       value = value - dist->dist_count[i];
+      if (test->debug) {
+        fprintf(test->where,
+                "\tdist_count = %d  new_value = %d  pattern = %d\n",
+                dist->dist_count[i], value, dist->pattern[i]);
+        fflush(test->where);
+      }
       if (value < 0) {
         my_data->vst_ring = dist->pattern[i];
         break;
@@ -760,8 +845,8 @@ get_next_vst_transaction(test_t *test)
     }
     if (test->debug) {
       fprintf(test->where,
-              "%s: next_pattern %d  value = %d  key = %d\n",
-              (char *)__func__, i, orig_value, key);
+              "%s: new ring value %p\n",
+              __func__, my_data->vst_ring);
       fflush(test->where);
     }
   }
@@ -778,7 +863,7 @@ get_next_vst_transaction(test_t *test)
 static int
 create_data_socket(test_t *test)
 {
-  vst_data_t  *my_data = test->test_specific_data;
+  vst_data_t  *my_data = GET_TEST_DATA(test);
 
   int family           = my_data->locaddr->ai_family;
   int type             = my_data->locaddr->ai_socktype;
@@ -793,8 +878,8 @@ create_data_socket(test_t *test)
 
   if (test->debug) {
     fprintf(test->where,
-            "create_data_socket: calling socket family = %d type = %d\n",
-            family, type);
+            "%s: calling socket family = %d type = %d\n",
+            __func__, family, type);
     fflush(test->where);
   }
   /*set up the data socket                        */
@@ -804,16 +889,16 @@ create_data_socket(test_t *test)
 
   if (CHECK_FOR_INVALID_SOCKET) {
     report_test_failure(test,
-                        "create_data_socket",
-                        BSDE_SOCKET_ERROR,
+                        (char *)__func__,
+                        VSTE_SOCKET_ERROR,
                         "error creating socket");
     return(temp_socket);
   }
 
   if (test->debug) {
     fprintf(test->where,
-            "create_data_socket: socket %d obtained...\n",
-            temp_socket);
+            "%s: socket %d obtained...\n",
+            __func__, temp_socket);
     fflush(test->where);
   }
 
@@ -835,15 +920,15 @@ create_data_socket(test_t *test)
     if(setsockopt(temp_socket, SOL_SOCKET, SO_SNDBUF,
                   &lss_size, sizeof(int)) < 0) {
       report_test_failure(test,
-                          "create_data_socket",
-                          BSDE_SETSOCKOPT_ERROR,
+                          (char *)__func__,
+                          VSTE_SETSOCKOPT_ERROR,
                           "error setting local send socket buffer size");
       return(temp_socket);
     }
     if (test->debug > 1) {
       fprintf(test->where,
-              "nettest_vst: create_data_socket: SO_SNDBUF of %d requested.\n",
-              lss_size);
+              "%s: %s: SO_SNDBUF of %d requested.\n",
+              __FILE__, __func__, lss_size);
       fflush(test->where);
     }
   }
@@ -852,15 +937,15 @@ create_data_socket(test_t *test)
     if(setsockopt(temp_socket, SOL_SOCKET, SO_RCVBUF,
                   &lsr_size, sizeof(int)) < 0) {
       report_test_failure(test,
-                          "create_data_socket",
-                          BSDE_SETSOCKOPT_ERROR,
+                          (char *)__func__,
+                          VSTE_SETSOCKOPT_ERROR,
                           "error setting local recv socket buffer size");
       return(temp_socket);
     }
     if (test->debug > 1) {
       fprintf(test->where,
-              "nettest_vst: create_data_socket: SO_RCVBUF of %d requested.\n",
-              lsr_size);
+              "%s: %s: SO_RCVBUF of %d requested.\n",
+              __FILE__, __func__, lsr_size);
       fflush(test->where);
     }
   }
@@ -876,8 +961,8 @@ create_data_socket(test_t *test)
                  (char *)&lss_size,
                  &sock_opt_len) < 0) {
     fprintf(test->where,
-        "nettest_vst: create_data_socket: getsockopt SO_SNDBUF: errno %d\n",
-        errno);
+        "%s: %s: getsockopt SO_SNDBUF: errno %d\n",
+        __FILE__, __func__, errno);
     fflush(test->where);
     lss_size = -1;
   }
@@ -887,14 +972,15 @@ create_data_socket(test_t *test)
                  (char *)&lsr_size,
                  &sock_opt_len) < 0) {
     fprintf(test->where,
-        "nettest_vst: create_data_socket: getsockopt SO_RCVBUF: errno %d\n",
-        errno);
+        "%s: %s: getsockopt SO_RCVBUF: errno %d\n",
+        __FILE__, __func__, errno);
     fflush(test->where);
     lsr_size = -1;
   }
   if (test->debug) {
     fprintf(test->where,
-            "nettest_vst: create_data_socket: socket sizes determined...\n");
+            "%s: %s: socket sizes determined...\n",
+            __FILE__, __func__);
     fprintf(test->where,
             "                       send: %d recv: %d\n",
             lss_size,lsr_size);
@@ -921,7 +1007,8 @@ create_data_socket(test_t *test)
                    &loc_rcvavoid,
                    sizeof(int)) < 0) {
       fprintf(test->where,
-              "nettest_vst: create_data_socket: Could not enable receive copy avoidance");
+              "%s: %s: Could not enable receive copy avoidance",
+              __FILE__, __func__);
       fflush(test->where);
       loc_rcvavoid = 0;
     }
@@ -939,7 +1026,8 @@ create_data_socket(test_t *test)
                    &loc_sndavoid,
                    sizeof(int)) < 0) {
       fprintf(test->where,
-        "netperf: create_data_socket: Could not enable send copy avoidance\n");
+        "%s: %s: Could not enable send copy avoidance\n",
+        __FILE__, __func__);
       fflush(test->where);
       loc_sndavoid = 0;
     }
@@ -964,14 +1052,15 @@ create_data_socket(test_t *test)
                   (char *)&one,
                   sizeof(one)) < 0) {
       fprintf(test->where,
-              "netperf: create_data_socket: nodelay: errno %d\n",
-              errno);
+              "%s: %s: nodelay: errno %d\n",
+              __FILE__, __func__, errno);
       fflush(test->where);
     }
 
     if (test->debug > 1) {
       fprintf(test->where,
-              "netperf: create_data_socket: TCP_NODELAY requested...\n");
+              "%s: %s: TCP_NODELAY requested...\n",
+              __FILE__, __func__);
       fflush(test->where);
     }
   }
@@ -997,6 +1086,8 @@ free_vst_test_data(test_t *test)
   vst_ring_ptr  prev;
   vst_ring_ptr  curr;
   
+  my_data     = GET_TEST_DATA(test);
+
   xmlFreeNode(my_data->wld);
   prev        = my_data->vst_ring;
   curr        = prev->next;
@@ -1069,7 +1160,7 @@ vst_test_init(test_t *test, int type, int protocol)
 
     fname  =  (char *)xmlGetProp(args,(const xmlChar *)"fill_file");
     /* fopen the fill file it will be used when allocating buffer rings */
-    if (string) {
+    if (fname) {
       new_data->fill_source = fopen(fname,"r");
     }
 
@@ -1103,14 +1194,16 @@ vst_test_init(test_t *test, int type, int protocol)
     string =  xmlGetProp(args,(const xmlChar *)"port_min");
     if (string) {
       new_data->port_min = atoi((char *)string);
-    } else {
+    }
+    else {
       new_data->port_min = -1;
     }
 
     string =  xmlGetProp(args,(const xmlChar *)"port_max");
     if (string) {
       new_data->port_max = atoi((char *)string);
-    } else {
+    }
+    else {
       new_data->port_min = -1;
     }
     
@@ -1171,25 +1264,27 @@ vst_test_init(test_t *test, int type, int protocol)
 
     if (!error) {
       new_data->locaddr = local_ai;
-    } else {
+    }
+    else {
       if (test->debug) {
-        fprintf(test->where,"vst_test_init: getaddrinfo returned %d %s\n",
-                error, gai_strerror(error));
+        fprintf(test->where,"%s: getaddrinfo returned %d %s\n",
+                __func__, error, gai_strerror(error));
         fflush(test->where);
       }
       report_test_failure(test,
-                          "vst_test_init",
-                          BSDE_GETADDRINFO_ERROR,
+                          (char *)__func__,
+                          VSTE_GETADDRINFO_ERROR,
                           gai_strerror(error));
     }
-  } else {
+  }
+  else {
     report_test_failure(test,
-                        "vst_test_init",
-                        BSDE_NO_SOCKET_ARGS,
+                        (char *)__func__,
+                        VSTE_NO_SOCKET_ARGS,
                         "no socket_arg element was found");
   }
 
-  test->test_specific_data = new_data;
+  SET_TEST_DATA(test, new_data);
 
   allocate_vst_buffers(test, fname);
 
@@ -1222,7 +1317,7 @@ static int
 vst_test_clear_stats(vst_data_t *my_data)
 {
   int i;
-  for (i = 0; i < BSD_MAX_COUNTERS; i++) {
+  for (i = 0; i < VST_MAX_COUNTERS; i++) {
     my_data->stats.counter[i] = 0;
   }
   my_data->elapsed_time.tv_usec = 0;
@@ -1236,8 +1331,8 @@ static void
 vst_test_decode_stats(xmlNodePtr stats,test_t *test)
 {
   if (test->debug) {
-    fprintf(test->where,"vst_test_decode_stats: entered for %s test %s\n",
-            test->id, test->test_name);
+    fprintf(test->where,"%s: entered for %s test %s\n",
+            __func__, test->id, test->test_name);
     fflush(test->where);
   }
 }
@@ -1250,13 +1345,13 @@ vst_test_get_stats(test_t *test)
   int         i,j;
   char        value[32];
   char        name[32];
-  uint64_t    loc_cnt[BSD_MAX_COUNTERS];
+  uint64_t    loc_cnt[VST_MAX_COUNTERS];
 
   vst_data_t *my_data = GET_TEST_DATA(test);
 
   if (test->debug) {
-    fprintf(test->where,"vst_test_get_stats: entered for %s test %s\n",
-            test->id, test->test_name);
+    fprintf(test->where,"%s: entered for %s test %s\n",
+            __func__, test->id, test->test_name);
     fflush(test->where);
   }
   if ((stats = xmlNewNode(NULL,(xmlChar *)"test_stats")) != NULL) {
@@ -1264,10 +1359,10 @@ vst_test_get_stats(test_t *test)
        the tid and time stamps/values and counter values  sgb 2004-07-07 */
 
     ap = xmlSetProp(stats,(xmlChar *)"tid",test->id);
-    for (i = 0; i < BSD_MAX_COUNTERS; i++) {
+    for (i = 0; i < VST_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
       if (test->debug) {
-        fprintf(test->where,"BSD_COUNTER%X = %#llx\n",i,loc_cnt[i]);
+        fprintf(test->where,"VST_COUNTER%X = %#llx\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -1288,7 +1383,8 @@ vst_test_get_stats(test_t *test)
           fflush(test->where);
         }
       }
-    } else {
+    }
+    else {
       if (ap != NULL) {
         sprintf(value,"%#ld",my_data->elapsed_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_sec",(xmlChar *)value);
@@ -1306,7 +1402,7 @@ vst_test_get_stats(test_t *test)
         }
       }
     }
-    for (i = 0; i < BSD_MAX_COUNTERS; i++) {
+    for (i = 0; i < VST_MAX_COUNTERS; i++) {
       if (ap == NULL) {
         break;
       }
@@ -1326,8 +1422,8 @@ vst_test_get_stats(test_t *test)
     }
   }
   if (test->debug) {
-    fprintf(test->where,"vst_test_get_stats: exiting for %s test %s\n",
-            test->id, test->test_name);
+    fprintf(test->where,"%s: exiting for %s test %s\n",
+            __func__, test->id, test->test_name);
     fflush(test->where);
   }
   return(stats);
@@ -1340,12 +1436,10 @@ recv_vst_rr_preinit(test_t *test)
   int               rc;
   int               s_listen;
   vst_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   myaddr;
   int               mylen;
 
-  my_data   = test->test_specific_data;
-  proc_name = "recv_vst_rr_preinit";
+  my_data   = GET_TEST_DATA(test);
   mylen     = sizeof(myaddr);
 
   s_listen = create_data_socket(test);
@@ -1355,32 +1449,33 @@ recv_vst_rr_preinit(test_t *test)
                   (xmlChar *)NULL, (xmlChar *)NULL, -1);
     fprintf(test->where, 
             "%s:create_data_socket returned %d\n", 
-            proc_name, s_listen);
+            __func__, s_listen);
     fflush(test->where);
   }
   rc = bind(s_listen, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            proc_name, rc, errno);
+            __func__, rc, errno);
     fflush(test->where);
   }
   if (rc == -1) {
     report_test_failure(test,
-                        proc_name,
-                        BSDE_BIND_FAILED,
+                        (char *)__func__,
+                        VSTE_BIND_FAILED,
                         "data socket bind failed");
   } else if (listen(s_listen,5) == -1) {
     report_test_failure(test,
-                        proc_name,
-                        BSDE_LISTEN_FAILED,
+                        (char *)__func__,
+                        VSTE_LISTEN_FAILED,
                         "data socket listen failed");
   } else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
     report_test_failure(test,
-                        proc_name,
-                        BSDE_GETSOCKNAME_FAILED,
+                        (char *)__func__,
+                        VSTE_GETSOCKNAME_FAILED,
                         "getting the listen socket name failed");
-  } else {
+  }
+  else {
     memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
     my_data->locaddr->ai_addrlen = mylen;
     set_dependent_data(test);
@@ -1392,30 +1487,29 @@ recv_vst_rr_init(test_t *test)
 {
   int               s_data;
   vst_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   peeraddr;
   int               peerlen;
 
-  my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_stream_init";
+  my_data   = GET_TEST_DATA(test);
   peerlen   = sizeof(peeraddr);
 
   if (test->debug) {
-    fprintf(test->where, "%s:waiting in accept\n", proc_name);
+    fprintf(test->where, "%s:waiting in accept\n", __func__);
     fflush(test->where);
   }
   if ((s_data = accept(my_data->s_listen,
                       &peeraddr,
                       &peerlen)) == -1) {
     report_test_failure(test,
-                        proc_name,
-                        BSDE_ACCEPT_FAILED,
+                        (char *)__func__,
+                        VSTE_ACCEPT_FAILED,
                         "listen socket accept failed");
-  } else {
+  }
+  else {
     if (test->debug) {
       fprintf(test->where, 
               "%s:accept returned successfully %d\n", 
-              proc_name, s_data);
+              __func__, s_data);
       fflush(test->where);
     }
     my_data->s_data = s_data;
@@ -1429,12 +1523,12 @@ recv_vst_rr_idle_link(test_t *test, int last_len)
   int               len;
   uint32_t          new_state;
   vst_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   peeraddr;
   int               peerlen;
 
-  my_data   = test->test_specific_data;
-  proc_name = "recv_vst_rr_idle_link";
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+
+  my_data   = GET_TEST_DATA(test);
   len       = last_len;
   peerlen   = sizeof(peeraddr);
 
@@ -1446,15 +1540,16 @@ recv_vst_rr_idle_link(test_t *test, int last_len)
 
   if (new_state == TEST_IDLE) {
     if (test->debug) {
-      fprintf(test->where,"%s: transition from LOAD to IDLE\n",proc_name);
+      fprintf(test->where,"%s: transition from LOAD to IDLE\n", __func__);
       fflush(test->where);
     }
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          proc_name,
-                          BSDE_SOCKET_SHUTDOWN_FAILED,
+                          (char *)__func__,
+                          VSTE_SOCKET_SHUTDOWN_FAILED,
                           "data_recv_error");
-    } else {
+    }
+    else {
       while (len > 0) {
         len=recv(my_data->s_data,
                  my_data->vst_ring->recv_buff_ptr,
@@ -1462,32 +1557,34 @@ recv_vst_rr_idle_link(test_t *test, int last_len)
       }
       close(my_data->s_data);
       if (test->debug) {
-        fprintf(test->where,"%s: waiting in accept\n",proc_name);
+        fprintf(test->where,"%s: waiting in accept\n", __func__);
         fflush(test->where);
       }
       if ((my_data->s_data=accept(my_data->s_listen,
                                  &peeraddr,
                                  &peerlen)) == -1) {
         report_test_failure(test,
-                          proc_name,
-                          BSDE_ACCEPT_FAILED,
+                          (char *)__func__,
+                          VSTE_ACCEPT_FAILED,
                           "listen socket accept failed");
-      } else {
+      }
+      else {
         if (test->debug) {
           fprintf(test->where,
                   "%s: accept returned successfully %d\n",
-                  proc_name,
+                  __func__,
                   my_data->s_data);
           fflush(test->where);
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        proc_name,
-                        BSDE_DATA_CONNECTION_CLOSED_ERROR,
+                        (char *)__func__,
+                        VSTE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
   }
 }
@@ -1503,75 +1600,80 @@ recv_vst_rr_meas(test_t *test)
   char             *req_ptr;
   uint32_t          new_state;
   vst_data_t       *my_data;
-  char             *proc_name;
 
   HISTOGRAM_VARS;
-  my_data   = test->test_specific_data;
-  proc_name = "recv_vst_rr_meas";
+  my_data   = GET_TEST_DATA(test);
 
-  /* code to timestamp enabled by HISTOGRAM */
-  HIST_TIMESTAMP(&time_one);
-  /* recv the request for the test */
-  req_base   = (int *)my_data->vst_ring->recv_buff_ptr;
-  req_ptr    = my_data->vst_ring->recv_buff_ptr;
-  bytes_left = my_data->vst_ring->recv_size;
-  received   = 0;
-  while (bytes_left > 0) {
-    if ((len=recv(my_data->s_data,
-                  req_ptr,
-                  bytes_left,
-                  0)) != 0) {
-      /* this macro hides windows differences */
-      if (CHECK_FOR_RECV_ERROR(len)) {
-        report_test_failure(test,
-                            proc_name,
-                            BSDE_DATA_RECV_ERROR,
-                            "data_recv_error");
+  while (NO_STATE_CHANGE(test)) {
+    /* code to timestamp enabled by HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* recv the request for the test */
+    req_base   = (int *)(
+               ( (long)(my_data->vst_ring->recv_buff_ptr)
+               + (long)sizeof(int) -1)
+               & ~((long)sizeof(int) -1));
+    req_ptr    = my_data->vst_ring->recv_buff_ptr;
+    bytes_left = my_data->vst_ring->recv_size;
+    received   = 0;
+    while (bytes_left > 0) {
+      if ((len=recv(my_data->s_data,
+                    req_ptr,
+                    bytes_left,
+                    0)) != 0) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              VSTE_DATA_RECV_ERROR,
+                              "data_recv_error");
+          break;
+        }
+        my_data->stats.named.bytes_received += len;
+        my_data->stats.named.recv_calls++;
+        received  += len;
+        req_ptr   += len;
+        if (received >= (sizeof(int)*2)) {
+          bytes_left = ntohl(req_base[0]) - received;
+        }
+        else {
+          bytes_left = my_data->vst_ring->recv_size - received;
+        }
+      }
+      else {
+        /* just got a data connection close break out of while loop */
         break;
       }
-      my_data->stats.named.bytes_received += len;
-      my_data->stats.named.recv_calls++;
-      received    += len;
-      bytes_left -= len;
-      if (received > sizeof(int)) {
-        bytes_left = ntohl(req_base[0]) - received;
-      } else {
-        bytes_left = my_data->vst_ring->recv_size - received;
-      }
-    } else {
-      /* just got a data connection close break out of while loop */
-      break;
     }
-  }
-  if (len == 0) {
-    /* how do we deal with a closed connection in the measured state */
-    report_test_failure(test,
-                        proc_name,
-                        BSDE_DATA_CONNECTION_CLOSED_ERROR,
-                        "data connection closed during TEST_MEASURE state");
-  } else {
-    rsp_size = ntohl(req_base[1]);
-    my_data->stats.named.trans_received++;
-    if ((len=send(my_data->s_data,
-                  my_data->vst_ring->send_buff_ptr,
-                  rsp_size,
-                  0)) != rsp_size) {
-      /* this macro hides windows differences */
-      if (CHECK_FOR_SEND_ERROR(len)) {
-        report_test_failure(test,
-                            proc_name,
-                            BSDE_DATA_SEND_ERROR,
-                            "data_send_error");
-      } else {
-        my_data->stats.named.bytes_sent += rsp_size;
-        my_data->stats.named.send_calls++;
-      }
+    if (len == 0) {
+      /* how do we deal with a closed connection in the measured state */
+      report_test_failure(test,
+                          (char *)__func__,
+                          VSTE_DATA_CONNECTION_CLOSED_ERROR,
+                          "data connection closed during TEST_MEASURE state");
     }
+    else {
+      rsp_size = ntohl(req_base[1]);
+      my_data->stats.named.trans_received++;
+      if ((len=send(my_data->s_data,
+                    my_data->vst_ring->send_buff_ptr,
+                    rsp_size,
+                    0)) != rsp_size) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_SEND_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              VSTE_DATA_SEND_ERROR,
+                              "data_send_error");
+        }
+      }
+      my_data->stats.named.bytes_sent += len;
+      my_data->stats.named.send_calls++;
+    }
+    /* code to timestamp enabled by HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+    get_next_vst_transaction(test);
   }
-  /* code to timestamp enabled by HISTOGRAM */
-  HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
-  get_next_vst_transaction(test);
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
     /* transitioning to loaded state from measure state
@@ -1593,51 +1695,60 @@ recv_vst_rr_load(test_t *test)
   char             *req_ptr;
   uint32_t          new_state;
   vst_data_t       *my_data;
-  char             *proc_name;
 
-  my_data   = test->test_specific_data;
-  proc_name = "recv_vst_rr_load";
+  my_data   = GET_TEST_DATA(test);
 
-  /* recv the request for the test */
-  req_base   = (int *)my_data->vst_ring->recv_buff_ptr;
-  req_ptr    = my_data->vst_ring->recv_buff_ptr;
-  bytes_left = my_data->vst_ring->recv_size;
-  received   = 0;
-  while (bytes_left > 0) {
-    if ((len=recv(my_data->s_data,
-                  req_ptr,
-                  bytes_left,
-                  0)) != 0) {
-      /* this macro hides windows differences */
-      if (CHECK_FOR_RECV_ERROR(len)) {
-        report_test_failure(test,
-                            proc_name,
-                            BSDE_DATA_RECV_ERROR,
-                            "data_recv_error");
+  while(NO_STATE_CHANGE(test)) {
+    /* recv the request for the test */
+    req_base   = (int *)(
+               ( (long)(my_data->vst_ring->recv_buff_ptr)
+               + (long)sizeof(int) -1)
+               & ~((long)sizeof(int) -1));
+    req_ptr    = my_data->vst_ring->recv_buff_ptr;
+    bytes_left = my_data->vst_ring->recv_size;
+    received   = 0;
+    while (bytes_left > 0) {
+      if ((len=recv(my_data->s_data,
+                    req_ptr,
+                    bytes_left,
+                    0)) != 0) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              VSTE_DATA_RECV_ERROR,
+                              "data_recv_error");
+          break;
+        }
+        received   += len;
+        req_ptr    += len;
+        if (received >= (sizeof(int)*2)) {
+          bytes_left = ntohl(req_base[0]) - received;
+        }
+        else {
+          bytes_left = my_data->vst_ring->recv_size - received;
+        }
+      }
+      else {
+        /* just got a data connection close break out of while loop */
         break;
       }
-      received   += len;
-      req_ptr    -= len;
-      if (received > sizeof(int)) {
-        bytes_left = ntohl(req_base[0]) - received;
-      } else {
-        bytes_left = my_data->vst_ring->recv_size - received;
-      }
-    } else {
-      /* just got a data connection close break out of while loop */
-      break;
     }
-  }
-  /* check for state transition */
-  new_state = CHECK_REQ_STATE;
-  if ((len == 0) ||
-      (new_state == TEST_IDLE)) {
-    /* just got a data connection close or
-       a request to transition to the idle state */
-    recv_vst_rr_idle_link(test,len);
-    new_state = TEST_IDLE;
-  } else {
+    /* check for state transition */
+    new_state = CHECK_REQ_STATE;
+    if ((len == 0) ||
+        (new_state == TEST_IDLE)) {
+      /* just got a data connection close or
+         a request to transition to the idle state */
+      break;
+    } 
     rsp_size = ntohl(req_base[1]);
+    if (rsp_size == 0) {
+      fprintf(test->where,
+              "%s: rsp_size = %d  received = %d\n",
+              __func__, rsp_size, received);
+      fflush(test->where);
+    }
     if ((len=send(my_data->s_data,
                   my_data->vst_ring->send_buff_ptr,
                   rsp_size,
@@ -1645,18 +1756,25 @@ recv_vst_rr_load(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
-                            BSDE_DATA_SEND_ERROR,
+                            (char *)__func__,
+                            VSTE_DATA_SEND_ERROR,
                             "data_send_error");
       }
     }
     get_next_vst_transaction(test);
+  }
+  new_state = CHECK_REQ_STATE;
+  if ((len == 0) ||
+      (new_state == TEST_IDLE)) {
+    recv_vst_rr_idle_link(test,len);
+  }
+  else {
     if (new_state == TEST_MEASURE) {
       /* transitioning to measure state from loaded state
          set previous timestamp */
       gettimeofday(&(my_data->prev_time), NULL);
     }
-  } 
+  }
   return(new_state);
 }
 
@@ -1665,7 +1783,7 @@ send_vst_rr_preinit(test_t *test)
 {
   vst_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   get_dependency_data(test, SOCK_STREAM, IPPROTO_TCP);
   my_data->s_data = create_data_socket(test);
@@ -1675,25 +1793,24 @@ static uint32_t
 send_vst_rr_init(test_t *test)
 {
   vst_data_t       *my_data;
-  char             *proc_name;
 
-  my_data   = test->test_specific_data;
-  proc_name = "send_vst_rr_init";
+  my_data   = GET_TEST_DATA(test);
 
   if (test->debug) {
-    fprintf(test->where,"%s: in INIT state making connect call\n",proc_name);
+    fprintf(test->where,"%s: in INIT state making connect call\n", __func__);
     fflush(test->where);
   }
   if (connect(my_data->s_data,
               my_data->remaddr->ai_addr,
               my_data->remaddr->ai_addrlen) < 0) {
     report_test_failure(test,
-                        proc_name,
-                        BSDE_CONNECT_FAILED,
+                        (char *)__func__,
+                        VSTE_CONNECT_FAILED,
                         "data socket connect failed");
-  } else {
+  }
+  else {
     if (test->debug) {
-      fprintf(test->where,"%s: connected and moving to IDLE\n",proc_name);
+      fprintf(test->where,"%s: connected and moving to IDLE\n", __func__);
       fflush(test->where);
     }
   }
@@ -1706,10 +1823,10 @@ send_vst_rr_idle_link(test_t *test, int last_len)
   int               len;
   uint32_t          new_state;
   vst_data_t       *my_data;
-  char             *proc_name;
 
-  my_data   = test->test_specific_data;
-  proc_name = "send_vst_rr_idle_link";
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+
+  my_data   = GET_TEST_DATA(test);
   len       = last_len;
 
   new_state = CHECK_REQ_STATE;
@@ -1719,15 +1836,16 @@ send_vst_rr_idle_link(test_t *test, int last_len)
   }
   if (new_state == TEST_IDLE) {
     if (test->debug) {
-      fprintf(test->where,"%s: transition from LOAD to IDLE\n",proc_name);
+      fprintf(test->where,"%s: transition from LOAD to IDLE\n", __func__);
       fflush(test->where);
     }
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          proc_name,
-                          BSDE_SOCKET_SHUTDOWN_FAILED,
+                          (char *)__func__,
+                          VSTE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
-    } else {
+    }
+    else {
       while (len > 0) {
         len = recv(my_data->s_data,
                    my_data->vst_ring->recv_buff_ptr,
@@ -1736,29 +1854,31 @@ send_vst_rr_idle_link(test_t *test, int last_len)
       close(my_data->s_data);
       my_data->s_data = create_data_socket(test);
       if (test->debug) {
-        fprintf(test->where,"%s: connecting from LOAD state\n",proc_name);
+        fprintf(test->where,"%s: connecting from LOAD state\n", __func__);
         fflush(test->where);
       }
       if (connect(my_data->s_data,
                   my_data->remaddr->ai_addr,
                   my_data->remaddr->ai_addrlen) < 0) {
         report_test_failure(test,
-                            proc_name,
-                            BSDE_CONNECT_FAILED,
+                            (char *)__func__,
+                            VSTE_CONNECT_FAILED,
                             "data socket connect failed");
-      } else {
+      }
+      else {
         if (test->debug) {
-          fprintf(test->where,"%s: connected moving to IDLE\n",proc_name);
+          fprintf(test->where,"%s: connected moving to IDLE\n", __func__);
           fflush(test->where);
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        proc_name,
-                        BSDE_DATA_CONNECTION_CLOSED_ERROR,
+                        (char *)__func__,
+                        VSTE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
 
   }
@@ -1773,68 +1893,69 @@ send_vst_rr_meas(test_t *test)
   int               bytes_left;
   char             *rsp_ptr;
   vst_data_t       *my_data;
-  char             *proc_name;
 
-  my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_meas";
-  HISTOGRAM_VARS;
-  /* code to make data dirty macro enabled by DIRTY */
-  MAKE_DIRTY(my_data,my_data->vst_ring);
-  /* code to timestamp enabled by HISTOGRAM */
-  HIST_TIMESTAMP(&time_one);
-  /* send data for the test */
-  send_len = my_data->vst_ring->send_size;
-  if((len=send(my_data->s_data,
-               my_data->vst_ring->send_buff_ptr,
-               send_len,
-               0)) != send_len) {
-    /* this macro hides windows differences */
-    if (CHECK_FOR_SEND_ERROR(len)) {
-      report_test_failure(test,
-                          proc_name,
-                          BSDE_DATA_SEND_ERROR,
-                          "data send error");
-    } else {
-      my_data->stats.named.bytes_sent += send_len;
-      my_data->stats.named.send_calls++;
-    }
-  }
-  /* recv the request for the test */
-  rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
-  bytes_left = my_data->vst_ring->recv_size;
-  while (bytes_left > 0) {
-    if ((len=recv(my_data->s_data,
-                  rsp_ptr,
-                  bytes_left,
-                  0)) != 0) {
+  my_data   = GET_TEST_DATA(test);
+
+  while (NO_STATE_CHANGE(test)) {
+    HISTOGRAM_VARS;
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->vst_ring);
+    /* code to timestamp enabled by HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* send data for the test */
+    send_len = my_data->vst_ring->send_size;
+    if((len=send(my_data->s_data,
+                 my_data->vst_ring->send_buff_ptr,
+                 send_len,
+                 0)) != send_len) {
       /* this macro hides windows differences */
-      if (CHECK_FOR_RECV_ERROR(len)) {
+      if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
-                            BSDE_DATA_RECV_ERROR,
-                            "data_recv_error");
+                            (char *)__func__,
+                            VSTE_DATA_SEND_ERROR,
+                            "data send error");
+      }
+    }
+    my_data->stats.named.bytes_sent += len;
+    my_data->stats.named.send_calls++;
+    /* recv the request for the test */
+    rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
+    bytes_left = my_data->vst_ring->recv_size;
+    while (bytes_left > 0) {
+      if ((len=recv(my_data->s_data,
+                    rsp_ptr,
+                    bytes_left,
+                    0)) != 0) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              VSTE_DATA_RECV_ERROR,
+                              "data_recv_error");
+          break;
+        }
+        my_data->stats.named.bytes_received += len;
+        my_data->stats.named.recv_calls++;
+        rsp_ptr    += len;
+        bytes_left -= len;
+      }
+      else {
+        /* len is 0 the connection was closed exit the while loop */
         break;
       }
-      my_data->stats.named.bytes_received += len;
-      my_data->stats.named.recv_calls++;
-      rsp_ptr    += len;
-      bytes_left -= len;
-    } else {
-      /* len is 0 the connection was closed exit the while loop */
-      break;
     }
-  }
-  /* code to timestamp enabled by HISTOGRAM */
-  HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
-  my_data->stats.named.trans_sent++;
-  get_next_vst_transaction(test);
-  if (len == 0) {
-    /* how do we deal with a closed connection in the measured state */
-    report_test_failure(test,
-                        proc_name,
-                        BSDE_DATA_CONNECTION_CLOSED_ERROR,
-                        "data connection closed during TEST_MEASURE state");
+    /* code to timestamp enabled by HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+    my_data->stats.named.trans_sent++;
+    get_next_vst_transaction(test);
+    if (len == 0) {
+      /* how do we deal with a closed connection in the measured state */
+      report_test_failure(test,
+                          (char *)__func__,
+                          VSTE_DATA_CONNECTION_CLOSED_ERROR,
+                          "data connection closed during TEST_MEASURE state");
+    }
   }
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
@@ -1855,57 +1976,62 @@ send_vst_rr_load(test_t *test)
   int               bytes_left;
   char             *rsp_ptr;
   vst_data_t       *my_data;
-  char             *proc_name;
 
-  my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_load";
+  my_data   = GET_TEST_DATA(test);
 
-  /* code to make data dirty macro enabled by DIRTY */
-  MAKE_DIRTY(my_data,my_data->vst_ring);
-  /* send data for the test */
-  send_len = my_data->vst_ring->send_size;
-  if((len=send(my_data->s_data,
-               my_data->vst_ring->send_buff_ptr,
-               send_len,
-               0)) != send_len) {
-    /* this macro hides windows differences */
-    if (CHECK_FOR_SEND_ERROR(len)) {
-      report_test_failure(test,
-                          proc_name,
-                          BSDE_DATA_SEND_ERROR,
-                          "data send error");
-    }
-  }
-  /* recv the request for the test */
-  rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
-  bytes_left = my_data->vst_ring->recv_size;
-  while (bytes_left > 0) {
-    if ((len=recv(my_data->s_data,
-                  rsp_ptr,
-                  bytes_left,
-                  0)) != 0) {
+  while(NO_STATE_CHANGE(test)) {
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->vst_ring);
+    /* send data for the test */
+    send_len = my_data->vst_ring->send_size;
+    if((len=send(my_data->s_data,
+                 my_data->vst_ring->send_buff_ptr,
+                 send_len,
+                 0)) != send_len) {
       /* this macro hides windows differences */
-      if (CHECK_FOR_RECV_ERROR(len)) {
+      if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
-                            BSDE_DATA_RECV_ERROR,
-                            "data_recv_error");
+                            (char *)__func__,
+                            VSTE_DATA_SEND_ERROR,
+                            "data send error");
+      }
+    }
+    /* recv the request for the test */
+    rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
+    bytes_left = my_data->vst_ring->recv_size;
+    while (bytes_left > 0) {
+      if ((len=recv(my_data->s_data,
+                    rsp_ptr,
+                    bytes_left,
+                    0)) != 0) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              VSTE_DATA_RECV_ERROR,
+                              "data_recv_error");
+          break;
+        }
+        rsp_ptr    += len;
+        bytes_left -= len;
+      }
+      else {
+        /* len is 0 the connection was closed exit the while loop */
         break;
       }
-      rsp_ptr    += len;
-      bytes_left -= len;
-    } else {
-      /* len is 0 the connection was closed exit the while loop */
+    }
+    if (len == 0) {
       break;
     }
+    get_next_vst_transaction(test);
   }
-  get_next_vst_transaction(test);
   new_state = CHECK_REQ_STATE;
   if ((len == 0) ||
       (new_state == TEST_IDLE)) {
     send_vst_rr_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  }
+  else {
     if (new_state == TEST_MEASURE) {
       /* transitioning to measure state from loaded state
          set previous timestamp */
@@ -2074,15 +2200,17 @@ vst_test_results_init(tset_t *test_set,char *report_flags,char *output)
   if (output) {
     if (test_set->debug) {
       fprintf(test_set->where,
-              "vst_test_results_init: report going to file %s\n",
-              output);
+              "%s: report going to file %s\n",
+              __func__, output);
       fflush(test_set->where);
     }
     outfd = fopen(output,"a");
-  } else {
+  }
+  else {
     if (test_set->debug) {
       fprintf(test_set->where,
-              "report_vst_test_results: report going to file stdout\n");
+              "%s: report going to file stdout\n",
+              __func__);
       fflush(test_set->where);
     }
     outfd = stdout;
@@ -2119,10 +2247,12 @@ vst_test_results_init(tset_t *test_set,char *report_flags,char *output)
       rd->print_test = 1;
     }
     test_set->report_data = rd;
-  } else {
+  }
+  else {
     /* could not allocate memory can't generate report */
     fprintf(outfd,
-            "vst_test_results_init: malloc failed can't generate report\n");
+            "%s: malloc failed can't generate report\n",
+            __func__);
     fflush(outfd);
     exit;
   }
@@ -2174,10 +2304,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   index  = count - 1;
 
   /* process test statistics */
-  if (test_set->debug) {
-    fprintf(test_set->where,"\tprocessing test_stats\n");
-    fflush(test_set->where);
-  }
+  NETPERF_DEBUG_ENTRY(test_set->debug, test_set->where);
+
   for (i=0; i<MAX_TEST_CNTRS; i++) {
     char *value_str =
        (char *)xmlGetProp(stats, (const xmlChar *)cntr_name[i]);
@@ -2188,7 +2316,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
         sscanf(value_str,"%llx",&x);
         test_cntr[i] = (double)x;
       }
-    } else {
+    }
+    else {
       test_cntr[i] = 0.0;
     }
     if (test_set->debug) {
@@ -2214,10 +2343,11 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(test_set->where);
   }
   if (rd->sd_denominator == 0.0) {
-    if (xmit_rate > 0.0 || recv_rate > 0.0) {
-      rd->sd_denominator = 1000000.0/(8.0*1024.0);
-    } else {
+    if (xmit_trans_rate > 0.0 || recv_trans_rate > 0.0) {
       rd->sd_denominator = 1.0;
+    }
+    else {
+      rd->sd_denominator = 1000000.0/(8.0*1024.0);
     }
   }
   if (test_set->debug) {
@@ -2226,7 +2356,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   }
   if (rd->sd_denominator != 1.0) {
     result = recv_rate + xmit_rate;
-  } else {
+  }
+  else {
     result = recv_trans_rate + xmit_trans_rate;
   }
   if (test_set->debug) {
@@ -2246,13 +2377,9 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(outfd,"%3d  ", count);                    /*  0,5 */
     fprintf(outfd,"%-6s ",  tid);                     /*  5,7 */
     fprintf(outfd,"%-6.2f ",elapsed_seconds);         /* 12,7 */
-    if (rd->sd_denominator != 1.0) {
       fprintf(outfd,"%7.2f ",result);                 /* 19,8 */
       fprintf(outfd,"%7.2f ",xmit_rate);              /* 27,8 */
       fprintf(outfd,"%7.2f ",recv_rate);              /* 35,8 */
-    } else {
-      fprintf(outfd,"%10.2f ",result);                /* 19,11 */
-    }
     fprintf(outfd,"\n");
     fflush(outfd);
   }
@@ -2314,7 +2441,8 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
         sscanf(value_str,"%llx",&x);
         sys_cntr[i] = (double)x;
       }
-    } else {
+    }
+    else {
       sys_cntr[i] = 0.0;
     }
     if (test_set->debug) {
@@ -2344,11 +2472,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(outfd,"%3d  ", count);                    /*  0,5 */
     fprintf(outfd,"%-6s ",  tid);                     /*  5,7 */
     fprintf(outfd,"%-6.2f ",elapsed_seconds);         /* 12,7 */
-    if (rd->sd_denominator != 1.0) {
       fprintf(outfd,"%24s","");                       /* 19,24*/
-    } else {
-      fprintf(outfd,"%11s","");                       /* 19,11*/
-    }
     fprintf(outfd,"%7.1e ",calibration);              /* 43,8 */
     fprintf(outfd,"%6.3f ",local_idle*100.0);         /* 51,7 */
     fprintf(outfd,"%6.3f ",local_busy*100.0);         /* 58,7 */
@@ -2364,22 +2488,17 @@ process_stats_for_run(tset_t *test_set)
   vst_results_t *rd;
   test_t        *test;
   tset_elt_t    *set_elt;
-  char          *proc_name;
   xmlNodePtr     stats;
   xmlNodePtr     prev_stats;
   int            count; 
   int            index;
-  int            loc_debug;
+  int            num_of_tests;
  
 
   rd        = test_set->report_data;
-  proc_name = "process_stats_for_run";
   set_elt   = test_set->tests;
   count     = test_set->confidence.count;
   index     = count - 1;
-  loc_debug = test_set->debug;
-
-  test_set->debug = 1;
 
   if (test_set->debug) {
     fprintf(test_set->where,
@@ -2389,7 +2508,7 @@ process_stats_for_run(tset_t *test_set)
   }
 
   if (test_set->debug) {
-    fprintf(test_set->where, "%s count = %d\n", proc_name, count);
+    fprintf(test_set->where, "%s count = %d\n", __func__, count);
     fflush(test_set->where);
   }
 
@@ -2400,6 +2519,7 @@ process_stats_for_run(tset_t *test_set)
   rd->servdemand[index]    =  0.0;
   rd->run_time[index]      =  0.0;
 
+  num_of_tests  = 0;
   while (set_elt != NULL) {
     int stats_for_test;
     test    = set_elt->test;
@@ -2409,7 +2529,8 @@ process_stats_for_run(tset_t *test_set)
         fprintf(test_set->where,
                 "\ttest %s has '%s' statistics\n",
                 test->id,stats->name);
-      } else {
+      }
+      else {
         fprintf(test_set->where,
                 "\ttest %s has no statistics available!\n",
                 test->id);
@@ -2432,6 +2553,7 @@ process_stats_for_run(tset_t *test_set)
         /* process test statistics */
         process_test_stats(test_set, stats, test->id);
         stats_for_test++;
+        num_of_tests++;
       }
       /* other types of nodes just get skipped by this report routine */
       /* delete statistics entry from test */
@@ -2448,7 +2570,7 @@ process_stats_for_run(tset_t *test_set)
               stats_for_test);
       fprintf(test_set->where,
               "%s was not designed to deal with this.\n",
-              proc_name);
+              __func__);
       fprintf(test_set->where,
               "exiting netperf now!!\n");
       fflush(test_set->where);
@@ -2456,13 +2578,14 @@ process_stats_for_run(tset_t *test_set)
     }
     set_elt = set_elt->next;
   }
+  
   if (rd->result_minimum > rd->results[index]) {
     rd->result_minimum = rd->results[index];
   }
   if (rd->result_maximum < rd->results[index]) {
     rd->result_maximum = rd->results[index];
   }
-  test_set->debug = loc_debug;
+  rd->run_time[index] = rd->run_time[index] / (double)num_of_tests;
 }
 
 static void
@@ -2474,6 +2597,12 @@ update_results_and_confidence(tset_t *test_set)
   rd        = test_set->report_data;
 
     /* calculate confidence and summary result values */
+  confidence                    = get_confidence(rd->xmit_results,
+                                      &(test_set->confidence),
+                                      &(rd->xmit_measured_mean));
+  confidence                    = get_confidence(rd->recv_results,
+                                      &(test_set->confidence),
+                                      &(rd->recv_measured_mean));
   confidence                    = get_confidence(rd->run_time,
                                       &(test_set->confidence),
                                       &(rd->ave_time));
@@ -2489,13 +2618,16 @@ update_results_and_confidence(tset_t *test_set)
   if (rd->result_confidence > rd->cpu_util_confidence) {
     if (rd->cpu_util_confidence > rd->service_demand_confidence) {
       confidence  = rd->service_demand_confidence;
-    } else {
+    }
+    else {
       confidence  = rd->cpu_util_confidence;
     }
-  } else {
+  }
+  else {
     if (rd->result_confidence > rd->service_demand_confidence) {
       confidence  = rd->service_demand_confidence;
-    } else {
+    }
+    else {
       confidence  = rd->result_confidence;
     }
   }
@@ -2515,8 +2647,7 @@ print_run_results(tset_t *test_set)
   char *field1[HDR_LINES]   = { "INST",  "NUM",  " "       };   /* 4 */
   char *field2[HDR_LINES]   = { "SET",   "Name", " "       };   /* 6 */
   char *field3[HDR_LINES]   = { "RUN",   "Time", "sec"     };   /* 6 */
-  char *field4A[HDR_LINES]  = { "DATA",  "RATE", "mb/s"    };   /* 7 */
-  char *field4B[HDR_LINES]  = { "TRANS", "RATE", "tran/s"  };   /* 7 */
+  char *field4[HDR_LINES]   = { "TRANS", "RATE", "tran/s"  };   /* 7 */
   char *field5[HDR_LINES]   = { "XMIT",  "Rate", "mb/s"    };   /* 7 */
   char *field6[HDR_LINES]   = { "RECV",  "Rate", "mb/s"    };   /* 7 */
   char *field7[HDR_LINES]   = { "SD",    "usec", "/KB"     };   /* 7 */
@@ -2539,13 +2670,9 @@ print_run_results(tset_t *test_set)
     fprintf(outfd,"%-4s ",field1[i]);                         /*  0,5 */
     fprintf(outfd,"%-6s ",field2[i]);                         /*  5,7 */
     fprintf(outfd,"%-6s ",field3[i]);                         /* 12,7 */
-    if (rd->sd_denominator != 1.0) {
-      fprintf(outfd,"%7s ",field4A[i]);                       /* 19,8 */
+      fprintf(outfd,"%7s ",field4[i]);                        /* 19,8 */
       fprintf(outfd,"%7s ",field5[i]);                        /* 27,8 */
       fprintf(outfd,"%7s ",field6[i]);                        /* 35,8 */
-    } else {
-      fprintf(outfd,"%10s ",field4B[i]);                      /* 19,11 */
-    }
     fprintf(outfd,"%7s ",field7[i]);                          /* 43,8 */
     fprintf(outfd,"%6s ",field8[i]);                          /* 51,7 */
 #ifdef OFF
@@ -2560,13 +2687,9 @@ print_run_results(tset_t *test_set)
   fprintf(outfd,"%-3d  ", count);                             /*  0,5 */
   fprintf(outfd,"%-6s ",  test_set->id);                      /*  5,7 */
   fprintf(outfd,"%-6.2f ",rd->run_time[index]);               /* 12,7 */
-  if (rd->sd_denominator != 1.0) {
     fprintf(outfd,"%7.2f ",rd->results[index]);               /* 19,8 */
     fprintf(outfd,"%7.2f ",rd->xmit_results[index]);          /* 27,8 */
     fprintf(outfd,"%7.2f ",rd->recv_results[index]);          /* 35,8 */
-  } else {
-    fprintf(outfd,"%10.2f ",rd->results[index]);              /* 19,11*/
-  }
   fprintf(outfd,"%7.3f ",rd->servdemand[index]);              /* 43,8 */
   fprintf(outfd,"%6.4f ",rd->utilization[index]);             /* 51,7 */
 #ifdef OFF
@@ -2591,53 +2714,17 @@ print_results_summary(tset_t *test_set)
   char *field1[HDR_LINES]   = { "AVE",   "Over", "Num"     };   /* 4 */
   char *field2[HDR_LINES]   = { "SET",   "Name", " "       };   /* 6 */
   char *field3[HDR_LINES]   = { "TEST",  "Time", "sec"     };   /* 6 */
-  char *field4A[HDR_LINES]  = { "DATA",  "RATE", "mb/s"    };   /* 7 */
-  char *field5A[HDR_LINES]  = { "conf",  "+/-",  "mb/s"    };   /* 7 */
-  char *field6A[HDR_LINES]  = { "Min",   "Rate", "mb/s"    };   /* 7 */
-  char *field7A[HDR_LINES]  = { "Max",   "Rate", "mb/s"    };   /* 7 */
+  char *field4[HDR_LINES]   = { "TRANS", "RATE", "tran/s"  };   /* 7 */
+  char *field5[HDR_LINES]   = { "conf",  "+/-",  "tran/s"  };   /* 7 */
+  char *field6[HDR_LINES]   = { "XMIT",  "Rate", "mb/s"    };   /* 7 */
+  char *field7[HDR_LINES]   = { "RECV",  "Rate", "mb/s"    };   /* 7 */
   char *field8[HDR_LINES]   = { "CPU",   "Util", "%/100"   };   /* 6 */
   char *field9[HDR_LINES]   = { "+/-",   "Util", "%/100"   };   /* 6 */
-  char *field10A[HDR_LINES] = { "SD",    "usec", "/KB"     };   /* 6 */
-  char *field11A[HDR_LINES] = { "+/-",   "usec", "/KB"     };   /* 6 */
+  char *field10[HDR_LINES]  = { "SD",    "usec", "/KB"     };   /* 6 */
+  char *field11[HDR_LINES]  = { "+/-",   "usec", "/KB"     };   /* 6 */
 
-  char *field4B[HDR_LINES]  = { "TRANS", "RATE", "tran/s"  };   /* 7 */
-  char *field5B[HDR_LINES]  = { "conf",  "+/-",  "tran/s"  };   /* 7 */
-  char *field6B[HDR_LINES]  = { "Min",   "Rate", "tran/s"  };   /* 7 */
-  char *field7B[HDR_LINES]  = { "Max",   "Rate", "tran/s"  };   /* 7 */
-
-  char *field10B[HDR_LINES] = { "SD",    "usec", "/tran"   };   /* 6 */
-  char *field11B[HDR_LINES] = { "+/-",   "usec", "/tran"   };   /* 6 */
-
-  char *field4[HDR_LINES];
-  char *field5[HDR_LINES];
-  char *field6[HDR_LINES];
-  char *field7[HDR_LINES];
-
-  char *field10[HDR_LINES];
-  char *field11[HDR_LINES];
-  
   rd    = test_set->report_data;
   outfd = rd->outfd;
-
-  if (rd->sd_denominator != 1.0) {
-    for (i = 0; i < HDR_LINES; i++) {
-      field4[i]  = field4A[i];
-      field5[i]  = field5A[i];
-      field6[i]  = field6A[i];
-      field7[i]  = field7A[i];
-      field10[i] = field10A[i];
-      field11[i] = field11A[i];
-    }
-  } else {
-    for (i = 0; i < HDR_LINES; i++) {
-      field4[i]  = field4B[i];
-      field5[i]  = field5B[i];
-      field6[i]  = field6B[i];
-      field7[i]  = field7B[i];
-      field10[i] = field10B[i];
-      field11[i] = field11B[i];
-    }
-  }
 
   /* Print the summary header */
   fprintf(outfd,"\n");
@@ -2660,17 +2747,10 @@ print_results_summary(tset_t *test_set)
   fprintf(outfd,"A%-3d ",test_set->confidence.count);             /*  0,5 */
   fprintf(outfd,"%-6s ",test_set->id);                            /*  5,7 */
   fprintf(outfd,"%-6.2f ",rd->ave_time);                          /* 12,7 */
-  if (rd->sd_denominator != 1.0) {
     fprintf(outfd,"%7.2f ",rd->result_measured_mean);             /* 19,8 */
     fprintf(outfd,"%7.3f ",rd->result_confidence);                /* 27,8 */
-    fprintf(outfd,"%7.2f ",rd->result_minimum);                   /* 35,8 */
-    fprintf(outfd,"%7.2f ",rd->result_maximum);                   /* 43,8 */
-  } else {
-    fprintf(outfd,"%7.0f ",rd->result_measured_mean);             /* 19,8 */
-    fprintf(outfd,"%7.2f ",rd->result_confidence);                /* 27,8 */
-    fprintf(outfd,"%7.0f ",rd->result_minimum);                   /* 35,8 */
-    fprintf(outfd,"%7.0f ",rd->result_maximum);                   /* 43,8 */
-  }
+    fprintf(outfd,"%7.2f ",rd->xmit_measured_mean);               /* 35,8 */
+    fprintf(outfd,"%7.2f ",rd->recv_measured_mean);               /* 43,8 */
   fprintf(outfd,"%6.4f ",rd->cpu_util_measured_mean);             /* 51,7 */
   fprintf(outfd,"%6.4f ",rd->cpu_util_confidence);                /* 58,7 */
   fprintf(outfd,"%6.3f ",rd->service_demand_measured_mean);       /* 65,7 */

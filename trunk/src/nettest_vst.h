@@ -40,7 +40,7 @@ enum {
   TRANS_RECEIVED,
   CONNECT_CALLS,
   ACCEPT_CALLS,
-  BSD_MAX_COUNTERS
+  VST_MAX_COUNTERS
 };
 
 typedef struct  vst_test_data {
@@ -91,7 +91,7 @@ typedef struct  vst_test_data {
 
   /* Statistics Counters */
   union {
-    uint64_t  counter[BSD_MAX_COUNTERS];
+    uint64_t  counter[VST_MAX_COUNTERS];
     struct {
       uint64_t  send_calls;
       uint64_t  bytes_sent;
@@ -128,6 +128,8 @@ typedef struct  vst_results_data {
   double result_confidence;
   double result_minimum;
   double result_maximum;
+  double xmit_measured_mean;
+  double recv_measured_mean;
   double cpu_util_measured_mean;
   double cpu_util_confidence;
   double service_demand_measured_mean;
@@ -139,23 +141,23 @@ typedef struct  vst_results_data {
 
 /* Error codes to be used within nettest_vst */
 enum {
-  BSDE_MAX_ERROR = -32,
-  BSDE_SOCKET_SHUTDOWN_FAILED,
-  BSDE_BIND_FAILED,
-  BSDE_GETADDRINFO_ERROR,
-  BSDE_XMLSETPROP_ERROR,
-  BSDE_XMLNEWNODE_ERROR,
-  BSDE_NO_SOCKET_ARGS,
-  BSDE_SOCKET_ERROR,
-  BSDE_SETSOCKOPT_ERROR,
-  BSDE_LISTEN_FAILED,
-  BSDE_GETSOCKNAME_FAILED,
-  BSDE_REQUESTED_STATE_INVALID,
-  BSDE_ACCEPT_FAILED,
-  BSDE_DATA_RECV_ERROR,
-  BSDE_TEST_STATE_CORRUPTED,
-  BSDE_CONNECT_FAILED,
-  BSDE_DATA_SEND_ERROR,
-  BSDE_DATA_CONNECTION_CLOSED_ERROR,
-  BSDE_SUCCESS = 0
+  VSTE_MAX_ERROR = -32,
+  VSTE_SOCKET_SHUTDOWN_FAILED,
+  VSTE_BIND_FAILED,
+  VSTE_GETADDRINFO_ERROR,
+  VSTE_XMLSETPROP_ERROR,
+  VSTE_XMLNEWNODE_ERROR,
+  VSTE_NO_SOCKET_ARGS,
+  VSTE_SOCKET_ERROR,
+  VSTE_SETSOCKOPT_ERROR,
+  VSTE_LISTEN_FAILED,
+  VSTE_GETSOCKNAME_FAILED,
+  VSTE_REQUESTED_STATE_INVALID,
+  VSTE_ACCEPT_FAILED,
+  VSTE_DATA_RECV_ERROR,
+  VSTE_TEST_STATE_CORRUPTED,
+  VSTE_CONNECT_FAILED,
+  VSTE_DATA_SEND_ERROR,
+  VSTE_DATA_CONNECTION_CLOSED_ERROR,
+  VSTE_SUCCESS = 0
 };
