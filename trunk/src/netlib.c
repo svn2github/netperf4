@@ -52,6 +52,10 @@ delete this exception statement from your version.
 #include <string.h>
 #endif
 
+#ifdef HAVE_STRINGS_H
+#include <strings.h>
+#endif
+
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
 #endif
@@ -103,10 +107,19 @@ netperf_timestamp(hrtime_t *timestamp)
 int
 delta_micro(hrtime_t *begin, hrtime_t *end)
 {
-  long nsecs;
+  int64_t nsecs;
   nsecs = (*end) - (*begin);
   return(nsecs/1000);
 }
+
+int
+delta_milli(hrtime_t *begin, hrtime_t *end)
+{
+  int64_t nsecs;
+  nsecs = (*end) - (*begin);
+  return(nsecs/1000000);
+}
+
 
 #else
 
@@ -136,6 +149,28 @@ delta_micro(struct timeval *begin,struct timeval *end)
   usecs += (secs * 1000000);
 
   return(usecs);
+
+}
+ /* return the difference (in milliseconds) between two timeval
+    timestamps */
+int
+delta_milli(struct timeval *begin,struct timeval *end)
+
+{
+
+  int usecs, secs;
+
+  if (end->tv_usec < begin->tv_usec) {
+    /* borrow a second from the tv_sec */
+    end->tv_usec += 1000000;
+    end->tv_sec--;
+  }
+  usecs = end->tv_usec - begin->tv_usec;
+  secs  = end->tv_sec - begin->tv_sec;
+
+  usecs += (secs * 1000000);
+
+  return(usecs/1000);
 
 }
 #endif /* HAVE_GETHRTIME */

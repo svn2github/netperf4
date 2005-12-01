@@ -57,7 +57,8 @@ enum {
 typedef struct dns_request_status {
   unsigned short active; /* was there a query sent with this id for
 		 which we are awaiting a response */
-  unsigned short success; /* should the request have been successful
+  uint16_t       id;
+  int32_t        success; /* should the request have been successful
 			     or not */
   NETPERF_TIMESTAMP_T sent_time;
 } dns_request_status_t;

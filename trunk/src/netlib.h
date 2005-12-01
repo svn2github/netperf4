@@ -41,7 +41,7 @@ extern  test_t * find_test_in_hash(const xmlChar *id);
 extern  void report_test_status(server_t *server);
 extern  GenReport get_report_function(xmlNodePtr cmd);
 
-
+/* do we REALLY want this stuff? */
 #ifdef NO_DLOPEN
 #include <dl.h>
 
