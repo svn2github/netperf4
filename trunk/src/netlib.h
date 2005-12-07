@@ -37,9 +37,11 @@ delete this exception statement from your version.
 #include <poll.h>
 #endif
 
+extern  void delete_test(const xmlChar *id);
 extern  test_t * find_test_in_hash(const xmlChar *id);
 extern  void report_test_status(server_t *server);
 extern  GenReport get_report_function(xmlNodePtr cmd);
+extern  const char * netperf_error_name(int rc);
 
 /* do we REALLY want this stuff? */
 #ifdef NO_DLOPEN

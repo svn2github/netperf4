@@ -40,11 +40,24 @@
 #define NO_STATE_CHANGE(test)             (test->state_req == test->new_state)
 #define SET_TEST_DATA(test,ptr)           test->test_specific_data = ptr
 
-#ifndef WIN32
-#define NETPERF_PATH_SEP "/"
-#else
+
+#ifdef WIN32
+#define CHECK_FOR_NOT_SOCKET (WSAGetLastError() == WSAENOTSOCK)
+#define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
+#define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
+#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (len == SOCKET_ERROR && WSAGetLas
+tError() == WSAEINTR)
+#define GET_ERRNO WSAGetLastError()
 #define NETPERF_PATH_SEP "\\"
+#else
+#define CHECK_FOR_NOT_SOCKET (errno == ENOTSOCK)
+#define CHECK_FOR_INVALID_SOCKET (temp_socket < 0)
+#define CHECK_FOR_RECV_ERROR(len) (len < 0)
+#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (errno == EINTR)
+#define GET_ERRNO errno
+#define NETPERF_PATH_SEP "/"
 #endif
+
 
 #ifdef HAVE_GETHRTIME
 #define NETPERF_TIMESTAMP_T hrtime_t
@@ -62,7 +75,9 @@ typedef enum netserver_state {
   NSRV_VERS,
   NSRV_INIT,
   NSRV_WORK,
-  NSRV_ERROR
+  NSRV_ERROR,
+  NSRV_CLOSE,
+  NSRV_EXIT
 } ns_state_t;
 
 typedef struct server_instance {
@@ -366,6 +381,7 @@ enum {
   NPE_TIMEOUT,
   NPE_SUCCESS = 0
 };
+
 
 #ifdef NETLIB
 

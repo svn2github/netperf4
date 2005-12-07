@@ -266,6 +266,39 @@ add_netperf_to_hash(server_t *new_netperf) {
 }
 
 
+void
+delete_netperf(const xmlChar *id)
+{
+
+  /* we presume that the id is of the form [a-zA-Z][0-9]+ and so will
+     call atoi on id and mod that with the SERVER_HASH_BUCKETS */
+
+  int hash_value;
+  server_t  *server_pointer;
+  server_t **prev_server;
+
+  hash_value = 0;
+
+  /* don't forget to add error checking one day */
+  pthread_mutex_lock(&(netperf_hash[hash_value].hash_lock));
+
+  prev_server    = &(netperf_hash[hash_value].server);
+  server_pointer = netperf_hash[hash_value].server;
+  while (server_pointer != NULL) {
+    if (!xmlStrcmp(server_pointer->id,id)) {
+      /* we have a match */
+      *prev_server = server_pointer->next;
+      free(server_pointer);
+      break;
+    }
+    prev_server    = &(server_pointer->next);
+    server_pointer = server_pointer->next;
+  }
+
+  pthread_mutex_unlock(&(netperf_hash[hash_value].hash_lock));
+}
+
+
 server_t *
 find_netperf_in_hash(const xmlChar *id)
 {
@@ -326,7 +359,7 @@ instantiate_netperf( int sock )
         if (xmlStrcmp(cur->name,(const xmlChar *)"version")!=0) {
           if (debug) {
             fprintf(where,
-                    "instantiate_netperf: Received an unexpected message\n");
+                    "%s: Received an unexpected message\n", __func__);
             fflush(where);
           }
           rc = NPE_UNEXPECTED_MSG;
@@ -336,7 +369,7 @@ instantiate_netperf( int sock )
           from_nid = xmlStrdup(xmlGetProp(msg,(const xmlChar *)"fromnid"));
 
           if ((netperf = (server_t *)malloc(sizeof(server_t))) == NULL) {
-            fprintf(where,"instantiate_netperf: malloc failed\n");
+            fprintf(where,"%s: malloc failed\n", __func__);
             fflush(where);
             exit(1);
           }
@@ -355,7 +388,7 @@ instantiate_netperf( int sock )
     } 
     else {
       if (debug) {
-        fprintf(where,"instantiate_netperf: close connection remote close\n");
+        fprintf(where,"%s: close connection remote close\n", __func__);
         fflush(where);
       }
       close(sock);
@@ -412,6 +445,7 @@ daemonize()
 }
 
 
+
 static void
 check_test_state()
 {
@@ -423,6 +457,7 @@ check_test_state()
   test_hash_t  *h;
   xmlNodePtr    msg = NULL;
   xmlNodePtr    new_node;
+  xmlChar      *id;
   server_t     *netperf;
   char          code[8];
 
@@ -439,8 +474,8 @@ check_test_state()
       if (orig != new) {
         /* report change in test state */
         if (debug) {
-          fprintf(where,"check_test_state:tid = %s  state %d  new_state %d\n",
-                  test->id, orig, new);
+          fprintf(where,"%s:tid = %s  state %d  new_state %d\n",
+                  __func__, test->id, orig, new);
           fflush(where);
         }
         switch (new) {
@@ -476,6 +511,7 @@ check_test_state()
         case TEST_DEAD:
           msg = xmlNewNode(NULL,(xmlChar *)"dead");
           xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          id = test->id;
           break;
         default:
           break;
@@ -486,21 +522,104 @@ check_test_state()
           if (rc != NPE_SUCCESS) {
             if (debug) {
               fprintf(where,
-                      "check_test_state: send_control_message failed\n");
+                      "%s: send_control_message failed\n", __func__);
               fflush(where);
             }
           }
         }
       }
       test = test->next;
+      if (new == TEST_DEAD) {
+        delete_test(id);
+      }
     }
     /* mutex unlocking is not required because only one 
        netserver thread looks at these data structures sgb */
   }
 }
 
+
+
 static void
-handle_netperf_requests()
+kill_all_tests()
+{
+  int           i;
+  int           empty_hash_buckets;
+  test_t       *test;
+  test_hash_t  *h;
+
+
+  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
+    h = &test_hash[i];
+    /* mutex locking is not required because only one 
+       netserver thread looks at these data structures sgb */
+    test = h->test;
+    while (test != NULL) {
+      /* tell each test to die */
+      test->state_req = TEST_DEAD;
+      test = test->next;
+    }
+  }
+  empty_hash_buckets = 0;
+  while(empty_hash_buckets < TEST_HASH_BUCKETS) {
+    empty_hash_buckets = 0;
+    sleep(1);
+    check_test_state();
+    for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
+      if (test_hash[i].test == NULL) {
+        empty_hash_buckets++;
+      }
+    }
+  }
+}
+
+
+static int
+close_netserver()
+{
+  int rc;
+  int loop;
+  server_t     *netperf;
+
+
+  netperf = netperf_hash[0].server;
+  if ((netperf->state_req == NSRV_CLOSE) ||
+      (netperf->state_req == NSRV_EXIT ) ||
+      (netperf->err_rc == NPE_REMOTE_CLOSE)) {
+    xmlNodePtr    msg = NULL;
+    kill_all_tests();
+    msg = xmlNewNode(NULL,(xmlChar *)"closed");
+    if (netperf->state_req == NSRV_CLOSE) {
+      xmlSetProp(msg,(xmlChar *)"flag",(const xmlChar *)"LOOPING");
+      loop = 1;
+    }
+    if (netperf->state_req == NSRV_EXIT) {
+      xmlSetProp(msg,(xmlChar *)"flag",(const xmlChar *)"GONE");
+      loop = 0;
+    }
+    if (msg) {
+      rc = send_control_message(netperf->sock, msg, netperf->id, my_nid);
+      if (rc != NPE_SUCCESS) {
+        if (debug) {
+          fprintf(where,
+                  "%s: send_control_message failed\n", __func__);
+          fflush(where);
+        }
+      }
+    }
+    delete_netperf(netperf->id);
+  } else {
+    /* we should never really get here   sgb  2005-12-06 */
+    fprintf(where, "%s entered through some unknown path!!!!\n", __func__);
+    fflush(where);
+    exit(-2);
+  }
+  return(loop);
+}
+
+
+static int
+handle_netperf_requests(int sock)
 {
   int loc_debug = 0;
   int rc = NPE_SUCCESS;
@@ -510,6 +629,16 @@ handle_netperf_requests()
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
+  rc = instantiate_netperf(sock);
+  if (rc != NPE_SUCCESS) {
+    fprintf(where,
+            "%s %s: instantiate_netperf  error %d\n",
+            program_name,
+            __func__,
+            rc);
+    fflush(where);
+    exit(rc);
+  }
   netperf = netperf_hash[0].server;
   /* mutex locking is not required because only one 
      netserver thread looks at these data structures sgb */
@@ -532,7 +661,8 @@ handle_netperf_requests()
       if (rc > 0) {
         rc = process_message(netperf, message);
         if (rc) {
-          fprintf(where,"process_message returned %d %s\n", rc);
+          fprintf(where,"process_message returned %d  %s\n",
+                  rc, netperf_error_name(rc));
           fflush(where);
         }
       } else {
@@ -541,7 +671,8 @@ handle_netperf_requests()
         if (rc == 0) {
           netperf->err_rc = NPE_REMOTE_CLOSE;
         } else {
-          fprintf(where,"recv_control_message returned %d\n",rc);
+          fprintf(where,"recv_control_message returned %d  %s\n",
+                  rc, netperf_error_name(rc));
           fflush(where);
           netperf->err_rc = rc;
         }
@@ -560,6 +691,10 @@ handle_netperf_requests()
       netperf->err_rc = rc;
       netperf->err_fn = (char *)__func__;
     }
+    if ((netperf->state_req == NSRV_CLOSE) ||
+        (netperf->state_req == NSRV_EXIT ))  {
+      break;
+    }
   }
 
   if (rc != NPE_SUCCESS) {
@@ -567,8 +702,11 @@ handle_netperf_requests()
   }
   /* mutex unlocking is not required because only one 
      netserver thread looks at these data structures sgb */
+  return(close_netserver());
 }
 
+
+
 static void
 setup_listen_endpoint(char service[]) {
 
@@ -576,10 +714,10 @@ setup_listen_endpoint(char service[]) {
   struct sockaddr *peeraddr     = &name;
   int              namelen      = sizeof(name);
   int              peerlen      = namelen;
-  int              peeraddr_len = namelen;
   int              sock;
   int              rc;
   int              listenfd     = 0;
+  int              loop         = 1;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -598,14 +736,13 @@ setup_listen_endpoint(char service[]) {
                                 &peerlen);
 
     if (listenfd == -1) {
-      fprintf(where,"setup_listen_endpoint: failed to open listen socket\n");
+      fprintf(where,"%s: failed to open listen socket\n", __func__);
       fflush(where);
       exit(1);
     }
 
     if (peerlen > namelen) {
       peeraddr = (struct sockaddr *)malloc (peerlen);
-      peeraddr_len = peerlen;
     }
 
     if (!forground) {
@@ -614,11 +751,12 @@ setup_listen_endpoint(char service[]) {
 
     /* loopdeloop */
 
-    for (;;) {
+    while (loop) {
       printf("about to accept on socket %d\n",listenfd);
       if ((sock = accept(listenfd,peeraddr,&peerlen)) == -1) {
 	fprintf(where,
-		"setup_listen_endpoint: accept failed errno %d %s\n",
+		"%s: accept failed errno %d %s\n",
+                __func__,
 		errno,
 		strerror(errno));
 	fflush(where);
@@ -626,7 +764,8 @@ setup_listen_endpoint(char service[]) {
       }
       if (debug) {
 	fprintf(where,
-		"setup_listen_endpoint: accepted connection on sock %d\n",
+		"%s: accepted connection on sock %d\n",
+                __func__,
 		sock);
 	fflush(where);
       }
@@ -636,19 +775,11 @@ setup_listen_endpoint(char service[]) {
       if (forground >= 2) {
 	/* no fork please, eat with our fingers */
 	printf("forground instantiation\n");
-	rc = instantiate_netperf(sock);
-	if (rc != NPE_SUCCESS) {
-	  fprintf(where,
-		  "setup_listen_endpoint: instantiate_netperf  error %d\n",
-		  rc);
-	  fflush(where);
-	  exit;
-	}
 	/* if we get here, before we go back to call accept again,
 	   probably a good idea to close the sock. of course, I'm not
 	   even sure we will ever get here, but hey, what the heck.
 	   raj 2005-11-10 */
-	handle_netperf_requests();
+	loop = handle_netperf_requests(sock);
 	printf("closing sock %d\n",sock);
 	close(sock);
       }
@@ -661,20 +792,12 @@ setup_listen_endpoint(char service[]) {
 	  perror("netserver fork failure");
 	  exit(-1);
 	case 0:
-	  /* we are the child, go ahead and instantiate_netserver,
+	  /* we are the child, go ahead and handle netperf requests,
 	     however, we really don't need the listenfd to be open, so
 	     go ahead and close it */
 	  printf("child closing %d\n",listenfd);
 	  close(listenfd);
-	  rc = instantiate_netperf(sock);
-	  if (rc != NPE_SUCCESS) {
-	    fprintf(where,
-		    "setup_listen_endpoint: instantiate_netperf  error %d\n",
-		    rc);
-	    fflush(where);
-	    exit;
-	  }
-	  handle_netperf_requests();
+	  handle_netperf_requests(sock);
 	  /* as the child, if we've no more requests to process - eg
 	     the connection has closed etc, then we might as well just
 	     exit. raj 2005-11-11 */
@@ -703,7 +826,6 @@ netserver_init()
   struct sockaddr *peeraddr     = &name;
   int              namelen      = sizeof(name);
   int              peerlen      = namelen;
-  int              peeraddr_len = namelen;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -713,15 +835,15 @@ netserver_init()
     netperf_hash[i].server = NULL;
     rc = pthread_mutex_init(&(netperf_hash[i].hash_lock), NULL);
     if (rc) {
-      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
+      fprintf(where, "%s: server pthread_mutex_init error %d\n", __func__, rc);
       fflush(where);
-      exit;
+      exit(rc);
     }
     rc = pthread_cond_init(&(netperf_hash[i].condition), NULL);
     if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
+      fprintf(where, "%s: server pthread_cond_init error %d\n", __func__, rc);
       fflush(where);
-      exit;
+      exit(rc);
     }
   }
  
@@ -729,34 +851,27 @@ netserver_init()
     test_hash[i].test = NULL;
     rc = pthread_mutex_init(&(test_hash[i].hash_lock), NULL);
     if (rc) {
-      fprintf(where, "netserver_init: pthread_mutex_init error %d\n",rc);
+      fprintf(where, "%s: test pthread_mutex_init error %d\n", __func__, rc);
       fflush(where);
-      exit;
+      exit(rc);
     }
     rc = pthread_cond_init(&(test_hash[i].condition), NULL);
     if (rc) {
-      fprintf(where, "server_init: pthread_cond_init error %d\n",rc);
+      fprintf(where, "%s: test pthread_cond_init error %d\n", __func__, rc);
       fflush(where);
-      exit;
+      exit(rc);
     }
   }
 
   netlib_init();
 
 }
-
 
-static void
-accept_netperf_connections()
-{
-}
 
-
 
 int
 main (int argc, char **argv)
 {
-  int i;
   int rc;
   int sock;
 
@@ -764,7 +879,7 @@ main (int argc, char **argv)
 
   where = stdout;
 
-  i = decode_command_line(argc, argv);
+  decode_command_line(argc, argv);
 
   /* do the work */
   xmlInitParser();
@@ -790,31 +905,18 @@ main (int argc, char **argv)
       
     if (getsockname(0, &name, &namelen) == -1) {
       /* we may not be a child of inetd */
-#ifdef WIN32
-      if (WSAGetLastError() == WSAENOTSOCK) {
+      if (CHECK_FOR_NOT_SOCKET) {
         setup_listen_endpoint(listen_port);
       }
-#else
-      if (errno == ENOTSOCK) {
-        setup_listen_endpoint(listen_port);
-      }
-#endif /* WIN32 */
     }
   } else {
-    /* we are a child of inetd, so just go ahead and do the right
-       thing. raj 2005-10-11 */
-    /* I wonder if this should be in handle_netperf_requests? */
-    rc = instantiate_netperf(sock);
-    if (rc != NPE_SUCCESS) {
-      fprintf(where,
-	      "%s main: instantiate_netperf  error %d\n",
-	      program_name,
-	      rc);
-      fflush(where);
-      exit;
-    }
+    /* we are a child of inetd or some other equivalent daemon,
+       so just go ahead and do the right thing. raj 2005-10-11 */
+    /* netperf2 has a lot of stuff here to set server_socket up correctly
+       I wonder if there is a cleaner way to do that because the code
+       in netperf2 is really hard to follow.   sgb 2005-12-5 */
+    sock = 0;
+    handle_netperf_requests(sock);
   }
-
-  handle_netperf_requests();
 }
 

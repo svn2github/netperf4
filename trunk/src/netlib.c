@@ -415,13 +415,47 @@ add_test_to_hash(test_t *new_test)
   return(NPE_SUCCESS);
 }
 
+void
+delete_test(const xmlChar *id)
+{
+  /* the removal of the test from any existing test set is done elsewhere */
+
+  /* we presume that the id is of the form [a-zA-Z][0-9]+ and so will
+     call atoi on id and mod that with the TEST_HASH_BUCKETS */
+
+  int      hash_value;
+  test_t  *test_pointer;
+  test_t **prev_test;
+
+
+  hash_value = TEST_HASH_VALUE(id);
+
+  /* don't forget to add error checking one day */
+  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+
+  prev_test    = &(test_hash[hash_value].test);
+  test_pointer = test_hash[hash_value].test;
+  while (test_pointer != NULL) {
+    if (!xmlStrcmp(test_pointer->id,id)) {
+      /* we have a match */
+      *prev_test = test_pointer->next;
+      free(test_pointer);
+      break;
+    }
+    prev_test    = &(test_pointer->next);
+    test_pointer = test_pointer->next;
+  }
+
+  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+}
+
 test_t *
 find_test_in_hash(const xmlChar *id)
 {
   /* we presume that the id is of the form [a-zA-Z][0-9]+ and so will
      call atoi on id and mod that with the TEST_HASH_BUCKETS */
 
-  int hash_value;
+  int     hash_value;
   test_t *test_pointer;
 
 
@@ -1548,4 +1582,14 @@ report_server_error(server_t *server)
 	  server->err_rc,
           NP_ERROR_NAMES[i]);
   fflush(where);
+}
+
+const char *
+netperf_error_name(int rc)
+{
+  int i;
+
+
+  i = rc - NPE_MIN_ERROR_NUM;
+  return(NP_ERROR_NAMES[i]);
 }

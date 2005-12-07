@@ -69,18 +69,6 @@ char    nettest_id[]="\
 
 #include "nettest_vst.h"
 
-#ifdef WIN32
-#define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
-#define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
-#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (len == SOCKET_ERROR && WSAGetLastError() == WSAEINTR) 
-#define GET_ERRNO WSAGetLastError()
-#else
-#define CHECK_FOR_INVALID_SOCKET (temp_socket < 0)
-#define CHECK_FOR_RECV_ERROR(len) (len < 0)
-#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (errno == EINTR)
-#define GET_ERRNO errno
-#endif
-
 
 static void
 report_test_failure(test, function, err_code, err_string)
@@ -810,6 +798,7 @@ get_next_vst_transaction(test_t *test)
   long         key;
   int          value;
   int          i;
+  int          loc_debug = 0;
 
   my_data = GET_TEST_DATA(test);
   dist    = my_data->vst_ring->distribution;
@@ -823,7 +812,7 @@ get_next_vst_transaction(test_t *test)
     setstate(dist->random_state);
     key   = random();
     value = key %  dist->dist_key;
-    if (test->debug) {
+    if (test->debug && loc_debug) {
       fprintf(test->where, "**** end of pattern reached ******\n");
       fprintf(test->where,
               "%s:  value = %d  key = %d\n",
@@ -832,7 +821,7 @@ get_next_vst_transaction(test_t *test)
     }
     for (i=0; i< dist->num_patterns; i++) {
       value = value - dist->dist_count[i];
-      if (test->debug) {
+      if (test->debug && loc_debug) {
         fprintf(test->where,
                 "\tdist_count = %d  new_value = %d  pattern = %d\n",
                 dist->dist_count[i], value, dist->pattern[i]);
@@ -843,7 +832,7 @@ get_next_vst_transaction(test_t *test)
         break;
       }
     }
-    if (test->debug) {
+    if (test->debug && loc_debug) {
       fprintf(test->where,
               "%s: new ring value %p\n",
               __func__, my_data->vst_ring);
@@ -1698,7 +1687,7 @@ recv_vst_rr_load(test_t *test)
 
   my_data   = GET_TEST_DATA(test);
 
-  while(NO_STATE_CHANGE(test)) {
+  while (NO_STATE_CHANGE(test)) {
     /* recv the request for the test */
     req_base   = (int *)(
                ( (long)(my_data->vst_ring->recv_buff_ptr)
@@ -1767,6 +1756,7 @@ recv_vst_rr_load(test_t *test)
   if ((len == 0) ||
       (new_state == TEST_IDLE)) {
     recv_vst_rr_idle_link(test,len);
+    new_state = TEST_IDLE;
   }
   else {
     if (new_state == TEST_MEASURE) {
@@ -1979,7 +1969,7 @@ send_vst_rr_load(test_t *test)
 
   my_data   = GET_TEST_DATA(test);
 
-  while(NO_STATE_CHANGE(test)) {
+  while (NO_STATE_CHANGE(test)) {
     /* code to make data dirty macro enabled by DIRTY */
     MAKE_DIRTY(my_data,my_data->vst_ring);
     /* send data for the test */
@@ -2254,7 +2244,7 @@ vst_test_results_init(tset_t *test_set,char *report_flags,char *output)
             "%s: malloc failed can't generate report\n",
             __func__);
     fflush(outfd);
-    exit;
+    exit(-11);
   }
 }
 
@@ -2538,7 +2528,7 @@ process_stats_for_run(tset_t *test_set)
       fflush(test_set->where);
     }
     stats_for_test = 0;
-    while(stats != NULL) {
+    while (stats != NULL) {
       /* process all the statistics records for this test */
       if (test_set->debug) {
         fprintf(test_set->where,"\tfound some statistics");
@@ -2574,7 +2564,7 @@ process_stats_for_run(tset_t *test_set)
       fprintf(test_set->where,
               "exiting netperf now!!\n");
       fflush(test_set->where);
-      exit;
+      exit(-13);
     }
     set_elt = set_elt->next;
   }

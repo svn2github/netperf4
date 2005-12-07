@@ -54,6 +54,8 @@ extern test_hash_t test_hash[TEST_HASH_BUCKETS];
 
 int clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int close_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
+int closed_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int configured_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int dead_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int die_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
@@ -64,7 +66,6 @@ int idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int idled_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int interval_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
-int kill_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int load_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int loaded_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
 int measure_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
@@ -85,7 +86,6 @@ const struct msgs   NP_Msgs[] = {
 #ifdef OFF
   { "cleared",         cleared_message,          0x00000000 },
   { "configured",      configured_message,       0x00000000 },
-  { "dead",            dead_message,             0x00000000 },
 #endif
   { "measuring",       measuring_message,        0x00000010 },
   { "loaded",          loaded_message,           0x00000010 },
@@ -94,6 +94,8 @@ const struct msgs   NP_Msgs[] = {
   { "sys_stats",       sys_stats_message,        0x00000010 },
   { "initialized",     initialized_message,      0x00000018 },
   { "error",           error_message,            0x00000018 },
+  { "dead",            dead_message,             0x00000018 },
+  { "closed",          closed_message,           0x00000018 },
   { "version",         np_version_check,         0x00000004 },
   { NULL,              unknown_message,          0xFFFFFFFF }
 };
@@ -102,10 +104,8 @@ const struct msgs   NS_Msgs[] = {
   /* Message name, function,             StateBitMap */
 #ifdef OFF
   { "clear",           clear_message,            0x00000000 },
-  { "die",             die_message,              0x00000000 },
   { "error",           error_message,            0x00000000 },
   { "interval",        interval_message,         0x00000000 },
-  { "kill",            kill_message,             0x00000000 },
   { "snap",            snap_message,             0x00000000 },
 #endif
   { "measure",         measure_message,          0x00000010 },
@@ -117,6 +117,8 @@ const struct msgs   NS_Msgs[] = {
   { "clear_sys_stats", clear_sys_stats_message,  0x00000010 },
   { "initialized",     initialized_message,      0x00000010 },
   { "test",            test_message,             0x00000014 },
+  { "die",             die_message,              0x00000030 },
+  { "close",           close_message,            0x00000030 },
   { "version",         ns_version_check,         0x00000001 },
   { NULL,              unknown_message,          0xFFFFFFFF }
 };
@@ -313,6 +315,57 @@ send_version_message(server_t *server, xmlChar *fromnid)
 
 
 int
+die_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  int        rc = NPE_SUCCESS;
+  xmlChar   *testid;
+  test_t    *test;
+
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"%s: tid = %s  prev_state_req = %d ",
+              __func__, testid, test->state_req);
+      fflush(where);
+    }
+    test->state_req = TEST_DEAD;
+    if (debug) {
+      fprintf(where," new_state_req = %d\n",test->state_req);
+      fflush(where);
+    }
+  }
+  return(rc);
+}
+
+
+int
+dead_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  xmlChar    *testid;
+  test_t     *test;
+
+
+  testid = xmlGetProp(msg,(const xmlChar *)"tid");
+  test   = find_test_in_hash(testid);
+  if (test != NULL) {
+    if (debug) {
+      fprintf(where,"%s: tid = %s  prev_state_req = %d ",
+              __func__, testid, test->state_req);
+      fflush(where);
+    }
+    test->state = TEST_DEAD;
+    if (debug) {
+      fprintf(where," new_state_req = %d\n",test->state_req);
+      fflush(where);
+    }
+  }
+  return(NPE_SUCCESS);
+}
+
+
+int
 error_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 {
   int loc_debug = 0;
@@ -435,7 +488,8 @@ get_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "get_stats_message: send_control_message failed\n");
+                "%s: send_control_message failed\n",
+                __func__);
         fflush(where);
       }
     }
@@ -457,7 +511,8 @@ get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   test   = find_test_in_hash(testid);
   if (test != NULL) {
     if (debug) {
-      fprintf(where,"get_sys_stats_message: test_state = %d ",test->state);
+      fprintf(where,"%s: test_state = %d ",
+              __func__, test->state);
       fflush(where);
     }
     sys_stats = (test->test_stats)(test);
@@ -468,7 +523,8 @@ get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "get_stats_message: send_control_message failed\n");
+                "%s: send_control_message failed\n",
+                 __func__);
         fflush(where);
       }
     }
@@ -574,6 +630,50 @@ idled_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     }
   }
   return(rc);
+}
+
+int
+close_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  xmlChar    *flag;
+
+
+  /* what should we really do with this flag??  sgb 2005-12-5 */
+  flag = xmlGetProp(msg,(const xmlChar *)"flag");
+  if (debug) {
+    fprintf(where,"%s: flag = '%s'  state = %d req_state = %d\n",
+            __func__, flag, server->state, server->state_req);
+    fflush(where);
+  }
+  if (!xmlStrcmp(flag,(const xmlChar *)"LOOP")) {
+    server->state_req = NSRV_CLOSE;
+  }
+  else {
+    server->state_req = NSRV_EXIT;
+  }
+  return(NPE_SUCCESS);
+}
+
+int
+closed_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
+{
+  xmlChar   *flag;
+
+
+  /* what should we really do with this flag??  sgb 2005-12-5 */
+  flag = xmlGetProp(msg,(const xmlChar *)"flag");
+  if (debug) {
+    fprintf(where,"%s: flag = '%s'  state = %d req_state = %d\n",
+            __func__, flag, server->state, server->state_req);
+    fflush(where);
+  }
+  if (!xmlStrcmp(flag,(const xmlChar *)"LOOPING")) {
+    server->state = NSRV_CLOSE;
+  }
+  else {
+    server->state = NSRV_EXIT;
+  }
+  return(NPE_SUCCESS);
 }
 
 int

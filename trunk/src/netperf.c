@@ -315,13 +315,13 @@ netperf_init()
     if (rc) {
       fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
       fflush(where);
-      exit;
+      exit(-2);
     }
     rc = pthread_cond_init(&(server_hash[i].condition), NULL);
     if (rc) {
       fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
       fflush(where);
-      exit;
+      exit(-2);
     }
   }
 
@@ -331,13 +331,13 @@ netperf_init()
     if (rc) {
       fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
       fflush(where);
-      exit;
+      exit(-2);
     }
     rc = pthread_cond_init(&(test_hash[i].condition), NULL);
     if (rc) {
       fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
       fflush(where);
-      exit;
+      exit(-2);
     }
   }
 
@@ -346,7 +346,7 @@ netperf_init()
 
 
 
-void
+static void
 display_server_hash()
 {
   int i;
@@ -363,7 +363,7 @@ display_server_hash()
   }
 }
 
-int
+static int
 add_server_to_hash(server_t *new_server) {
 
   int hash_value;
@@ -382,7 +382,40 @@ add_server_to_hash(server_t *new_server) {
   return(NPE_SUCCESS);
 }
 
-server_t *
+static void
+delete_server(const xmlChar *id)
+{
+  /* we presume that the id is of the form [a-zA-Z][0-9]+ and so will
+     call atoi on id and mod that with the SERVER_HASH_BUCKETS */
+
+  int       hash_value;
+  server_t *server_pointer;
+  server_t **prev_server;
+
+
+  hash_value = ((atoi((char *)id + 1)) % SERVER_HASH_BUCKETS);
+
+  /* don't forget to add error checking one day */
+  pthread_mutex_lock(&(server_hash[hash_value].hash_lock));
+
+  prev_server    = &(server_hash[hash_value].server);
+  server_pointer = server_hash[hash_value].server;
+  while (server_pointer != NULL) {
+    if (!xmlStrcmp(server_pointer->id,id)) {
+      /* we have a match */
+      *prev_server = server_pointer->next;
+      free(server_pointer);
+      break;
+    }
+    prev_server    = &(server_pointer->next);
+    server_pointer = server_pointer->next;
+  }
+
+  pthread_mutex_unlock(&(server_hash[hash_value].hash_lock));
+}
+
+
+static server_t *
 find_server_in_hash(const xmlChar *id) {
 
   /* we presume that the id is of the form [a-zA-Z][0-9]+ and so will
@@ -411,7 +444,7 @@ find_server_in_hash(const xmlChar *id) {
 }
 
 
-int
+static int
 add_test_set_to_hash(tset_t *new_test_set)
 {
   int hash_value;
@@ -430,7 +463,7 @@ add_test_set_to_hash(tset_t *new_test_set)
   return(NPE_SUCCESS);
 }
 
-int
+static int
 delete_test_set_from_hash(const xmlChar *id)
 {
   /* we presume that the id is of the form [s][0-9]+ and so will
@@ -466,7 +499,7 @@ delete_test_set_from_hash(const xmlChar *id)
   return(NPE_SUCCESS);
 }
 
-tset_t *
+static tset_t *
 find_test_set_in_hash(const xmlChar *id)
 {
   /* we presume that the id is of the form [s][0-9]+ and so will
@@ -622,7 +655,7 @@ instantiate_netservers()
           fprintf(where, "instaniate_netservers: ");
           fprintf(where, "pthread_rwlock_init error %d\n", rc);
           fflush(where);
-          rc == NPE_PTHREAD_RWLOCK_INIT_FAILED;
+          rc = NPE_PTHREAD_RWLOCK_INIT_FAILED;
         }
         if (rc == NPE_SUCCESS) {
           rc = instantiate_tests(this_netserver, new_server);
@@ -900,6 +933,7 @@ initialize_test(void *data)
 
   NETPERF_DEBUG_EXIT(debug,where);
 
+  return(test);
 }
 
 
@@ -1006,6 +1040,7 @@ netperf_worker(void *data)
   }
   pthread_mutex_unlock(server->lock);
 
+  return(server);
 }
 
 
@@ -1122,17 +1157,16 @@ wait_for_tests_to_initialize()
 }
 
 
-static int
+static void
 wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
 {
-  const char* fnc = "wait_for_tests_to_enter_requested_state";
   int          rc = NPE_SUCCESS;
   xmlChar     *tid;
   test_t      *test;
   tset_t      *test_set;
 
   if (debug) {
-    fprintf(where,"entering %s\n",fnc);
+    fprintf(where,"entering %s\n", __func__);
     fflush(where);
   }
   tid = xmlGetProp(cmd, (const xmlChar *)"tid");
@@ -1165,7 +1199,7 @@ wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
     }
   }
   if (debug) {
-    fprintf(where,"exiting %s rc = %d\n",fnc,rc);
+    fprintf(where,"exiting %s rc = %d\n", __func__, rc);
     fflush(where);
   }
 }
@@ -1725,6 +1759,35 @@ comment_command(xmlNodePtr cmd, uint32_t junk)
 
 
 static int
+close_command(xmlNodePtr cmd, uint32_t junk)
+{
+  int      rc;
+  xmlChar  *sid;
+  server_t *server;
+  
+  sid    = xmlGetProp(cmd,(const xmlChar *)"sid");
+  server = find_server_in_hash(sid);
+  xmlSetProp(cmd,(const xmlChar *)"sid", server->id);
+  rc = send_control_message(server->sock,
+                            cmd,
+                            server->id,
+                            my_nid);
+  if (rc != NPE_SUCCESS) {
+    server->state  = NSRV_ERROR;
+    server->err_rc = rc;
+    server->err_fn = (char *)__func__;
+  }
+  while ((server->state != NSRV_ERROR) &&
+         (server->state != NSRV_CLOSE) &&
+         (server->state != NSRV_EXIT ))  {
+    sleep(1);
+  }
+  delete_server(sid);
+  return(rc);
+}
+
+
+static int
 unknown_command(xmlNodePtr cmd, uint32_t junk)
 {
   fprintf(where,"process_command: unknown command in file %s\n",cname);
@@ -1763,10 +1826,11 @@ struct netperf_cmd netperf_cmds[] = {
   { "delete_test_set", delete_test_set,         0               },
   { "show_test_set",   show_test_set,           0               },
   { "comment",         comment_command,         0               },
+  { "close",           close_command,           0               },
   { "exit",            exit_netperf_command,    0               },
   { "exec_local",      exec_local_command,      0               },
   { "exec_remote",     exec_remote_command,     0               },
-  { "unknown",         unknown_command,         0               }
+  { NULL,              unknown_command,         0               }
 };
 
 static int
@@ -1831,7 +1895,12 @@ process_commands_and_events()
   commands = parse_xml_file(iname, (const xmlChar *)"commands", &doc);
 
   /* execute commands and events in a loop */
-  cmd = commands->xmlChildrenNode;
+  if (commands != NULL) {
+    cmd = commands->xmlChildrenNode;
+  }
+  else {
+    cmd = NULL;
+  }
   while (cmd != NULL && rc == NPE_SUCCESS) {
     if (debug) {
       fprintf(where,"process_commands_and_events: calling process_command\n");
@@ -1867,13 +1936,12 @@ int
 main(int argc, char **argv)
 {
   int       rc = NPE_SUCCESS;
-  int       tmp;
 
   program_name = argv[0];
 
   where = stderr;
 
-  tmp = decode_switches(argc, argv);
+  decode_switches(argc, argv);
 
   xmlInitParser();
   xmlKeepBlanksDefault(0);
