@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <!-- Contains Declarations for three types of netperf documents:
         netperf configuration file
-        netperf command
+        netperf commands
         netperf message
      
      all three document types share common element declarations
@@ -61,8 +61,8 @@
   (idled) |
   (initialized) |
   (interval) |
-  (kill) |
-  (killed) |
+  (close) |
+  (closed) |
   (load) |
   (loaded) |
   (measure) |
@@ -85,6 +85,7 @@
 
 <!ELEMENT commands (
   (clear_stats) |
+  (close) |
   (create_test_set) |
   (delete_test_set) |
   (die) |
@@ -216,6 +217,19 @@
 >
 
 
+<!ELEMENT close EMPTY >
+<!ATTLIST close
+  sid           CDATA           #REQUIRED
+  flag          (LOOP | EXIT)   "LOOP"
+>
+
+
+<!ELEMENT closed EMPTY >
+<!ATTLIST closed
+  flag          (LOOPING | GONE)  #IMPLIED
+>
+
+
 <!ELEMENT configured EMPTY >
 
 <!ELEMENT dependency_data (#PCDATA) >
@@ -240,10 +254,13 @@
   tid           CDATA   #REQUIRED
 >
 
+
 <!ELEMENT exec_local EMPTY >
 <!ATTLIST exec_local
   command       CDATA   #REQUIRED
 >
+
+<!-- exec_remote is a security hole and is not implemented -->
 
 <!ELEMENT exec_remote EMPTY >
 <!ATTLIST exec_remote
@@ -251,11 +268,13 @@
   command       CDATA   #REQUIRED
 >
 
+
 <!ELEMENT get_stats EMPTY >
 <!ATTLIST get_stats
   xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
   tid           CDATA   #REQUIRED
 >
+
 
 <!ELEMENT idle EMPTY >
 <!ATTLIST idle
@@ -268,6 +287,7 @@
   xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
   tid           CDATA   #REQUIRED
 >
+
 
 <!ELEMENT initialized (dependency_data)? >
 <!ATTLIST initialized
