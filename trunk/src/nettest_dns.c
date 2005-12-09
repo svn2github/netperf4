@@ -104,12 +104,6 @@ char    nettest_dns_id[]="\
 
 #include "netperf.h"
 
-#ifdef HISTOGRAM
-#include "hist.h"
-#else
-#define HIST  void*
-#endif /* HISTOGRAM */
-
 #include "nettest_dns.h"
 
 #ifdef WIN32
@@ -1510,7 +1504,7 @@ send_dns_rr_meas(test_t *test)
 	}
 
 	/* this is what we want to see */
-	/* code to timestamp enabled by HISTOGRAM */
+	/* code to timestamp enabled by WANT_HISTOGRAM */
 	HIST_TIMESTAMP(&time_two);
 	HIST_ADD(my_data->time_hist,
 		 delta_milli(&(status_entry->sent_time),&time_two));

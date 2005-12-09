@@ -1,4 +1,5 @@
 /* Copyright 2005, Hewlett-Packard Company */
+
 /*
 
 This file is part of netperf4.
@@ -43,7 +44,7 @@ delete this exception statement from your version.
 
 /* hist.h
 
-   Given a time difference in microseconds, increment one of 61
+   Given a time difference in microseconds, increment one of 81
    different buckets: 
    
    0 - 9 in increments of 1 usec
@@ -125,11 +126,17 @@ void HIST_timestamp(struct timeval *timestamp);
 /*
   delta_micro - calculate the difference in microseconds between two
   timestamps
+  delta_milli - calculate the difference in milliseconds between two
+  timestamps
+  perhaps these things should be moved into netperf.h since they aren't
+  limited to WANT_HISTOGRAM?  raj 2005-12-09
 */
 #ifdef HAVE_GETHRTIME
 int delta_micro(hrtime_t *begin, hrtime_t *end);
+int delta_milli(hrtime_t *begin, hrtime_t *end);
 #else
 int delta_micro(struct timeval *begin, struct timeval *end);
+int delta_milli(struct timeval *begin, struct timeval *end);
 #endif
 
 #endif

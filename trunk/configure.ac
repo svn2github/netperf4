@@ -10,7 +10,7 @@ AC_PREREQ(2.59)
 AC_INIT(netperf, 4.0.0alpha2)
 # use the target version rather than host - one day we may want cross-compile
 AC_CANONICAL_TARGET
-AC_CONFIG_SRCDIR([src/hist.h])
+# AC_CONFIG_SRCDIR([src/hist.h])
 AM_INIT_AUTOMAKE(netperf, 4.0.0alpha2)
 AM_CONFIG_HEADER(config.h)
 # AC_CONFIG_HEADER(config.h)

@@ -150,7 +150,7 @@ USE_CPU_SOURCE = netsysstats_@NETSYS_SOURCE@.c
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netsysstats*.c 
 
-COMMON_SRC = hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netconfidence.c netconfidence.h
+COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netconfidence.c netconfidence.h
 
 netperf_SOURCES = netperf.c $(COMMON_SRC)
 netserver_SOURCES = netserver.c $(COMMON_SRC)
@@ -158,7 +158,7 @@ netserver_SOURCES = netserver.c $(COMMON_SRC)
 # in theory this will cause these header files to be put in the
 # installed headers location, where folks who want to make their own
 # test libraries can find them
-include_HEADERS = netperf.h netconfidence.h
+include_HEADERS = netperf.h netconfidence.h netperf_hist.h
 
 # in theory, the stuff below should deal with creating the requisite libs
 lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_dns.la nettest_vst.la

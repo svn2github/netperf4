@@ -8,7 +8,7 @@ char    nettest_id[]="\
 @(#)nettest_vst.c (c) Copyright 2005 Hewlett-Packard Co. $Id: nettest_vst.c 2005-12-23 00:43:09Z sgb $";
 #else
 #define DIRTY
-#define HISTOGRAM
+#define WANT_HISTOGRAM
 #define INTERVALS
 #endif /* lint */
 
@@ -18,7 +18,7 @@ char    nettest_id[]="\
 #define MAKE_DIRTY(mydata,ring)  /* DIRTY is not currently supported */
 #endif
 
-#ifdef HISTOGRAM
+#ifdef WANT_HISTOGRAM
 #define HISTOGRAM_VARS        struct timeval time_one,time_two
 #define HIST_TIMESTAMP(time)  gettimeofday(time,NULL)
 #define HIST_ADD(h,delta)     HIST_add(h,delta)
@@ -60,12 +60,6 @@ char    nettest_id[]="\
 #include <netdb.h>
 
 #include "netperf.h"
-
-#ifdef HISTOGRAM
-#include "hist.h"
-#else
-#define HIST  void*
-#endif /* HISTOGRAM */
 
 #include "nettest_vst.h"
 
@@ -1594,7 +1588,7 @@ recv_vst_rr_meas(test_t *test)
   my_data   = GET_TEST_DATA(test);
 
   while (NO_STATE_CHANGE(test)) {
-    /* code to timestamp enabled by HISTOGRAM */
+    /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_one);
     /* recv the request for the test */
     req_base   = (int *)(
@@ -1658,7 +1652,7 @@ recv_vst_rr_meas(test_t *test)
       my_data->stats.named.bytes_sent += len;
       my_data->stats.named.send_calls++;
     }
-    /* code to timestamp enabled by HISTOGRAM */
+    /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_two);
     HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
     get_next_vst_transaction(test);
@@ -1890,7 +1884,7 @@ send_vst_rr_meas(test_t *test)
     HISTOGRAM_VARS;
     /* code to make data dirty macro enabled by DIRTY */
     MAKE_DIRTY(my_data,my_data->vst_ring);
-    /* code to timestamp enabled by HISTOGRAM */
+    /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_one);
     /* send data for the test */
     send_len = my_data->vst_ring->send_size;
@@ -1934,7 +1928,7 @@ send_vst_rr_meas(test_t *test)
         break;
       }
     }
-    /* code to timestamp enabled by HISTOGRAM */
+    /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_two);
     HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
     my_data->stats.named.trans_sent++;

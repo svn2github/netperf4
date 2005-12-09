@@ -6,6 +6,13 @@
 /* we want to get the definition of uint32_t et al */
 #include <stdint.h>
 
+#ifdef WANT_HISTOGRAM
+#include "netperf_hist.h"
+#else
+#define HIST  void*
+#endif
+
+
 #include "netconfidence.h"
 
 #define NETPERF_DEFAULT_SERVICE_NAME     "netperf4"

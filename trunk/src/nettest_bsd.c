@@ -33,7 +33,7 @@ char    nettest_id[]="\
 @(#)nettest_bsd.c (c) Copyright 2005 Hewlett-Packard Co. $Id$";
 #else
 #define DIRTY
-#define HISTOGRAM
+#define WANT_HISTOGRAM
 #endif /* lint */
 
 #ifdef DIRTY
@@ -81,12 +81,6 @@ char    nettest_id[]="\
 #include <netdb.h>
 
 #include "netperf.h"
-
-#ifdef HISTOGRAM
-#include "hist.h"
-#else
-#define HIST  void*
-#endif /* HISTOGRAM */
 
 #include "nettest_bsd.h"
 
@@ -1249,7 +1243,7 @@ recv_tcp_stream_meas(test_t *test)
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data, my_data->recv_ring);
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_one);
   /* recv data for the test */
   if ((len=recv(my_data->s_data,
@@ -1274,7 +1268,7 @@ recv_tcp_stream_meas(test_t *test)
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed during TEST_MEASURE state");
   }
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
   HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   new_state = CHECK_REQ_STATE;
@@ -1443,7 +1437,7 @@ send_tcp_stream_meas(test_t *test)
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_one);
   /* send data for the test */
   if((len=send(my_data->s_data,
@@ -1461,7 +1455,7 @@ send_tcp_stream_meas(test_t *test)
   my_data->stats.named.bytes_sent += len;
   my_data->stats.named.send_calls++;
   my_data->send_ring = my_data->send_ring->next;
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
   HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   new_state = CHECK_REQ_STATE;
@@ -1488,7 +1482,7 @@ send_tcp_stream_load(test_t *test)
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_one);
   /* send data for the test */
   if((len=send(my_data->s_data,
@@ -1831,7 +1825,7 @@ recv_tcp_rr_meas(test_t *test)
   my_data   = test->test_specific_data;
   proc_name = "recv_tcp_rr_meas";
 
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_one);
   /* recv the request for the test */
   req_ptr    = my_data->recv_ring->buffer_ptr;
@@ -1877,7 +1871,7 @@ recv_tcp_rr_meas(test_t *test)
       }
     }
   }
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
   HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   my_data->recv_ring = my_data->recv_ring->next;
@@ -2090,7 +2084,7 @@ send_tcp_rr_meas(test_t *test)
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_one);
   /* send data for the test */
   if((len=send(my_data->s_data,
@@ -2128,7 +2122,7 @@ send_tcp_rr_meas(test_t *test)
       break;
     }
   }
-  /* code to timestamp enabled by HISTOGRAM */
+  /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
   HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
   my_data->stats.named.trans_sent++;
