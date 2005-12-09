@@ -550,7 +550,8 @@ AC_SUBST(LIBOJBS)
 # now spit it all out
 AC_CONFIG_FILES([Makefile
                  src/Makefile
-		 doc/Makefile])
+		 doc/Makefile
+		 netperf-config])
 
 
 AC_OUTPUT

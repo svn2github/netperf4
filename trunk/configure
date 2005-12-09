@@ -25381,7 +25381,7 @@ LIBS="$LIBS $libxml2_libs"
 
 
 # now spit it all out
-                              ac_config_files="$ac_config_files Makefile src/Makefile doc/Makefile"
+                                        ac_config_files="$ac_config_files Makefile src/Makefile doc/Makefile netperf-config"
 
 
 
@@ -25951,6 +25951,7 @@ do
   "Makefile" ) CONFIG_FILES="$CONFIG_FILES Makefile" ;;
   "src/Makefile" ) CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
   "doc/Makefile" ) CONFIG_FILES="$CONFIG_FILES doc/Makefile" ;;
+  "netperf-config" ) CONFIG_FILES="$CONFIG_FILES netperf-config" ;;
   "depfiles" ) CONFIG_COMMANDS="$CONFIG_COMMANDS depfiles" ;;
   "config.h" ) CONFIG_HEADERS="$CONFIG_HEADERS config.h" ;;
   *) { { echo "$as_me:$LINENO: error: invalid argument: $ac_config_target" >&5
