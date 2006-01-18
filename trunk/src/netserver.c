@@ -445,13 +445,44 @@ daemonize()
 }
 
 
+static void
+report_stuck_test_status(server_t *netperf)
+{
+  int           i;
+  uint32_t      reported;
+  uint32_t      requested;
+  uint32_t      current;
+  test_hash_t  *h;
+  test_t       *test;
+
+  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
+    h = &test_hash[i];
+    /* mutex locking is not required because only one 
+       netserver thread looks at these data structures sgb */
+    test = h->test;
+    while (test != NULL) {
+      reported  = test->state;
+      current   = test->new_state;
+      requested = test->state_req;
+      if (current != requested) {
+        if (current != TEST_ERROR) {
+          report_test_status(test);
+        }
+      }
+      if (current != reported) {
+        report_test_status(test);
+      }
+      test = test->next;
+    }
+  }
+}
 
 static void
 check_test_state()
 {
   int           i;
-  int           orig;
-  int           new;
+  uint32_t      orig;
+  uint32_t      new;
   int           rc;
   test_t       *test;
   test_hash_t  *h;
@@ -621,7 +652,6 @@ close_netserver()
 static int
 handle_netperf_requests(int sock)
 {
-  int loc_debug = 0;
   int rc = NPE_SUCCESS;
   struct pollfd fds;
   xmlDocPtr     message;
@@ -678,11 +708,12 @@ handle_netperf_requests(int sock)
         }
       }
     } else {
-      if (debug || loc_debug) {
+      if (debug) {
         fprintf(where,"ho hum, nothing to do\n");
         fflush(where);
-        report_test_status(netperf);
+        report_servers_test_status(netperf);
       }
+      report_stuck_test_status(netperf);
     }
     /* mutex locking is not required because only one 
        netserver thread looks at these data structures sgb */

@@ -127,12 +127,12 @@
 
 <!ELEMENT delete_test_set EMPTY >
 <!ATTLIST delete_test_set
-  set_name	ID	#REQUIRED
+  set_name	IDREF	#REQUIRED
 >
 
 <!ELEMENT show_test_set EMPTY >
 <!ATTLIST show_test_set
-  set_name	ID	#REQUIRED
+  set_name	IDREF	#REQUIRED
 >
 
 
@@ -219,6 +219,7 @@
 
 <!ELEMENT close EMPTY >
 <!ATTLIST close
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
   sid           CDATA           #REQUIRED
   flag          (LOOP | EXIT)   "LOOP"
 >

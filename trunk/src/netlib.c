@@ -270,20 +270,83 @@ parse_address_family(char family_string[])
   return(AF_UNSPEC);
 }
 
-void
-report_test_status(server_t *server)
+static void  
+test_state_to_string(int value, char *string)
 {
-  int ret;
-  test_hash_t *h;
+  char *state; 
+
+  switch (value) {
+  case TEST_PREINIT:
+    state = "PRE ";
+    break;
+  case TEST_INIT:
+    state = "INIT";
+    break;
+  case TEST_IDLE:
+    state = "IDLE";
+    break;
+  case TEST_MEASURE:
+    state = "MEAS";
+    break;
+  case TEST_LOADED:
+    state = "LOAD";
+    break;
+  case TEST_ERROR:
+    state = "ERR ";
+    break;
+  case TEST_DEAD:
+    state = "DEAD";
+    break;
+  default:
+    state = "ILLG";
+    break;
+  }
+  strcpy(string,state);
+}
+
+void
+report_test_status(test_t *test)
+{
   bsd_data_t  *my_data;
+  char        current[8];
+  char        requested[8];
+  char        reported[8];
+  double       a=-1.0,b=-1.0,c=-1.0,d=-1.0;
+
+  my_data = (bsd_data_t *)test->test_specific_data;
+  /* of course, there can be times when we don't yet have a my_data?
+     so, we best not be trying to dereference that pointer had we?!?
+     raj 2005-10-27 */
+  if (my_data) {
+    a    = my_data->stats.counter[0];
+    b    = my_data->stats.counter[1];
+    c    = my_data->stats.counter[2];
+    d    = my_data->stats.counter[3];
+  }
+      
+  test_state_to_string(test->state,     reported );
+  test_state_to_string(test->new_state, current  );
+  test_state_to_string(test->state_req, requested);
+
+  fprintf(where,"%4s %4s %15s %4s %4s %4s %8g %8g %8g %8g %d\n",
+          test->server_id,test->id,test->test_name,
+          reported, current, requested, a, b, c, d, test->tid);
+  fflush(where);
+}
+
+void
+report_servers_test_status(server_t *server)
+{
+  int          ret;
+  test_hash_t *h;
   test_t      *test;
   char        *state;
   char        *req_st;
   double       a=-1.0,b=-1.0,c=-1.0,d=-1.0;
   int          i;
 
-  fprintf(where,"\n\n%3s %15s %7s %7s %8s %8s %8s %8s\n",
-          "tst","test_name","state","req_st",
+  fprintf(where,"\n\n%4s %4s %15s %4s %4s %4s %8s %8s %8s %8s\n",
+          "srvr","tst","test_name","CURR","TEST","RQST",
           "cnt1","cnt2","cnt3","cnt4");
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
@@ -295,75 +358,8 @@ report_test_status(server_t *server)
     test = h->test;
 
     while (test != NULL) {
-
-      my_data = (bsd_data_t *)test->test_specific_data;
-      /* of course, there can be times when we don't yet have a my_data?
-	 so, we best not be trying to dereference that pointer had we?!?
-	 raj 2005-10-27 */
-      if (my_data) {
-	a    = my_data->stats.counter[0];
-	b    = my_data->stats.counter[1];
-	c    = my_data->stats.counter[2];
-	d    = my_data->stats.counter[3];
-      }
-      
-      
       if (!xmlStrcmp(test->server_id,server->id)) {
-        switch (test->state) {
-        case TEST_PREINIT:
-          state = "PREINIT";
-          break;
-        case TEST_INIT:
-          state = "INIT";
-          break;
-        case TEST_IDLE:
-          state = "IDLE";
-          break;
-        case TEST_MEASURE:
-          state = "MEASURE";
-          break;
-        case TEST_LOADED:
-          state = "LOADED";
-          break;
-        case TEST_ERROR:
-          state = "ERROR";
-          break;
-        case TEST_DEAD:
-          state = "DEAD";
-          break;
-        default:
-          state = "ILLEGAL";
-          break;
-        }
-        switch (test->state_req) {
-        case TEST_PREINIT:
-          req_st = "PREINIT";
-          break;
-        case TEST_INIT:
-          req_st = "INIT";
-          break;
-        case TEST_IDLE:
-          req_st = "IDLE";
-          break;
-        case TEST_MEASURE:
-          req_st = "MEASURE";
-          break;
-        case TEST_LOADED:
-          req_st = "LOADED";
-          break;
-        case TEST_ERROR:
-          req_st = "ERROR";
-          break;
-        case TEST_DEAD:
-          req_st = "DEAD";
-          break;
-        default:
-          req_st = "ILLEGAL";
-          break;
-        }
-
-        fprintf(where,"%3s %15s %7s %7s %8g %8g %8g %8g\n",
-                test->id,test->test_name,state,req_st,a,b,c,d);
+        report_test_status(test);
       }
       test = test->next;
     }
@@ -373,8 +369,8 @@ report_test_status(server_t *server)
       fflush(where);
     }
   }
-  fflush(where);
 }
+
 
 void
 display_test_hash()

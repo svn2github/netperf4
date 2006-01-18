@@ -71,7 +71,9 @@ report_test_failure(test, function, err_code, err_string)
   int     err_code;
   char   *err_string;
 {
-  if (test->debug) {
+  int loc_debug = 1;
+
+  if (test->debug || loc_debug) {
     fprintf(test->where,"%s: called report_test_failure:",function);
     fprintf(test->where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
     fflush(test->where);
@@ -432,12 +434,13 @@ convert(string,units)
 
 
  /* this routine will allocates a circular list of fixed buffers for  */
- /* send and receive operations. each of these buffers will be aligned */
- /* and offset as per the users request. the circumference of this */
- /* ring will be controlled by the setting of send_width. the buffers */
- /* will be filled with data from the file specified in fill_file. if */
- /* fill_file is an empty string, the buffers will not be filled with */
- /* any particular data */
+ /* send and receive operations. each of these buffers will be offset */
+ /* as per the users request and then align will be adjusted to be a  */
+ /* sizeof(int) or a multiple of size of int before buffer alignment. */
+ /* the circumference of this ring will be controlled by the setting  */
+ /* of send_width. the buffers will be filled with data from the file */
+ /* specified in fill_file. if fill_file is an empty string, then     */
+ /* buffers will not be filled with any particular data.              */
 
 static void 
 allocate_fixed_buffers(test_t *test)
@@ -472,8 +475,8 @@ allocate_fixed_buffers(test_t *test)
     recv_size   = my_data->rsp_size;
     recv_align  = my_data->recv_align;
     recv_offset = my_data->recv_offset;
-    if (send_size < (sizeof(int)*3)) {
-      send_size = sizeof(int) * 3 - 1;
+    if (send_size < (sizeof(int)*4)) {
+      send_size = sizeof(int) * 4;
     }
   }
   else {
@@ -484,40 +487,65 @@ allocate_fixed_buffers(test_t *test)
     recv_size   = my_data->req_size;
     recv_align  = my_data->recv_align;
     recv_offset = my_data->recv_offset;
-    if (recv_size < (sizeof(int)*3)) {
-      recv_size = sizeof(int) * 3 - 1;
+    if (recv_size < (sizeof(int)*4)) {
+      recv_size = sizeof(int) * 4;
     }
   }
 
+  if (send_align < sizeof(int)) {
+    send_align = sizeof(int);
+  }
+  else {
+    send_align = (send_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
+  }
+  
+  if (recv_align < sizeof(int)) {
+    recv_align = sizeof(int);
+  }
+  else {
+    recv_align = (recv_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
+  }
+  
   send_malloc_size = send_size + send_align + send_offset;
   recv_malloc_size = recv_size + recv_align + recv_offset;
 
+  prev_link = NULL;
   for (i = 0; i < width; i++) {
     temp_link = (vst_ring_ptr)malloc(sizeof(vst_ring_elt_t));
         
     temp_link->send_buff_base = (char *)malloc(send_malloc_size);
+    if (temp_link->send_buff_base == NULL) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          VSTE_MALLOC_FAILED,
+                          "error allocating vst send buffer");
+    }
+    temp_link->send_buff_ptr  = temp_link->send_buff_base + send_offset;
     temp_link->send_buff_ptr  = (char *)(
-                              ( (long)(temp_link->send_buff_base)
-                              + (long)send_align -1)
-                              & ~((long)send_align -1));
-    temp_link->send_buff_ptr  += send_offset;
+                              ( (long)(temp_link->send_buff_ptr)
+                              + (long)send_align - 1)
+                              & ~((long)send_align - 1));
     temp_link->send_buff_size = send_malloc_size;
     temp_link->send_size      = send_size;
 
     temp_link->recv_buff_base = (char *)malloc(recv_malloc_size);
+    if (temp_link->send_buff_base == NULL) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          VSTE_MALLOC_FAILED,
+                          "error allocating vst recv buffer");
+    }
+    temp_link->recv_buff_ptr  = temp_link->recv_buff_base + recv_offset;
     temp_link->recv_buff_ptr  = (char *)(
-                              ( (long)(temp_link->recv_buff_base)
-                              + (long)recv_align -1)
-                              & ~((long)recv_align -1));
-    temp_link->recv_buff_ptr  += recv_offset;
+                              ( (long)(temp_link->recv_buff_ptr)
+                              + (long)recv_align - 1)
+                              & ~((long)recv_align - 1));
     temp_link->recv_buff_size = recv_malloc_size;
     temp_link->recv_size      = recv_size;
    
     if (send) {
-      send_buf = (int *)(
-               ( (long)(temp_link->send_buff_ptr)
-               + (long)sizeof(int) -1)
-               & ~((long)sizeof(int) -1));
+      memset(temp_link->send_buff_base, -1, send_malloc_size);
+      send_buf    = (int *)temp_link->send_buff_ptr;
       send_buf[0] = send_size;
       send_buf[1] = recv_size;
     }
@@ -570,6 +598,20 @@ allocate_pattern_buffer(test_t *test)
   recv_align  = my_data->recv_align;
   recv_offset = my_data->recv_offset;
 
+  if (send_align < sizeof(int)) {
+    send_align = sizeof(int);
+  }
+  else {
+    send_align = (send_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
+  }
+  
+  if (recv_align < sizeof(int)) {
+    recv_align = sizeof(int);
+  }
+  else {
+    recv_align = (recv_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
+  }
+  
   pattern = wld->xmlChildrenNode;
 
   for (p=0;p < MAX_PATTERNS; p++) {
@@ -593,32 +635,51 @@ allocate_pattern_buffer(test_t *test)
           string    =  (char *)xmlGetProp(entry,(const xmlChar *)"rsp_size");
           recv_size =  atoi(string);
 
+          if (send_size < (sizeof(int)*4)) {
+            send_size = sizeof(int) * 4;
+          }
           malloc_size = send_size + send_align + send_offset;
         
           temp_link->send_buff_base = (char *)malloc(malloc_size);
+          if (temp_link->send_buff_base == NULL) {
+            report_test_failure(test,
+                                (char *)__func__,
+                                VSTE_MALLOC_FAILED,
+                                "error allocating vst send buffer");
+          }
+          temp_link->send_buff_ptr  = temp_link->send_buff_base + send_offset;
           temp_link->send_buff_ptr  = (char *)(
-                                    ( (long)(temp_link->send_buff_base)
-                                    + (long)send_align -1)
-                                    & ~((long)send_align -1));
+                                    ( (long)(temp_link->send_buff_ptr)
+                                    + (long)send_align - 1)
+                                    & ~((long)send_align - 1));
           temp_link->send_buff_size = malloc_size;
           temp_link->send_size      = send_size;
+
+          memset(temp_link->send_buff_base, -1, malloc_size);
 
           malloc_size = recv_size + recv_align + recv_offset;
 
           temp_link->recv_buff_base = (char *)malloc(malloc_size);
+          if (temp_link->send_buff_base == NULL) {
+            report_test_failure(test,
+                                (char *)__func__,
+                                VSTE_MALLOC_FAILED,
+                                "error allocating vst recv buffer");
+          }
+          temp_link->recv_buff_ptr  = temp_link->recv_buff_base + recv_offset;
           temp_link->recv_buff_ptr  = (char *)(
-                                    ( (long)(temp_link->recv_buff_base)
-                                    + (long)recv_align -1)
-                                    & ~((long)recv_align -1));
+                                    ( (long)(temp_link->recv_buff_ptr)
+                                    + (long)recv_align - 1)
+                                    & ~((long)recv_align - 1));
           temp_link->recv_buff_size = malloc_size;
           temp_link->recv_size      = recv_size;
         
-          send_buf = (int *)(
-                   ( (long)(temp_link->send_buff_ptr)
-                   + (long)sizeof(int) -1)
-                   & ~((long)sizeof(int) -1));
+          send_buf    = (int *)temp_link->send_buff_ptr;
+          
           send_buf[0] = send_size;
           send_buf[1] = recv_size;
+          send_buf[2] = send_size;
+          send_buf[3] = recv_size;
 
           temp_link->distribution   = NULL;
 
@@ -1591,10 +1652,7 @@ recv_vst_rr_meas(test_t *test)
     /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_one);
     /* recv the request for the test */
-    req_base   = (int *)(
-               ( (long)(my_data->vst_ring->recv_buff_ptr)
-               + (long)sizeof(int) -1)
-               & ~((long)sizeof(int) -1));
+    req_base   = (int *)my_data->vst_ring->recv_buff_ptr;
     req_ptr    = my_data->vst_ring->recv_buff_ptr;
     bytes_left = my_data->vst_ring->recv_size;
     received   = 0;
@@ -1615,8 +1673,30 @@ recv_vst_rr_meas(test_t *test)
         my_data->stats.named.recv_calls++;
         received  += len;
         req_ptr   += len;
-        if (received >= (sizeof(int)*2)) {
-          bytes_left = ntohl(req_base[0]) - received;
+        if (received >= (sizeof(int)*4)) {
+          bytes_left = ntohl(req_base[0]);
+          rsp_size   = ntohl(req_base[1]);
+          if ((bytes_left > my_data->vst_ring->recv_size) ||
+              (rsp_size   > my_data->vst_ring->send_size) ||
+              (bytes_left < (sizeof(int)*4)) || 
+              (rsp_size   < (sizeof(int)*4)) ||
+              (bytes_left != ntohl(req_base[2])) ||
+              (rsp_size   != ntohl(req_base[3])) ) {
+            fprintf(test->where,
+                    "\n%s: Error in received packet for test_id = '%s'\n",
+                    __func__, test->id);
+            fprintf(test->where,
+                    "\treq_base[0] = %d\treq_base[1] = %d\n",
+                    bytes_left, rsp_size);
+            fprintf(test->where,
+                    "\treq_base[2] = %d\treq_base[3] = %d\n\n",
+                    ntohl(req_base[2]), ntohl(req_base[3]));
+            fprintf(test->where,
+                    "\treq_base = %p\torig_req_ptr = %p\treceived = %d\n",
+                    req_base, my_data->vst_ring->recv_buff_ptr, received);
+            fflush(test->where);
+          }
+          bytes_left = bytes_left - received;
         }
         else {
           bytes_left = my_data->vst_ring->recv_size - received;
@@ -1635,7 +1715,6 @@ recv_vst_rr_meas(test_t *test)
                           "data connection closed during TEST_MEASURE state");
     }
     else {
-      rsp_size = ntohl(req_base[1]);
       my_data->stats.named.trans_received++;
       if ((len=send(my_data->s_data,
                     my_data->vst_ring->send_buff_ptr,
@@ -1683,10 +1762,7 @@ recv_vst_rr_load(test_t *test)
 
   while (NO_STATE_CHANGE(test)) {
     /* recv the request for the test */
-    req_base   = (int *)(
-               ( (long)(my_data->vst_ring->recv_buff_ptr)
-               + (long)sizeof(int) -1)
-               & ~((long)sizeof(int) -1));
+    req_base   = (int *)my_data->vst_ring->recv_buff_ptr;
     req_ptr    = my_data->vst_ring->recv_buff_ptr;
     bytes_left = my_data->vst_ring->recv_size;
     received   = 0;
@@ -1705,8 +1781,30 @@ recv_vst_rr_load(test_t *test)
         }
         received   += len;
         req_ptr    += len;
-        if (received >= (sizeof(int)*2)) {
-          bytes_left = ntohl(req_base[0]) - received;
+        if (received >= (sizeof(int)*4)) {
+          bytes_left = ntohl(req_base[0]);
+          rsp_size   = ntohl(req_base[1]);
+          if ((bytes_left > my_data->vst_ring->recv_size) ||
+              (rsp_size   > my_data->vst_ring->send_size) ||
+              (bytes_left < (sizeof(int)*4)) || 
+              (rsp_size   < (sizeof(int)*4)) ||
+              (bytes_left != ntohl(req_base[2])) ||
+              (rsp_size   != ntohl(req_base[3])) ) {
+            fprintf(test->where,
+                    "\n%s: Error in received packet for test_id = '%s'\n",
+                    __func__, test->id);
+            fprintf(test->where,
+                    "\treq_base[0] = %d\treq_base[1] = %d\n",
+                    bytes_left, rsp_size);
+            fprintf(test->where,
+                    "\treq_base[2] = %d\treq_base[3] = %d\n\n",
+                    ntohl(req_base[2]), ntohl(req_base[3]));
+            fprintf(test->where,
+                    "\treq_base = %p\torig_req_ptr = %p\treceived = %d\n",
+                    req_base, my_data->vst_ring->recv_buff_ptr, received);
+            fflush(test->where);
+          }
+          bytes_left = bytes_left - received;
         }
         else {
           bytes_left = my_data->vst_ring->recv_size - received;
@@ -1725,13 +1823,6 @@ recv_vst_rr_load(test_t *test)
          a request to transition to the idle state */
       break;
     } 
-    rsp_size = ntohl(req_base[1]);
-    if (rsp_size == 0) {
-      fprintf(test->where,
-              "%s: rsp_size = %d  received = %d\n",
-              __func__, rsp_size, received);
-      fflush(test->where);
-    }
     if ((len=send(my_data->s_data,
                   my_data->vst_ring->send_buff_ptr,
                   rsp_size,
@@ -1877,6 +1968,7 @@ send_vst_rr_meas(test_t *test)
   int               bytes_left;
   char             *rsp_ptr;
   vst_data_t       *my_data;
+  int              *send_buf;
 
   my_data   = GET_TEST_DATA(test);
 
@@ -1888,6 +1980,17 @@ send_vst_rr_meas(test_t *test)
     HIST_TIMESTAMP(&time_one);
     /* send data for the test */
     send_len = my_data->vst_ring->send_size;
+    bytes_left = my_data->vst_ring->recv_size;
+    send_buf   = (int *)my_data->vst_ring->send_buff_ptr;
+    if ((send_len   != send_buf[0]) ||
+        (bytes_left != send_buf[1]) ||
+        (send_len   != send_buf[2]) ||
+        (bytes_left != send_buf[3])) {
+      fprintf(test->where,
+              "\n%s: Found corrupted buffer is %d,%d should be %d,%d\n\n",
+              __func__, send_buf[0], send_buf[1], send_len, bytes_left);
+      fflush(test->where);
+    }
     if((len=send(my_data->s_data,
                  my_data->vst_ring->send_buff_ptr,
                  send_len,
@@ -1904,7 +2007,6 @@ send_vst_rr_meas(test_t *test)
     my_data->stats.named.send_calls++;
     /* recv the request for the test */
     rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
-    bytes_left = my_data->vst_ring->recv_size;
     while (bytes_left > 0) {
       if ((len=recv(my_data->s_data,
                     rsp_ptr,
@@ -1960,6 +2062,7 @@ send_vst_rr_load(test_t *test)
   int               bytes_left;
   char             *rsp_ptr;
   vst_data_t       *my_data;
+  int              *send_buf;
 
   my_data   = GET_TEST_DATA(test);
 
@@ -1967,7 +2070,18 @@ send_vst_rr_load(test_t *test)
     /* code to make data dirty macro enabled by DIRTY */
     MAKE_DIRTY(my_data,my_data->vst_ring);
     /* send data for the test */
-    send_len = my_data->vst_ring->send_size;
+    send_len   = my_data->vst_ring->send_size;
+    bytes_left = my_data->vst_ring->recv_size;
+    send_buf   = (int *)my_data->vst_ring->send_buff_ptr;
+    if ((send_len   != send_buf[0]) ||
+        (bytes_left != send_buf[1]) ||
+        (send_len   != send_buf[2]) ||
+        (bytes_left != send_buf[3])) {
+      fprintf(test->where,
+              "\n%s: Found corrupted buffer is %d,%d should be %d,%d\n\n",
+              __func__, send_buf[0], send_buf[1], send_len, bytes_left);
+      fflush(test->where);
+    }
     if((len=send(my_data->s_data,
                  my_data->vst_ring->send_buff_ptr,
                  send_len,
@@ -1982,7 +2096,6 @@ send_vst_rr_load(test_t *test)
     }
     /* recv the request for the test */
     rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
-    bytes_left = my_data->vst_ring->recv_size;
     while (bytes_left > 0) {
       if ((len=recv(my_data->s_data,
                     rsp_ptr,

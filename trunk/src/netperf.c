@@ -1024,7 +1024,7 @@ netperf_worker(void *data)
       if (debug) {
         fprintf(where,"netperf_worker: ho hum, nothing to do\n");
         fflush(where);
-        report_test_status(server);
+        report_servers_test_status(server);
       }
     }
     pthread_mutex_lock(server->lock);
@@ -1164,6 +1164,7 @@ wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
   xmlChar     *tid;
   test_t      *test;
   tset_t      *test_set;
+  int          i;
 
   if (debug) {
     fprintf(where,"entering %s\n", __func__);
@@ -1176,25 +1177,42 @@ wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
     while (set_elt) {
       test = set_elt->test;
       if (test) {
+        i = 15;
         while (test->state != test->state_req) {
           if (test->state == TEST_ERROR) {
             rc = NPE_TEST_FOUND_IN_ERROR_STATE;
             break;
           }
-          sleep(1);
+          if (i) {
+            i--;
+            sleep(1);
+          }
+          else {
+            i = 15;
+            report_test_status(test);
+          }
         }
       }
       set_elt = set_elt->next;
     }
-  } else {
+  }
+  else {
     test = find_test_in_hash(tid);
     if (test) {
+      i = 15;
       while (test->state != test->state_req) {
         if (test->state == TEST_ERROR) {
           rc = NPE_TEST_FOUND_IN_ERROR_STATE;
           break;
         }
-        sleep(1);
+        if (i) {
+          i--;
+          sleep(1);
+        }
+        else {
+          i = 15;
+          report_test_status(test);
+        }
       }
     }
   }
@@ -1836,7 +1854,7 @@ struct netperf_cmd netperf_cmds[] = {
 static int
 process_command(xmlNodePtr cmd)
 {
-  int loc_debug = 0;
+  int loc_debug = 1;
   int rc = NPE_SUCCESS;
   struct netperf_cmd *which_cmd;
   
