@@ -109,6 +109,7 @@ char      *listen_port = NETPERF_DEFAULT_SERVICE_NAME;  /* --port */
 uint16_t   listen_port_num = 0;                         /* --port */
 char      *local_host_name       = NULL;
 int        local_address_family  = AF_UNSPEC;
+int        need_setup = 0;
 
 char	local_host_name_buf[BUFSIZ];
 char    local_addr_fam_buf[BUFSIZ];
@@ -183,6 +184,7 @@ decode_command_line (int argc, char **argv)
 	  break;
         case 'f':       /* --forground */
           forground++;  /* 1 means no deamon, 2 means no fork after accept */
+	  need_setup = 1;
           break;
 	case 'L':
 	  break_args_explicit(optarg,local_host_name_buf,local_addr_fam_buf);
@@ -202,6 +204,7 @@ decode_command_line (int argc, char **argv)
 	    }
 #endif
 	  }
+	  need_setup = 1;
 	  break;
         case 'o':               /* --output */
           oname = strdup(optarg);
@@ -219,6 +222,7 @@ decode_command_line (int argc, char **argv)
           /* specified port number */
           listen_port = strdup(optarg);
           listen_port_num = atoi(listen_port);
+	  need_setup = 1;
           break;
         case 'q':               /* --quiet, --silent */
           want_quiet = 1;
@@ -905,6 +909,8 @@ main (int argc, char **argv)
 {
   int rc;
   int sock;
+  struct sockaddr name;
+  int namelen = sizeof(name);
 
   program_name = argv[0];
 
@@ -923,29 +929,23 @@ main (int argc, char **argv)
      whether we are a child of inetd or not. raj 2005-10-11 */
   netserver_init();
 
-  /* so, are we a child of inetd or the like, and if not, should we
-     daemonize? if we are given a port number on which we should
-     listen, or if stdin is not a socket, then we need to setup a
-     listen endpoint, and we may want to daemonize. otherwise, if we
-     are a child of inet or the like, we just want to start processing
-     requests. raj 2005-10-11 */
+  /* if netserver is invoked with any of the -L, -p or -f options it
+     will necessary to setup the listen endpoint.  similarly, if
+     standard in is not a socket, it will be necessary to setup the
+     listen endpoint.  otherwise, we assume we sprang-forth from inetd
+     or the like and should start processing requests. */
 
-  if (0 == listen_port_num) {
-    struct sockaddr name;
-    int namelen = sizeof(name);
-      
-    if (getsockname(0, &name, &namelen) == -1) {
+  if (getsockname(0, &name, &namelen) == -1) {
       /* we may not be a child of inetd */
       if (CHECK_FOR_NOT_SOCKET) {
-        setup_listen_endpoint(listen_port);
+	need_setup = 1;
       }
-    }
-  } else {
-    /* we are a child of inetd or some other equivalent daemon,
-       so just go ahead and do the right thing. raj 2005-10-11 */
-    /* netperf2 has a lot of stuff here to set server_socket up correctly
-       I wonder if there is a cleaner way to do that because the code
-       in netperf2 is really hard to follow.   sgb 2005-12-5 */
+  }
+
+  if (need_setup) {
+    setup_listen_endpoint(listen_port);
+  }
+  else {
     sock = 0;
     handle_netperf_requests(sock);
   }
