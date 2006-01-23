@@ -105,6 +105,7 @@ update_sys_stats(test_t *test)
   dtime->tv_usec = curr->tv_usec - prev->tv_usec;
   dtime->tv_sec  = curr->tv_sec  - prev->tv_sec;
 
+  printf("in update_sys_stats test is %p\n",test);
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   if (test->debug) {
@@ -454,161 +455,166 @@ sys_stats(test_t *test)
                         SYS_STATS_MALLOC_FAILED,
                         "call to malloc failed");
   }
-  /* lets make sure we have a valid pointer before we go calling
-     memset, so put this after the if (tsd == NULL) bit... */
-  memset(tsd,0,sizeof(netsysstat_data_t));
-  test->test_specific_data = tsd;
-  while ((GET_TEST_STATE != TEST_ERROR) &&
-         (GET_TEST_STATE != TEST_DEAD)) {
-    switch (GET_TEST_STATE) {
-    case TEST_PREINIT:
-      /* following allocates and initializes num_cpus, and psd
-         in the netsysstat_data structure   sgb 2005-10-17 */
-      err = sys_cpu_util_init(test);
-      num_cpus = tsd->num_cpus;
-      if (num_cpus > 0) {
-        if (test->debug) {
-          fprintf(test->where,
-                  "sys_stats: allocating counters for %d cpus\n",
-                  num_cpus);
-          fflush(test->where);
-        }
-        tsd->total_sys_counters =
-          (cpu_time_counters_t *)malloc(sizeof(cpu_time_counters_t));
-
-	tsd->starting_cpu_counters = 
-	  (cpu_time_counters_t *)malloc(num_cpus * 
-					sizeof(cpu_time_counters_t));
-	tsd->ending_cpu_counters = 
-	  (cpu_time_counters_t *)malloc(num_cpus * 
-					sizeof(cpu_time_counters_t));
-	tsd->delta_cpu_counters = 
-	  (cpu_time_counters_t *)malloc(num_cpus * 
-					sizeof(cpu_time_counters_t));
-	tsd->total_cpu_counters = 
-	  (cpu_time_counters_t *)malloc(num_cpus * 
-					sizeof(cpu_time_counters_t));
-
-	if ((NULL != tsd->total_sys_counters) && 
-	    (NULL != tsd->starting_cpu_counters) &&
-	    (NULL != tsd->ending_cpu_counters) &&
-	    (NULL != tsd->delta_cpu_counters) &&
-	    (NULL != tsd->total_cpu_counters)) {
-	  /* put the memset's here, once we know that the pointers are
-	     good. raj 2005-10-27 */
-	  memset(tsd->total_sys_counters,0,sizeof(netsysstat_data_t));
-	  memset(tsd->total_cpu_counters,0,
-		 (num_cpus * sizeof(netsysstat_data_t)));
-          SET_TEST_STATE(TEST_INIT);
-        } else {
-	  /* lets see about cleaning-up some memory shall we? */
-	  if (tsd->total_sys_counters) free(tsd->total_sys_counters);
-	  if (tsd->starting_cpu_counters) free(tsd->starting_cpu_counters);
-	  if (tsd->ending_cpu_counters) free(tsd->ending_cpu_counters);
-	  if (tsd->delta_cpu_counters) free(tsd->delta_cpu_counters);
-	  if (tsd->total_cpu_counters) free(tsd->total_cpu_counters);
+  else {
+    /* lets make sure we have a valid pointer before we go calling
+       memset, so put this after the if (tsd == NULL) bit... */
+    memset(tsd,0,sizeof(netsysstat_data_t));
+    test->test_specific_data = tsd;
+    while ((GET_TEST_STATE != TEST_ERROR) &&
+	   (GET_TEST_STATE != TEST_DEAD)) {
+      switch (GET_TEST_STATE) {
+      case TEST_PREINIT:
+	/* following allocates and initializes num_cpus, and psd
+	   in the netsysstat_data structure   sgb 2005-10-17 */
+	err = sys_cpu_util_init(test);
+	num_cpus = tsd->num_cpus;
+	if (num_cpus > 0) {
+	  if (test->debug) {
+	    fprintf(test->where,
+		    "sys_stats: allocating counters for %d cpus\n",
+		    num_cpus);
+	    fflush(test->where);
+	  }
+	  tsd->total_sys_counters =
+	    (cpu_time_counters_t *)malloc(sizeof(cpu_time_counters_t));
 	  
-          report_test_failure(test,
-                              "sys_stats",
-                              SYS_STATS_MALLOC_FAILED,
-                              "call to malloc failed");
-        }
-      } else {
-        report_test_failure(test,
-                            "sys_stats",
-                            err,
-                            "call to sys_cpu_util_init failed");
+	  tsd->starting_cpu_counters = 
+	    (cpu_time_counters_t *)malloc(num_cpus * 
+					  sizeof(cpu_time_counters_t));
+	  tsd->ending_cpu_counters = 
+	    (cpu_time_counters_t *)malloc(num_cpus * 
+					  sizeof(cpu_time_counters_t));
+	  tsd->delta_cpu_counters = 
+	    (cpu_time_counters_t *)malloc(num_cpus * 
+					  sizeof(cpu_time_counters_t));
+	  tsd->total_cpu_counters = 
+	    (cpu_time_counters_t *)malloc(num_cpus * 
+					  sizeof(cpu_time_counters_t));
+	  
+	  if ((NULL != tsd->total_sys_counters) && 
+	      (NULL != tsd->starting_cpu_counters) &&
+	      (NULL != tsd->ending_cpu_counters) &&
+	      (NULL != tsd->delta_cpu_counters) &&
+	      (NULL != tsd->total_cpu_counters)) {
+	    /* put the memset's here, once we know that the pointers are
+	       good. raj 2005-10-27
+	       for good measure, make sure we are doing a memset for
+	       the proper size of each of these blessed things! raj
+	       2006-01-23 */ 
+	    memset(tsd->total_sys_counters,0,sizeof(cpu_time_counters_t));
+	    memset(tsd->total_cpu_counters,0,
+		   (num_cpus * sizeof(cpu_time_counters_t)));
+	    SET_TEST_STATE(TEST_INIT);
+	  } else {
+	    /* lets see about cleaning-up some memory shall we? */
+	    if (tsd->total_sys_counters) free(tsd->total_sys_counters);
+	    if (tsd->starting_cpu_counters) free(tsd->starting_cpu_counters);
+	    if (tsd->ending_cpu_counters) free(tsd->ending_cpu_counters);
+	    if (tsd->delta_cpu_counters) free(tsd->delta_cpu_counters);
+	    if (tsd->total_cpu_counters) free(tsd->total_cpu_counters);
+	    
+	    report_test_failure(test,
+				"sys_stats",
+				SYS_STATS_MALLOC_FAILED,
+				"call to malloc failed");
+	  }
+	} else {
+	  report_test_failure(test,
+			      "sys_stats",
+			      err,
+			      "call to sys_cpu_util_init failed");
+	}
+	break;
+      case TEST_INIT:
+	if (test->debug) {
+	  fprintf(test->where,"sys_stats: in INIT state\n");
+	  fflush(test->where);
+	}
+	if (CHECK_REQ_STATE == TEST_IDLE) {
+	  SET_TEST_STATE(TEST_IDLE);
+	} else {
+	  report_test_failure(test,
+			      "sys_stats",
+			      SYS_STATS_REQUESTED_STATE_INVALID,
+			      "sys_stats found in TEST_INIT state");
+	}
+	break;
+      case TEST_IDLE:
+	if (test->debug) {
+	  fprintf(test->where,"sys_stats: in IDLE state\n");
+	  fflush(test->where);
+	}
+	/* check for state transition */
+	if (CHECK_REQ_STATE == TEST_IDLE) {
+	  sleep(1);
+	} else if (CHECK_REQ_STATE == TEST_LOADED) {
+	  SET_TEST_STATE(TEST_LOADED);
+	} else if (CHECK_REQ_STATE == TEST_DEAD) {
+	  SET_TEST_STATE(TEST_DEAD);
+	} else {
+	  report_test_failure(test,
+			      "sys_stats",
+			      SYS_STATS_REQUESTED_STATE_INVALID,
+			      "sys_stats found in TEST_IDLE state");
+	}
+	break;
+      case TEST_MEASURE:
+	if (test->debug) {
+	  fprintf(test->where,"sys_stats: in MEAS state\n");
+	  fflush(test->where);
+	}
+	
+	if (CHECK_REQ_STATE == TEST_MEASURE) {
+	  sleep(1);
+	} else if (CHECK_REQ_STATE == TEST_LOADED) {
+	  /* get_cpu_time_counters sets current timestamp */
+	  get_cpu_time_counters(tsd->ending_cpu_counters,&(tsd->curr_time),test);
+	  update_sys_stats(test);
+	  SET_TEST_STATE(TEST_LOADED);
+	} else {
+	  report_test_failure(test,
+			      "sys_stats",
+			      SYS_STATS_REQUESTED_STATE_INVALID,
+			      "in TEST_MEASURED only TEST_LOADED is valid");
+	}
+	break;
+      case TEST_LOADED:
+	if (test->debug) {
+	  fprintf(test->where,"sys_stats: in LOAD state\n");
+	  fflush(test->where);
+	}
+	
+	if (CHECK_REQ_STATE == TEST_LOADED) {
+	  sleep(1);
+	} else if (CHECK_REQ_STATE == TEST_MEASURE) {
+	  /* transitioning to measure state from loaded state set
+	     get_cpu_time_counters sets previous timestamp */
+	  get_cpu_time_counters(tsd->starting_cpu_counters,&(tsd->prev_time),test);
+	  SET_TEST_STATE(TEST_MEASURE);
+	} else if (CHECK_REQ_STATE == TEST_IDLE) {
+	  SET_TEST_STATE(TEST_IDLE);
+	} else {
+	  report_test_failure(test,
+			      "sys_stats",
+			      SYS_STATS_REQUESTED_STATE_INVALID,
+			      "in TEST_LOADED state IDLE MEASURE valid");
+	}
+	break;
+      default:
+	report_test_failure(test,
+			    "sys_stats",
+			    SYS_STATS_STATE_CORRUPTED,
+			    "sys_stats found in ILLEGAL state");
+      } /* end of switch in while loop */
+    } /* end of while for test */
+    
+    /* do we ever get here? seems that if we do, it would be spinning
+       like crazy?!?  raj 2005-10-06 */
+    while (GET_TEST_STATE != TEST_DEAD) {
+      sleep(1);
+      if (CHECK_REQ_STATE == TEST_DEAD) {
+	SET_TEST_STATE(TEST_DEAD);
       }
-      break;
-    case TEST_INIT:
-      if (test->debug) {
-	fprintf(test->where,"sys_stats: in INIT state\n");
-	fflush(test->where);
-      }
-      if (CHECK_REQ_STATE == TEST_IDLE) {
-        SET_TEST_STATE(TEST_IDLE);
-      } else {
-        report_test_failure(test,
-                            "sys_stats",
-                            SYS_STATS_REQUESTED_STATE_INVALID,
-                            "sys_stats found in TEST_INIT state");
-      }
-      break;
-    case TEST_IDLE:
-      if (test->debug) {
-	fprintf(test->where,"sys_stats: in IDLE state\n");
-	fflush(test->where);
-      }
-      /* check for state transition */
-      if (CHECK_REQ_STATE == TEST_IDLE) {
-        sleep(1);
-      } else if (CHECK_REQ_STATE == TEST_LOADED) {
-        SET_TEST_STATE(TEST_LOADED);
-      } else if (CHECK_REQ_STATE == TEST_DEAD) {
-        SET_TEST_STATE(TEST_DEAD);
-      } else {
-        report_test_failure(test,
-                            "sys_stats",
-                            SYS_STATS_REQUESTED_STATE_INVALID,
-                            "sys_stats found in TEST_IDLE state");
-      }
-      break;
-    case TEST_MEASURE:
-      if (test->debug) {
-	fprintf(test->where,"sys_stats: in MEAS state\n");
-	fflush(test->where);
-      }
-
-      if (CHECK_REQ_STATE == TEST_MEASURE) {
-        sleep(1);
-      } else if (CHECK_REQ_STATE == TEST_LOADED) {
-        /* get_cpu_time_counters sets current timestamp */
-	get_cpu_time_counters(tsd->ending_cpu_counters,&(tsd->curr_time),test);
-	update_sys_stats(test);
-	SET_TEST_STATE(TEST_LOADED);
-      } else {
-        report_test_failure(test,
-                            "sys_stats",
-                            SYS_STATS_REQUESTED_STATE_INVALID,
-                            "in TEST_MEASURED only TEST_LOADED is valid");
-      }
-      break;
-    case TEST_LOADED:
-      if (test->debug) {
-	fprintf(test->where,"sys_stats: in LOAD state\n");
-	fflush(test->where);
-      }
-
-      if (CHECK_REQ_STATE == TEST_LOADED) {
-        sleep(1);
-      } else if (CHECK_REQ_STATE == TEST_MEASURE) {
-	/* transitioning to measure state from loaded state set
-	   get_cpu_time_counters sets previous timestamp */
-	get_cpu_time_counters(tsd->starting_cpu_counters,&(tsd->prev_time),test);
-	SET_TEST_STATE(TEST_MEASURE);
-      } else if (CHECK_REQ_STATE == TEST_IDLE) {
-        SET_TEST_STATE(TEST_IDLE);
-      } else {
-        report_test_failure(test,
-                            "sys_stats",
-                            SYS_STATS_REQUESTED_STATE_INVALID,
-                            "in TEST_LOADED state IDLE MEASURE valid");
-      }
-      break;
-    default:
-      report_test_failure(test,
-                          "sys_stats",
-                          SYS_STATS_STATE_CORRUPTED,
-                          "sys_stats found in ILLEGAL state");
-    } /* end of switch in while loop */
-  } /* end of while for test */
-
-  /* do we ever get here? seems that if we do, it would be spinning
-     like crazy?!?  raj 2005-10-06 */
-  while (GET_TEST_STATE != TEST_DEAD) {
-    sleep(1);
-    if (CHECK_REQ_STATE == TEST_DEAD) {
-      SET_TEST_STATE(TEST_DEAD);
     }
   }
 }
