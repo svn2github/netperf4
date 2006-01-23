@@ -45,6 +45,10 @@ char    nettest_id[]="\
 
 
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <stdio.h>
 #include <values.h>
 #include <unistd.h>
@@ -918,7 +922,7 @@ create_data_socket(test_t *test)
 
   int temp_socket;
   int one;
-  int sock_opt_len;
+  netperf_socklen_t sock_opt_len;
 
   if (test->debug) {
     fprintf(test->where,
@@ -1481,7 +1485,7 @@ recv_vst_rr_preinit(test_t *test)
   int               s_listen;
   vst_data_t       *my_data;
   struct sockaddr   myaddr;
-  int               mylen;
+  netperf_socklen_t mylen;
 
   my_data   = GET_TEST_DATA(test);
   mylen     = sizeof(myaddr);
@@ -1532,7 +1536,7 @@ recv_vst_rr_init(test_t *test)
   int               s_data;
   vst_data_t       *my_data;
   struct sockaddr   peeraddr;
-  int               peerlen;
+  netperf_socklen_t peerlen;
 
   my_data   = GET_TEST_DATA(test);
   peerlen   = sizeof(peeraddr);
@@ -1568,7 +1572,7 @@ recv_vst_rr_idle_link(test_t *test, int last_len)
   uint32_t          new_state;
   vst_data_t       *my_data;
   struct sockaddr   peeraddr;
-  int               peerlen;
+  netperf_socklen_t peerlen;
 
   NETPERF_DEBUG_ENTRY(test->debug, test->where);
 

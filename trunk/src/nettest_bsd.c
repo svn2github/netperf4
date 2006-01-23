@@ -67,6 +67,10 @@ char    nettest_id[]="\
 
 
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <stdio.h>
 #include <values.h>
 #include <unistd.h>
@@ -556,7 +560,7 @@ create_data_socket(test)
 
   int temp_socket;
   int one;
-  int sock_opt_len;
+  netperf_socklen_t sock_opt_len;
 
   if (test->debug) {
     fprintf(test->where,
@@ -1062,7 +1066,7 @@ recv_tcp_stream_preinit(test_t *test)
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   myaddr;
-  int               mylen;
+  netperf_socklen_t mylen;
 
   my_data   = test->test_specific_data;
   proc_name = "recv_tcp_stream_preinit";        
@@ -1119,7 +1123,7 @@ recv_tcp_stream_init(test_t *test)
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   peeraddr;
-  int               peerlen;
+  netperf_socklen_t peerlen;
 
   my_data   = test->test_specific_data;
   proc_name = "recv_tcp_stream_preinit";        
@@ -1155,7 +1159,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   peeraddr;
-  int               peerlen;
+  netperf_socklen_t peerlen;
   int               len;
 
   my_data   = test->test_specific_data;
@@ -1651,7 +1655,7 @@ recv_tcp_rr_preinit(test_t *test)
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   myaddr;
-  int               mylen;
+  netperf_socklen_t mylen;
 
   my_data   = test->test_specific_data;
   proc_name = "recv_tcp_rr_preinit";
@@ -1713,7 +1717,7 @@ recv_tcp_rr_init(test_t *test)
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   peeraddr;
-  int               peerlen;
+  netperf_socklen_t peerlen;
 
   my_data   = test->test_specific_data;
   proc_name = "recv_tcp_stream_init";
@@ -1750,7 +1754,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   peeraddr;
-  int               peerlen;
+  netperf_socklen_t peerlen;
 
   my_data   = test->test_specific_data;
   proc_name = "recv_tcp_rr_idle_link";

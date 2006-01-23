@@ -426,7 +426,7 @@ create_data_socket(test)
 
   int temp_socket;
   int one;
-  int sock_opt_len;
+  netperf_socklen_t sock_opt_len;
 
   if (test->debug) {
     fprintf(test->where,
