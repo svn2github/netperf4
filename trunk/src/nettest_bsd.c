@@ -2361,7 +2361,7 @@ send_tcp_rr(test_t *test)
     for computing service demand */
 
 void
-bsd_test_results_init(tset_t *test_set,char *report_flags,char *output)
+bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
 {
   bsd_results_t *rd;
   FILE          *outfd;

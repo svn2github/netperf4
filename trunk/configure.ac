@@ -28,6 +28,7 @@ AC_C_CONST
 # Checks for libraries.
 AC_HAVE_LIBRARY(m)
 AC_HAVE_LIBRARY(pthread)
+AC_HAVE_LIBRARY(dl)
 
 # Checks for header files.
 AC_HEADER_STDC

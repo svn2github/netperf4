@@ -1342,6 +1342,14 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
 
   set_name      = xmlGetProp(my_cmd,(const xmlChar *)"test_set");
   report_flags  = (char *)xmlGetProp(my_cmd,(const xmlChar *)"report_flags");
+
+  if (NULL == report_flags) {
+    fprintf(where,
+	    "Error: report_flags NULL in report_stats_command\n");
+    fflush(where);
+    return(NPE_EMPTY_MSG);
+  }
+
   output_file   = (char *)xmlGetProp(my_cmd,(const xmlChar *)"output_file");
 
   /* once more, we have to make sure that there really is a valid
