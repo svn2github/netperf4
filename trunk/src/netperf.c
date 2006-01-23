@@ -353,7 +353,7 @@ display_server_hash()
   server_t * server;
   for (i=0;i < SERVER_HASH_BUCKETS; i++) {
     server = server_hash[i].server;
-    fprintf(where,"server_hash_bucket[%d]=%lx\n",i,server_hash[i].server);
+    fprintf(where,"server_hash_bucket[%d]=%p\n",i,server_hash[i].server);
     while (server) {
       fprintf(where,"\tserver->id %s, server->sock %d, server->state %d\n",
               server->id,server->sock,server->state);

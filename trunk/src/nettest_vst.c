@@ -56,9 +56,18 @@ char    nettest_id[]="\
 #include <signal.h>
 #include <errno.h>
 
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIM
+#include <time.h>
+#endif
+#endif
+
 #ifdef OFF
 #include <netinet/in.h>
 #endif
+
+#include <netinet/tcp.h>
 
 #include <sys/socket.h>
 #include <netdb.h>
@@ -1416,7 +1425,7 @@ vst_test_get_stats(test_t *test)
     if (GET_TEST_STATE == TEST_MEASURE) {
       gettimeofday(&(my_data->curr_time), NULL);
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->curr_time.tv_sec);
+        sprintf(value,"%ld",my_data->curr_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"time_sec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"time_sec=%s\n",value);
@@ -1424,7 +1433,7 @@ vst_test_get_stats(test_t *test)
         }
       }
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->curr_time.tv_usec);
+        sprintf(value,"%ld",my_data->curr_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"time_usec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"time_usec=%s\n",value);
@@ -1434,7 +1443,7 @@ vst_test_get_stats(test_t *test)
     }
     else {
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->elapsed_time.tv_sec);
+        sprintf(value,"%ld",my_data->elapsed_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_sec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"elapsed_sec=%s\n",value);
@@ -1442,7 +1451,7 @@ vst_test_get_stats(test_t *test)
         }
       }
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->elapsed_time.tv_usec);
+        sprintf(value,"%ld",my_data->elapsed_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_usec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"elapsed_usec=%s\n",value);

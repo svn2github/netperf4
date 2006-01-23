@@ -52,6 +52,13 @@ delete this exception statement from your version.
 #include <string.h>
 #endif
 
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIME
+#include <time.h>
+#endif
+#endif
+
 #include <errno.h>
 
 #include "netperf.h"
@@ -260,7 +267,7 @@ set_stat_attribute(test_t *test, xmlNodePtr stats,char *name, uint32_t value)
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
-  sprintf(value_str,"%#ld",value);
+  sprintf(value_str,"%d",value);
   ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value_str);
   if (test->debug) {
     fprintf(test->where,"%s=%s\n",name,value_str);

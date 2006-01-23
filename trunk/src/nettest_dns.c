@@ -60,6 +60,13 @@ char    nettest_dns_id[]="\
 #include <stdio.h>
 #include <values.h>
 
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIME
+#include <time.h>
+#endif
+#endif
+
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -73,6 +80,8 @@ char    nettest_dns_id[]="\
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
+
+#include <netinet/tcp.h>
 
 #ifdef HAVE_ARPA_NAMESER_H
 #include <arpa/nameser.h>
@@ -763,7 +772,6 @@ dns_test_init(test_t *test, int type, int protocol)
   int               error;
   struct addrinfo   hints;
   struct addrinfo  *local_ai;
-  struct addrinfo  *local_temp;
 
   /* allocate memory to store the information about this test */
   new_data = (dns_data_t *)malloc(sizeof(dns_data_t));
@@ -949,7 +957,7 @@ dns_test_get_stats(test_t *test)
 {
   xmlNodePtr  stats = NULL;
   xmlAttrPtr  ap    = NULL;
-  int         i,j;
+  int         i;
   char        value[32];
   char        name[32];
   uint64_t    loc_cnt[DNS_MAX_COUNTERS];
@@ -975,7 +983,7 @@ dns_test_get_stats(test_t *test)
     if (GET_TEST_STATE == TEST_MEASURE) {
       gettimeofday(&(my_data->curr_time), NULL);
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->curr_time.tv_sec);
+        sprintf(value,"%ld",my_data->curr_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"time_sec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"time_sec=%s\n",value);
@@ -983,7 +991,7 @@ dns_test_get_stats(test_t *test)
         }
       }
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->curr_time.tv_usec);
+        sprintf(value,"%ld",my_data->curr_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"time_usec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"time_usec=%s\n",value);
@@ -992,7 +1000,7 @@ dns_test_get_stats(test_t *test)
       }
     } else {
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->elapsed_time.tv_sec);
+        sprintf(value,"%ld",my_data->elapsed_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_sec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"elapsed_sec=%s\n",value);
@@ -1000,7 +1008,7 @@ dns_test_get_stats(test_t *test)
         }
       }
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->elapsed_time.tv_usec);
+        sprintf(value,"%ld",my_data->elapsed_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_usec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"elapsed_usec=%s\n",value);
@@ -1364,6 +1372,7 @@ send_dns_requests(test_t *test)
 static int
 recv_dns_responses(test_t *test)
 {
+  return(0);
 }
 
 static uint32_t
@@ -1865,7 +1874,7 @@ dns_test_results_init(tset_t *test_set,char *report_flags,char *output)
     fprintf(outfd,
             "dns_test_results_init: malloc failed can't generate report\n");
     fflush(outfd);
-    exit;
+    exit(-1);
   }
 }
 
@@ -2186,7 +2195,7 @@ process_stats_for_run(tset_t *test_set)
       fprintf(test_set->where,
               "exiting netperf now!!\n");
       fflush(test_set->where);
-      exit;
+      exit(-1);
     }
     set_elt = set_elt->next;
   }

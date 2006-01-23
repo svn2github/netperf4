@@ -68,6 +68,13 @@ delete this exception statement from your version.
 #include <netdb.h>
 #endif
 
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIME
+#include <time.h>
+#endif
+#endif
+
 #include <poll.h>
 #include <sys/resource.h>
 #include <pthread.h>
@@ -381,7 +388,7 @@ display_test_hash()
   if (debug) {
     for (i=0;i < TEST_HASH_BUCKETS; i++) {
       test = test_hash[i].test;
-      fprintf(where,"test_hash[%d]=%lx\n",i,test_hash[i].test);
+      fprintf(where,"test_hash[%d]=%p\n",i,test_hash[i].test);
       while (test) {
         fprintf(where,"\ttest->id %s, test->state %d\n",
                 test->id,test->state);
@@ -881,7 +888,7 @@ launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
     /* pthread_create succeeded detach thread so we don't need to join */
     *tid = temp_tid;
     if (debug) {
-      fprintf(where,"launch_thread: pthread_create succeeded id = %d\n",tid);
+      fprintf(where,"launch_thread: pthread_create succeeded id = %d\n",*tid);
       fflush(where);
     }
     rc = pthread_detach(temp_tid);

@@ -745,14 +745,14 @@ handle_netperf_requests(int sock)
 static void
 setup_listen_endpoint(char service[]) {
 
-  struct sockaddr  name;
-  struct sockaddr *peeraddr     = &name;
-  int              namelen      = sizeof(name);
-  int              peerlen      = namelen;
-  int              sock;
-  int              rc;
-  int              listenfd     = 0;
-  int              loop         = 1;
+  struct sockaddr   name;
+  struct sockaddr  *peeraddr     = &name;
+  int               namelen      = sizeof(name);
+  netperf_socklen_t peerlen      = namelen;
+  int               sock;
+  int               rc;
+  int               listenfd     = 0;
+  int               loop         = 1;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -910,7 +910,7 @@ main (int argc, char **argv)
   int rc;
   int sock;
   struct sockaddr name;
-  int namelen = sizeof(name);
+  netperf_socklen_t namelen = sizeof(name);
 
   program_name = argv[0];
 

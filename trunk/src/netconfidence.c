@@ -43,6 +43,10 @@ delete this exception statement from your version.
 #include <math.h>
 #endif
 
+#ifdef HAVE_STRING_H
+#include <string.h>
+#endif
+
 #include "netperf.h"
 
 extern int debug;
@@ -120,7 +124,7 @@ set_confidence_level(char *desired_level)
   }
   if (level == 0) {
     fprintf(where,"Invalid confidence_level of %s", desired_level);
-    fprintf(where," was specified! Using default confidence_level of 99%\n");
+    fprintf(where," was specified! Using default confidence_level of 99%%\n");
     fflush(where);
     level = 7;
   }

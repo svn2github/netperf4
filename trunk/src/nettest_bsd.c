@@ -77,9 +77,18 @@ char    nettest_id[]="\
 #include <string.h>
 #include <errno.h>
 
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIME
+#include <time.h>
+#endif
+#endif
+
 #ifdef OFF
 #include <netinet/in.h>
 #endif
+
+#include <netinet/tcp.h>
 
 #include <sys/socket.h>
 #include <netdb.h>
@@ -773,7 +782,6 @@ bsd_test_init(test_t *test, int type, int protocol)
   int               error;
   struct addrinfo   hints;
   struct addrinfo  *local_ai;
-  struct addrinfo  *local_temp;
 
   /* allocate memory to store the information about this test */
   new_data = (bsd_data_t *)malloc(sizeof(bsd_data_t));
@@ -971,7 +979,7 @@ bsd_test_get_stats(test_t *test)
 {
   xmlNodePtr  stats = NULL;
   xmlAttrPtr  ap    = NULL;
-  int         i,j;
+  int         i;
   char        value[32];
   char        name[32];
   uint64_t    loc_cnt[BSD_MAX_COUNTERS];
@@ -997,7 +1005,7 @@ bsd_test_get_stats(test_t *test)
     if (GET_TEST_STATE == TEST_MEASURE) {
       gettimeofday(&(my_data->curr_time), NULL);
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->curr_time.tv_sec);
+        sprintf(value,"%ld",my_data->curr_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"time_sec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"time_sec=%s\n",value);
@@ -1005,7 +1013,7 @@ bsd_test_get_stats(test_t *test)
         }
       }
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->curr_time.tv_usec);
+        sprintf(value,"%ld",my_data->curr_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"time_usec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"time_usec=%s\n",value);
@@ -1014,7 +1022,7 @@ bsd_test_get_stats(test_t *test)
       }
     } else {
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->elapsed_time.tv_sec);
+        sprintf(value,"%ld",my_data->elapsed_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_sec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"elapsed_sec=%s\n",value);
@@ -1022,7 +1030,7 @@ bsd_test_get_stats(test_t *test)
         }
       }
       if (ap != NULL) {
-        sprintf(value,"%#ld",my_data->elapsed_time.tv_usec);
+        sprintf(value,"%ld",my_data->elapsed_time.tv_usec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_usec",(xmlChar *)value);
         if (test->debug) {
           fprintf(test->where,"elapsed_usec=%s\n",value);
@@ -1385,8 +1393,6 @@ send_tcp_stream_init(test_t *test)
 static void
 send_tcp_stream_idle_link(test_t *test)
 {
-  int               len;
-  uint32_t          new_state;
   bsd_data_t       *my_data;
   char             *proc_name;
 
@@ -2417,7 +2423,7 @@ bsd_test_results_init(tset_t *test_set,char *report_flags,char *output)
     fprintf(outfd,
             "bsd_test_results_init: malloc failed can't generate report\n");
     fflush(outfd);
-    exit;
+    exit(-1);
   }
 }
 
@@ -2561,7 +2567,6 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   FILE          *outfd;
   bsd_results_t *rd;
   double         elapsed_seconds;
-  double         sys_util;
   double         calibration;
   double         local_idle;
   double         local_busy;
@@ -2743,7 +2748,7 @@ process_stats_for_run(tset_t *test_set)
       fprintf(test_set->where,
               "exiting netperf now!!\n");
       fflush(test_set->where);
-      exit;
+      exit(-1);
     }
     set_elt = set_elt->next;
   }

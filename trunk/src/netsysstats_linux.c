@@ -103,7 +103,6 @@ int
 sys_cpu_util_init(test_t *test) 
 {
 
-  int err;
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
@@ -146,7 +145,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 		      test_t *test)
 {
 
-  int i,space,records;
+  int i,records;
   char *p = proc_stat_buf;
   char cpunam[64];
   uint64_t nicetime;
