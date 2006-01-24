@@ -1,5 +1,5 @@
 static char netlib_specific_id[]="\
-@(#)(c) Copyright 2006 Hewlett-Packard Company, $Id: netlib_hpux.c 21 2006-1-19 01:07:54Z burger $";
+@(#)(c) Copyright 2006, Hewlett-Packard Company, $Id: netlib_hpux.c 21 2006-1-19 01:07:54Z burger $";
 
 /*
 
@@ -40,47 +40,56 @@ delete this exception statement from your version.
 #include <unistd.h>
 #endif
 
-/* mustn't forget the include file for the pthread_mumble stuff... raj
-   2006-01-24 */
-#ifdef HAVE_PTHREAD_H
-#include <pthread.h>
+#ifdef HAVE_SCHED_H
+#include <sched.h>
 #endif
+
+#include <errno.h>
 
 #include "netperf.h"
 #include "netlib.h"
 
 
+#ifdef HAVE_SCHED_SETAFFINITY
 int
 set_thread_locality(test_t *test, char *loc_type, char *loc_value)
 {
   int   err = -1;
   int   value;
   char *err_str;
-  psetid_t       pset;
-  pthread_ldom_t ldom;
-  pthread_spu_t  spu;
+  cpu_set_t      mask;
+
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
+  CPU_ZERO(&mask);
+
+  /* OK, right off the bat I see we have a potential issue with > 32
+     CPUs if we just use atoi() so we'll need something else at some
+     point. raj 2006-01-24 */
+
   value  = atoi(loc_value);
+
+  CPU_SET(value, &mask);
+
+  /* under linux, for now at least, all the flavors of affinity are
+     the same. we keep the strucutre from the HP-UX version just for
+     grins. raj 2006-01-24 */
+
   if (strcmp(loc_type,"PROC") == 0) {
-    err  = pthread_processor_bind_np(
-             PTHREAD_BIND_FORCED_NP,
-             &spu,
-             value,
-             test->tid);
+    err  = sched_setaffinity(test->tid,
+			     sizeof(mask),
+			     &mask);
   }
   else if (strcmp(loc_type,"LDOM") == 0) {
-    err  = pthread_ldom_bind_np(
-             &ldom,
-             value,
-             test->tid);
+    err  = sched_setaffinity(test->tid,
+			     sizeof(mask),
+			     &mask);
   }
   else if (strcmp(loc_type,"PSET") == 0) {
-    err  = pthread_pset_bind_np(
-             &pset,
-             value,
-             test->tid);
+    err  = sched_setaffinity(test->tid,
+			     sizeof(mask),
+			     &mask);
   }
   if (err) {
     if (err == EINVAL) {
@@ -91,6 +100,9 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
     }
     if (err == ESRCH) {
       err_str = "Invalid thread id";
+    }
+    if (err == EFAULT) {
+      err_str = "Invalid memory address";
     }
     if (err == -1) {
       err_str = "Invalid locality type";
@@ -105,9 +117,20 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
   else {
     err = NPE_SUCCESS;
   }
-
   NETPERF_DEBUG_EXIT(test->debug,test->where);
-
   return(err);
 }
-
+#else
+int
+set_thread_locality(test_t *test, char *loc_type, char *loc_value)
+{
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+  if (test->debug) {
+    fprintf(test->where,
+	    "No call to set CPU affinity available, request ignored.\n");
+    fflush(test->where);
+  }
+  NETPERF_DEBUG_EXIT(test->debug,test->where);
+  return(NPE_SUCCESS);
+}
+#endif

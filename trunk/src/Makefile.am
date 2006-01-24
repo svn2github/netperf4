@@ -4,17 +4,20 @@ bin_PROGRAMS = netperf netserver
 
 AM_CFLAGS = $(NETPERF_CFLAGS)
 
+# for now we will use "NETSYS_SOURCE" for both the netsysstats and
+# netlib platform-specific stuff
 USE_CPU_SOURCE=netsysstats_@NETSYS_SOURCE@.c
+USE_NETLIB_SOURCE=netlib_@NETSYS_SOURCE@.c
 
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 
 EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netsysstats*.c 
 
-COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netconfidence.c netconfidence.h
+COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netconfidence.c netconfidence.h 
 
-netperf_SOURCES = netperf.c $(COMMON_SRC)
-netserver_SOURCES = netserver.c $(COMMON_SRC)
+netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
+netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
 # in theory this will cause these header files to be put in the
 # installed headers location, where folks who want to make their own

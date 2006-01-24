@@ -33,7 +33,7 @@ AC_HAVE_LIBRARY(dl)
 # Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h malloc.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h unistd.h math.h arpa/nameser.h resolv.h poll.h])
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h malloc.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h unistd.h math.h arpa/nameser.h resolv.h poll.h pthread.h sched.h])
 
 # Some platforms require these.  There may be a better way.
 AC_HAVE_LIBRARY(socket)

@@ -1850,7 +1850,7 @@ struct netperf_cmd netperf_cmds[] = {
   { "close",           close_command,           0               },
   { "exit",            exit_netperf_command,    0               },
   { "exec_local",      exec_local_command,      0               },
-  { "exec_remote",     exec_remote_command,     0               },
+  { "exec_remote",     unknown_command,         0               },
   { NULL,              unknown_command,         0               }
 };
 
