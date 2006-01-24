@@ -90,7 +90,6 @@
   (delete_test_set) |
   (die) |
   (exec_local) |
-  (exec_remote) |
   (exit) |
   (get_stats) |
   (idle) |
@@ -166,13 +165,15 @@
 <!ELEMENT test ((dependson | dependency_data)?, (socket_args | unknown )?,
                  (dns_args)? ) >
 <!ATTLIST test
-  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
-  tid           ID      #REQUIRED
-  test_name     CDATA   "send_tcp_stream"
-  library       CDATA   #REQUIRED
-  test_clear    CDATA   #IMPLIED
-  test_stats    CDATA   #IMPLIED
-  test_decode   CDATA   #IMPLIED
+  xmlns           CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid             ID      #REQUIRED
+  test_name       CDATA   "send_tcp_stream"
+  library         CDATA   #REQUIRED
+  test_clear      CDATA   #IMPLIED
+  test_stats      CDATA   #IMPLIED
+  test_decode     CDATA   #IMPLIED
+  locality_type   CDATA   #IMPLIED
+  locality_value  CDATA   #IMPLIED
 >
 <!-- test_name
      The attributes allow definition of different function symbol names.
@@ -190,6 +191,13 @@
      accumulate, and report the statics counters for the tests in the library.
      If test_decode is not specified the default function name will be used
      which is the concatination of the test_name with "_decode_stats" -->
+<!-- locality_type is used to specify the type of locality binding which should
+     be performed.  If locality_type is not specified no binding occurs.
+     For HP-UX valid locality_type values are ( PSET | LDOM | PROC ).
+     If an invalid locality_type is specified no binding occurs. -->
+<!-- locality_value is used to specify the id to which to bind. The value is
+     system specific.  If locality_value is not specified no binding occurs.
+     If an invalid locality_value is specified no binding occurs. -->
 
 <!ELEMENT unknown (#PCDATA) >
 
@@ -258,14 +266,6 @@
 
 <!ELEMENT exec_local EMPTY >
 <!ATTLIST exec_local
-  command       CDATA   #REQUIRED
->
-
-<!-- exec_remote is a security hole and is not implemented -->
-
-<!ELEMENT exec_remote EMPTY >
-<!ATTLIST exec_remote
-  nid           ID      #REQUIRED
   command       CDATA   #REQUIRED
 >
 
@@ -345,7 +345,6 @@
   (create_test_set) |
   (delete_test_set) |
   (exec_local) |
-  (exec_remote) |
   (get_stats) |
   (idle) |
   (init) |

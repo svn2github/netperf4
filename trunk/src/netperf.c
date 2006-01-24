@@ -1648,21 +1648,16 @@ show_test_set(xmlNodePtr cmd, uint32_t junk)
 static int
 exec_local_command(xmlNodePtr cmd, uint32_t junk)
 {
-  int          rc   = NPE_SUCCESS;
-  fprintf(where,"exec_local_command: routine needs to be completed\n");
+  int      rc   = NPE_SUCCESS;
+  xmlChar *command;
+
+  command = xmlGetProp(cmd,(const xmlChar *)"command");
+  fprintf(where,"%s: %s\n", __func__, command);
   fflush(where);
+  system((char *)command);
   return(rc);
 }
 
-
-static int
-exec_remote_command(xmlNodePtr cmd, uint32_t junk)
-{
-  int          rc   = NPE_SUCCESS;
-  fprintf(where,"exec_remote_command: routine needs to be completed\n");
-  fflush(where);
-  return(rc);
-}
 
 static int
 exit_netperf_command(xmlNodePtr cmd, uint32_t junk)

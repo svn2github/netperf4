@@ -846,6 +846,8 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlNodePtr new_node;
   xmlChar   *test_name;
   xmlChar   *testid;
+  xmlChar   *loc_type;
+  xmlChar   *loc_value;
 
 
   NETPERF_DEBUG_ENTRY(debug,where);
@@ -910,7 +912,14 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
         fflush(where);
       }
     }
-    
+    /* Set test thread locality */
+    if (rc == NPE_SUCCESS) {
+      loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
+      loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
+      if ((loc_type != NULL) && (loc_value != NULL)) {
+        rc = set_thread_locality(new_test, loc_type, loc_value);
+      }
+    }
     /* wait for test to initialize */
     if (rc == NPE_SUCCESS) {
       while (new_test->new_state == TEST_PREINIT) {
