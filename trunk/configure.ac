@@ -25,6 +25,18 @@ AC_PROG_CC
 
 AC_C_CONST
 
+# likely as good a place as any to see about adding stuff to flags I
+# wonder if this needs to get any more sophisticated than this?
+
+case $target in 
+     *-*-linux*)
+        CPPFLAGS="$CPPFLAGS -D_REENTRANT -D_GNU_SOURCE"
+	;;
+     *-*-hpux*)
+        CPPFLAGS="$CPPFLAGS -D_REENTRANT"
+	;;
+esac
+
 # Checks for libraries.
 AC_HAVE_LIBRARY(m)
 AC_HAVE_LIBRARY(pthread)
