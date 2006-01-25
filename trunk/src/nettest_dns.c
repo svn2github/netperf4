@@ -58,7 +58,19 @@ char    nettest_dns_id[]="\
 
 
 #include <stdio.h>
+#ifdef HAVE_VALUES_H
 #include <values.h>
+#endif
+
+/* perhaps this needs ifdef coverage, we use it on darwin to get DLB_MAX et al */
+#include <float.h>
+#ifndef MAXDOUBLE
+#define MAXDOUBLE DBL_MAX
+#endif
+#ifndef MINDOUBLE
+#define MINDOUBLE DBL_MIN
+#endif
+
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -86,6 +98,9 @@ char    nettest_dns_id[]="\
 #ifdef HAVE_ARPA_NAMESER_H
 #include <arpa/nameser.h>
 #endif
+
+/* need to get this covered by an ifdef */
+#include <arpa/nameser_compat.h>
 
 #ifdef HAVE_RESOLV_H
 #include <resolv.h>

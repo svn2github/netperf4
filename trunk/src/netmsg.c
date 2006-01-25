@@ -32,12 +32,40 @@ delete this exception statement from your version.
 
 */
 
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
+
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+
+#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+
+#ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
+#endif
+
+#ifdef HAVE_POLL_H
 #include <poll.h>
+#endif
+
+#ifdef HAVE_SYS_TIME_H
+/* seems that Darwin or at least MacOS X 4.3 needs sys/time with
+   sys/resource */
+#include <sys/time.h>
+#endif
+
+#ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
+#endif
+
 #if HAVE_GLIB_H
 #include <glib.h>
 #endif

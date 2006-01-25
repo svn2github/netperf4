@@ -36,12 +36,16 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+
+/* #ifdef HAVE_SYS_UIO_H */
+#include <sys/uio.h>
+/* #endif */
+
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
 
 #ifdef HAVE_SYS_STAT_H

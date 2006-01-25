@@ -72,9 +72,24 @@ char    nettest_id[]="\
 #endif
 
 #include <stdio.h>
+#ifdef HAVE_VALUES_H
 #include <values.h>
+#else
+#ifdef HAVE_MATH_H
+#include <math.h>
+#endif
+#endif
+
+#include <float.h>
+
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+
 #include <errno.h>
 
 #ifdef HAVE_SYS_TIME_H
@@ -84,9 +99,7 @@ char    nettest_id[]="\
 #endif
 #endif
 
-#ifdef OFF
 #include <netinet/in.h>
-#endif
 
 #include <netinet/tcp.h>
 
@@ -96,6 +109,14 @@ char    nettest_id[]="\
 #include "netperf.h"
 
 #include "nettest_bsd.h"
+
+/* after all that do we have MAXDOUBLE and MINDOUBLE? */
+#ifndef MAXDOUBLE
+#define MAXDOUBLE DBL_MAX
+#endif
+#ifndef MINDOUBLE
+#define MINDOUBLE DBL_MIN
+#endif
 
 #ifdef WIN32
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)

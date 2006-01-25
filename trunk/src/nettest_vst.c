@@ -50,7 +50,16 @@ char    nettest_id[]="\
 #endif
 
 #include <stdio.h>
+#ifdef HAVE_VALUES_H
 #include <values.h>
+#endif
+#include <float.h>
+#ifndef MAXDOUBLE
+#define MAXDOUBLE DBL_MAX
+#endif
+#ifndef MINDOUBLE
+#define MINDOUBLE DBL_MIN
+#endif
 #include <unistd.h>
 #include <string.h>
 #include <signal.h>
@@ -63,7 +72,7 @@ char    nettest_id[]="\
 #endif
 #endif
 
-#ifdef OFF
+#ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
 
