@@ -1121,14 +1121,12 @@ send_dns_rr_init(test_t *test)
 static void
 send_dns_rr_idle_link(test_t *test, int last_len)
 {
-  int               len;
   uint32_t          new_state;
   dns_data_t       *my_data;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   my_data   = test->test_specific_data;
-  len       = last_len;
 
   new_state = CHECK_REQ_STATE;
   while (new_state == TEST_LOADED) {
@@ -1410,7 +1408,6 @@ send_dns_rr_meas(test_t *test)
   uint32_t          new_state;
   int               len;
   int               ret;
-  int               response_len;
   int               bytes_left;
   uint16_t         *rsp_ptr;
   uint16_t          response_id;
@@ -1506,7 +1503,6 @@ send_dns_rr_meas(test_t *test)
 	  /* do we have more to read this time around? */
 	  if (my_data->use_tcp == 0) {
 	    /* we are UDP */
-	    response_len = len;
 	    bytes_left = 0;
 	  }
 	  else {
@@ -1546,7 +1542,7 @@ send_dns_rr_meas(test_t *test)
 	   now. raj 2005-11-18 */
 	my_data->stats.named.trans_sent++;
 	my_data->stats.named.trans_received++;
-	/* my_data->stats.named.response_bytes_received += response_len; */
+
 	/* hey dummy, don't forget to clear the entry... raj 2005-11-22 */
 	memset(status_entry,0,sizeof(dns_request_status_t));
       }
@@ -2449,7 +2445,6 @@ report_dns_test_results(tset_t *test_set, char *report_flags, char *output)
   dns_results_t *rd;
   int count;
   int max_count;
-  int min_count;
 
   rd  = test_set->report_data;
 
@@ -2469,13 +2464,9 @@ report_dns_test_results(tset_t *test_set, char *report_flags, char *output)
 
   count        = test_set->confidence.count;
   max_count    = test_set->confidence.max_count;
-  min_count    = test_set->confidence.min_count;
+
   /* always print summary results at end of last call through loop */
   if (count == max_count) {
-
-/*  if ((count == max_count) || 
-      ((rd->confidence >= 0) && (count >= min_count))) */
-
     print_results_summary(test_set);
   }
 } /* end of report_dns_test_results */
