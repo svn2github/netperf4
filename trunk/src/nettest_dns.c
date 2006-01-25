@@ -112,6 +112,7 @@ char    nettest_dns_id[]="\
 #endif
 
 #include "netperf.h"
+#include "netlib.h"
 
 #include "nettest_dns.h"
 
@@ -1381,19 +1382,14 @@ send_dns_rr_meas(test_t *test)
   uint32_t          new_state;
   int               len;
   int               ret;
-  int               i;
   int               response_len;
   int               bytes_left;
-  int               req_size;
   uint16_t         *rsp_ptr;
-  uint16_t          message_id;
   uint16_t          response_id;
-  int               num_to_check;
   dns_data_t       *my_data;
   dns_request_status_t *status_entry;
   struct pollfd     fds;
   int               keep_going=1;
-  NETPERF_TIMESTAMP_T    now;
 
   /* this aught to be enough to hold it - modulo stuff like large
      requests on TCP connections... and we make it of type uint16_t so
@@ -1569,7 +1565,6 @@ send_dns_rr_load(test_t *test)
   int               ret;
   int               len;
   int               bytes_left;
-  int               req_size;
   uint16_t         *rsp_ptr;
   dns_data_t       *my_data;
   struct pollfd     fds;
@@ -2018,7 +2013,6 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   FILE          *outfd;
   dns_results_t *rd;
   double         elapsed_seconds;
-  double         sys_util;
   double         calibration;
   double         local_idle;
   double         local_busy;

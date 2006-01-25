@@ -44,6 +44,10 @@ delete this exception statement from your version.
 #include <sched.h>
 #endif
 
+#ifdef HAVE_STRING_H
+#include <string.h>
+#endif
+
 #include <errno.h>
 
 #include "netperf.h"

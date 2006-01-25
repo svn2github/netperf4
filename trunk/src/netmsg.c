@@ -225,37 +225,6 @@ np_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   return(rc);
 }
 
-/*
-   netserver verify the version message from a netperf
-   Valid responses from a netserver in an error message if version
-   does not match or a version check response if it matches.
-*/
-
-int
-ns_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *netperf)
-{
-  int rc = NPE_SUCCESS;
-  xmlChar  * new_nid;
-  xmlNodePtr message;
-
-  if (!xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"vers"),NETPERF_VERSION) &&
-      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"updt"),NETPERF_UPDATE)  &&
-      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"fix"), NETPERF_FIX))     {
-    /* versions match */
-    netperf->state      =  NSRV_VERS;
-    netperf->state_req  =  NSRV_WORK;
-    rc = send_version_message(netperf,my_nid);
-  } else {
-    /* versions don't match */
-    if (debug) {
-      fprintf(where,"ns_version_chk: version check failed\n");
-      fflush(where);
-    }
-    rc = NPE_BAD_VERSION;
-  }
-  return(rc);
-}
-
 
 /*
    generate a version message and send it out the control
@@ -263,7 +232,7 @@ ns_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *netperf)
    sure does lead to some rather cumbersome coding... raj 2003-02-27
 */
 int
-send_version_message(server_t *server, xmlChar *fromnid)
+send_version_message(server_t *server, const xmlChar *fromnid)
 {
   int rc = NPE_SUCCESS;
   xmlNodePtr message;
@@ -309,6 +278,36 @@ send_version_message(server_t *server, xmlChar *fromnid)
       fprintf(where,"send_version_message: error status %d\n",rc);
       fflush(where);
     }
+  }
+  return(rc);
+}
+
+
+/*
+   netserver verify the version message from a netperf
+   Valid responses from a netserver in an error message if version
+   does not match or a version check response if it matches.
+*/
+
+int
+ns_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *netperf)
+{
+  int rc = NPE_SUCCESS;
+
+  if (!xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"vers"),NETPERF_VERSION) &&
+      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"updt"),NETPERF_UPDATE)  &&
+      !xmlStrcmp(xmlGetProp(msg,(const xmlChar *)"fix"), NETPERF_FIX))     {
+    /* versions match */
+    netperf->state      =  NSRV_VERS;
+    netperf->state_req  =  NSRV_WORK;
+    rc = send_version_message(netperf,my_nid);
+  } else {
+    /* versions don't match */
+    if (debug) {
+      fprintf(where,"ns_version_chk: version check failed\n");
+      fflush(where);
+    }
+    rc = NPE_BAD_VERSION;
   }
   return(rc);
 }
@@ -405,7 +404,6 @@ clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
   test_t      *test;
-  xmlNodePtr  stats;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
@@ -437,7 +435,6 @@ clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
   test_t      *test;
-  xmlNodePtr  stats;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
@@ -842,9 +839,6 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int        rc = NPE_SUCCESS;
   test_t    *new_test;
   xmlNodePtr test_node;
-  xmlNodePtr reply;
-  xmlNodePtr new_node;
-  xmlChar   *test_name;
   xmlChar   *testid;
   xmlChar   *loc_type;
   xmlChar   *loc_value;

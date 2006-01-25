@@ -75,9 +75,19 @@ delete this exception statement from your version.
 #endif
 #endif
 
+#ifdef HAVE_POLL_H
 #include <poll.h>
+#endif
+
 #include <sys/resource.h>
+
+#ifdef HAVE_PTHREAD_H
 #include <pthread.h>
+#endif
+
+#ifdef HAVE_DLFCN_H
+#include <dlfcn.h>
+#endif
 
 #if HAVE_GLIB_H
 #include <glib.h>
@@ -347,9 +357,6 @@ report_servers_test_status(server_t *server)
   int          ret;
   test_hash_t *h;
   test_t      *test;
-  char        *state;
-  char        *req_st;
-  double       a=-1.0,b=-1.0,c=-1.0,d=-1.0;
   int          i;
 
   fprintf(where,"\n\n%4s %4s %15s %4s %4s %4s %8s %8s %8s %8s\n",
@@ -714,7 +721,7 @@ get_report_function(xmlNodePtr cmd)
 }
 
 int
-get_test_function(test_t *test, xmlChar *func)
+get_test_function(test_t *test, const xmlChar *func)
 {
   int tmp = debug;
   void    *lib_handle = test->library_handle;
@@ -1274,7 +1281,6 @@ int32_t
 recv_control_message(int control_sock, xmlDocPtr *message)
 {
   int loc_debug = 0;
-  int tmp;
   int32_t bytes_recvd = 0,
           bytes_left,
           counter;
@@ -1285,7 +1291,7 @@ recv_control_message(int control_sock, xmlDocPtr *message)
 
   struct pollfd fds;
 
-  struct timeval timeout;
+  int timeout = 15000;
 
 
   /* one of these days, we probably aught to make sure that what
@@ -1311,7 +1317,7 @@ recv_control_message(int control_sock, xmlDocPtr *message)
     /* poll had better return one, or there was either a problem or
        a timeout... */
 
-    if ((counter = poll(&fds, 1, 15000)) != 1) {
+    if ((counter = poll(&fds, 1, timeout)) != 1) {
       if (debug) {
         fprintf(where,
                 "recv_control_message: poll error or timeout. errno %d counter %d\n",
@@ -1465,7 +1471,7 @@ int
 send_control_message(const int control_sock,
                      xmlNodePtr body,
                      xmlChar *nid,
-                     xmlChar *fromnid)
+                     const xmlChar *fromnid)
 {
   int  rc = NPE_SUCCESS;
 

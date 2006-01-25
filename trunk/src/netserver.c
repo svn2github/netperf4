@@ -79,6 +79,7 @@ delete this exception statement from your version.
 
 #include "netperf.h"
 #include "netlib.h"
+#include "netmsg.h"
 
 extern struct msgs NS_Msgs;
 
@@ -750,7 +751,6 @@ setup_listen_endpoint(char service[]) {
   int               namelen      = sizeof(name);
   netperf_socklen_t peerlen      = namelen;
   int               sock;
-  int               rc;
   int               listenfd     = 0;
   int               loop         = 1;
 
@@ -855,16 +855,12 @@ netserver_init()
 {
   int   i;
   int   rc;
-  int   sock;
 
   struct sockaddr  name;
-  struct sockaddr *peeraddr     = &name;
   int              namelen      = sizeof(name);
-  int              peerlen      = namelen;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
-  char *service = NULL;
 
   for (i = 0; i < NETPERF_HASH_BUCKETS; i++) {
     netperf_hash[i].server = NULL;
@@ -907,7 +903,7 @@ netserver_init()
 int
 main (int argc, char **argv)
 {
-  int rc;
+
   int sock;
   struct sockaddr name;
   netperf_socklen_t namelen = sizeof(name);

@@ -1,5 +1,7 @@
 /*
 
+Copyright (c) 2005,2006 Hewlett-Packard Company 
+
 $Id$
 
 This file is part of netperf4.
@@ -31,11 +33,36 @@ delete this exception statement from your version.
 
 */
 
-#ifdef NOTDEF
-#include <netdb.h>
+#ifndef _NETLIB_H
+#define _NETLIB_H
 
-#include <poll.h>
+#ifdef HAVE_CONFIG_H
+#include "config.h"
 #endif
+
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIME
+#include <time.h>
+#endif
+#endif
+
+#ifdef HAVE_SYS_SOCKET_H
+#include <sys/socket.h>
+#endif
+
+#ifdef HAVE_NETDB_H
+#include <netdb.h>
+#endif
+
+#ifdef HAVE_PTHREAD_H
+#include <pthread.h>
+#endif
+
+#include <libxml/xmlmemory.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+
 
 extern  void delete_test(const xmlChar *id);
 extern  test_t * find_test_in_hash(const xmlChar *id);
@@ -47,57 +74,32 @@ extern  int set_test_locality(test_t  *test,
                               xmlChar *loc_type,
                               xmlChar *loc_value);
 
-/* do we REALLY want this stuff? */
-#ifdef NO_DLOPEN
-#include <dl.h>
-
-/* dlopen flags */
-#define RTLD_NOW        0x00000001  /* bind immediately */
-#define RTLD_LAZY       0x00000002  /* bind deferred */
-#define RTLD_GLOBAL     0x00000004  /* symbols are globally visible */
-#define RTLD_LOCAL      0x00000008  /* symbols only visible to this load */
-
-static void* dlopen(char* filename, unsigned int flags)
-{
-  shl_t handle;
-  handle = shl_load( filename, BIND_IMMEDIATE | BIND_VERBOSE , 0L );
-  return((void *)handle);
-}
-
-static void* dlsym(void* handle, const char* name)
-{
-  int rc;
-  void *value = NULL;
-  shl_t shl_handle = handle;
-  rc = shl_findsym( &shl_handle, name, TYPE_PROCEDURE, &value );
-  return(value);
-}
-
-static char* dlerror(void)
-{
-  switch (errno) {
-    case ENOEXEC:
-      return("The specified file is not a shared library, or a format error was detected.");
-    case ENOSYM:
-      return("Some symbol required by the shared library could not be found.");
-    case EINVAL:
-      return("The specified handle or index is not valid or an attempt was made to load a library at an invalid address.");
-    case ENOMEM:
-      return("There is insufficient room in the address space to load the library.");
-    case ENOENT:
-      return("The specified library does not exist.");
-    case EACCES:
-      return("Read or execute permission is denied for the specified library.");
-    case 0:
-      return("Symbol not found.");
-    default:
-      return("Unknown error");
-  }
-}
-
+#ifdef HAVE_GETHRTIME
+extern void netperf_timestamp(hrtime_t *timestamp);
+extern int  delta_micro(hrtime_t *begin, hrtime_t *end);
+extern int  delta_milli(hrtime_t *begin, hrtime_t *end);
 #else
-#include <dlfcn.h>
+extern void netperf_timestamp(struct timeval *timestamp);
+extern int  delta_micro(struct timeval *begin,struct timeval *end);
+extern int  delta_milli(struct timeval *begin,struct timeval *end);
 #endif
+
+extern int strtofam(xmlChar *familystr);
+extern void dump_addrinfo(FILE *dumploc, struct addrinfo *info,
+			  xmlChar *host, xmlChar *port, int family);
+extern int establish_control(xmlChar *hostname,  xmlChar *port, int remfam,
+			     xmlChar *localhost, xmlChar *localport, int locfam);
+extern int get_test_function(test_t *test, const xmlChar *func);
+extern int add_test_to_hash(test_t *new_test);
+extern int send_control_message(const int control_sock, xmlNodePtr body,
+				xmlChar *nid, const xmlChar *fromnid);
+extern int32_t recv_control_message(int control_sock, xmlDocPtr *message);
+extern void report_server_error(server_t *server);
+extern int launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data);
+extern int set_thread_locality(test_t *test, char *loc_type, char *loc_value);
+extern void break_args_explicit(char *s, char *arg1, char *arg2);
+extern int parse_address_family(char family_string[]);
+extern int establish_listen(char *hostname, char *service, int af, socklen_t *addrlenp);
 
 /* state machine data structure for process message */
 
@@ -112,4 +114,4 @@ struct msgs {
 void netlib_init();
 
 void display_test_hash();
-
+#endif

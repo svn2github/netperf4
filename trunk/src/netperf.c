@@ -61,6 +61,7 @@ delete this exception statement from your version.
 
 #include "netperf.h"
 #include "netlib.h"
+#include "netmsg.h"
 
 extern struct msgs NP_Msgs;
 
@@ -719,7 +720,7 @@ wait_for_version_response(server_t *server)
     if (poll(&fds,1,5000) > 0) {
       if (debug) {
         fprintf(where,"wait_for_version_response ");
-        fprintf(where,"calling recv_control_messaage\n");
+        fprintf(where,"calling recv_control_message\n");
         fflush(where);
       }
       pthread_rwlock_rdlock(&server->rwlock);
@@ -870,13 +871,11 @@ initialize_test(void *data)
 {
   test_t     *test            = data;
   xmlChar    *id;
-  xmlDocPtr   doc;
   xmlNodePtr  dep_data        = NULL;
   int         rc              = NPE_SUCCESS;
   xmlNodePtr  cur             = NULL;
   xmlNodePtr  msg             = NULL;
   server_t   *server;
-  xmlNodePtr  testnode        = test->node;
   
   if (debug) {
     fprintf(where,"entering initialize_test\n");
@@ -1315,11 +1314,8 @@ static int
 report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
 {
   int            rc   = NPE_SUCCESS;
-  xmlDocPtr      doc;
   xmlNodePtr     commands;
   xmlNodePtr     cmd;
-  xmlNsPtr       ns;
-  char          *myfile;
   char          *output_file;
   char          *report_flags;
   xmlChar       *set_name;
@@ -1331,7 +1327,6 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
   int            max_count;
   int            sample_count = 0;
   GenReport      gen_report   = NULL;
-  void          *data = NULL;
   
   commands      = my_cmd->xmlChildrenNode;
 
@@ -1893,7 +1888,6 @@ process_commands_and_events()
   xmlDocPtr   doc;
   xmlNodePtr  commands;
   xmlNodePtr  cmd;
-  xmlNsPtr    ns;
 
   if (debug) {
     fprintf(where,"process_commands_and_events: calling parse_xml_file\n");
