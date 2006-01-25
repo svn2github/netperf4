@@ -39,8 +39,13 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#ifdef HAVE_STDIO_H
 #include <stdio.h>
+#endif
+
+#ifdef HAVE_SIGNAL_H
 #include <signal.h>
+#endif
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -58,13 +63,17 @@ delete this exception statement from your version.
 #include <unistd.h>
 #endif
 
+#ifdef HAVE_ERRNO_H
 #include <errno.h>
+#endif
 
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
 #endif
 
+#ifdef HAVE_POLL_H
 #include <poll.h>
+#endif
 
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
@@ -855,9 +864,6 @@ netserver_init()
 {
   int   i;
   int   rc;
-
-  struct sockaddr  name;
-  int              namelen      = sizeof(name);
 
   NETPERF_DEBUG_ENTRY(debug,where);
 

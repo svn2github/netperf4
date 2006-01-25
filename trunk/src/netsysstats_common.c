@@ -440,7 +440,7 @@ void
 sys_stats(test_t *test)
 {
   
-  int i,n,err;
+  int err;
   int num_cpus;
  
   netsysstat_data_t  *tsd;

@@ -20996,7 +20996,23 @@ fi
 
 
 
-for ac_header in arpa/inet.h fcntl.h limits.h malloc.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h unistd.h math.h arpa/nameser.h resolv.h poll.h pthread.h sched.h dlfcn.h sys/resource.h
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+for ac_header in arpa/inet.h arpa/nameser.h arpa/nameser_compat.h dlfcn.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pthread.h pwd.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h
 do
 as_ac_Header=`echo "ac_cv_header_$ac_header" | $as_tr_sh`
 if eval "test \"\${$as_ac_Header+set}\" = set"; then
@@ -23398,11 +23414,7 @@ _ACEOF
 
 
 
-
-
-
-
-for ac_func in alarm bzero gethostbyname gethrtime gettimeofday inet_ntoa memset memcpy munmap select socket sqrt strcasecmp strchr strstr strtoul uname
+for ac_func in gethostbyname gethrtime gettimeofday inet_ntoa memset memcpy socket sqrt strcasecmp strchr strstr strtoul uname
 do
 as_ac_var=`echo "ac_cv_func_$ac_func" | $as_tr_sh`
 echo "$as_me:$LINENO: checking for $ac_func" >&5

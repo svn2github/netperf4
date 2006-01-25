@@ -1,10 +1,10 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
-/* Define to 1 if you have the `alarm' function. */
-#undef HAVE_ALARM
-
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
+
+/* Define to 1 if you have the <arpa/nameser_compat.h> header file. */
+#undef HAVE_ARPA_NAMESER_COMPAT_H
 
 /* Define to 1 if you have the <arpa/nameser.h> header file. */
 #undef HAVE_ARPA_NAMESER_H
@@ -12,14 +12,17 @@
 /* Define to 1 if you have the `bind_to_cpu_id' function. */
 #undef HAVE_BIND_TO_CPU_ID
 
-/* Define to 1 if you have the `bzero' function. */
-#undef HAVE_BZERO
-
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 
+/* Define to 1 if you have the <errno.h> header file. */
+#undef HAVE_ERRNO_H
+
 /* Define to 1 if you have the <fcntl.h> header file. */
 #undef HAVE_FCNTL_H
+
+/* Define to 1 if you have the <float.h> header file. */
+#undef HAVE_FLOAT_H
 
 /* Define to 1 if you have the `fork' function. */
 #undef HAVE_FORK
@@ -117,9 +120,6 @@
 /* Define to 1 if you have the `mpctl' function. */
 #undef HAVE_MPCTL
 
-/* Define to 1 if you have the `munmap' function. */
-#undef HAVE_MUNMAP
-
 /* Define to 1 if you have the <netdb.h> header file. */
 #undef HAVE_NETDB_H
 
@@ -128,6 +128,9 @@
 
 /* Define to 1 if you have the <netinet/sctp.h> header file. */
 #undef HAVE_NETINET_SCTP_H
+
+/* Define to 1 if you have the <netinet/tcp.h> header file. */
+#undef HAVE_NETINET_TCP_H
 
 /* Define to 1 if you have the <poll.h> header file. */
 #undef HAVE_POLL_H
@@ -138,6 +141,9 @@
 /* Define to 1 if you have the <pthread.h> header file. */
 #undef HAVE_PTHREAD_H
 
+/* Define to 1 if you have the <pwd.h> header file. */
+#undef HAVE_PWD_H
+
 /* Define to 1 if you have the <resolv.h> header file. */
 #undef HAVE_RESOLV_H
 
@@ -147,11 +153,11 @@
 /* Define to 1 if you have the `sched_setaffinity' function. */
 #undef HAVE_SCHED_SETAFFINITY
 
-/* Define to 1 if you have the `select' function. */
-#undef HAVE_SELECT
-
 /* Define to 1 if you have the `sendfile' function. */
 #undef HAVE_SENDFILE
+
+/* Define to 1 if you have the <signal.h> header file. */
+#undef HAVE_SIGNAL_H
 
 /* Define to 1 if you have the `socket' function. */
 #undef HAVE_SOCKET
@@ -164,6 +170,9 @@
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
+
+/* Define to 1 if you have the <stdio.h> header file. */
+#undef HAVE_STDIO_H
 
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
@@ -189,11 +198,17 @@
 /* Define to 1 if <netinet/in.h> defines `struct sockaddr_storage' */
 #undef HAVE_STRUCT_SOCKADDR_STORAGE
 
+/* Define to 1 if you have the <sys/dk.h> header file. */
+#undef HAVE_SYS_DK_H
+
 /* Define to 1 if you have the <sys/ioctl.h> header file. */
 #undef HAVE_SYS_IOCTL_H
 
 /* Define to 1 if you have the <sys/param.h> header file. */
 #undef HAVE_SYS_PARAM_H
+
+/* Define to 1 if you have the <sys/pstat.h> header file. */
+#undef HAVE_SYS_PSTAT_H
 
 /* Define to 1 if you have the <sys/resource.h> header file. */
 #undef HAVE_SYS_RESOURCE_H
@@ -213,6 +228,9 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
 
+/* Define to 1 if you have the <sys/uio.h> header file. */
+#undef HAVE_SYS_UIO_H
+
 /* Define to 1 if you have <sys/wait.h> that is POSIX.1 compatible. */
 #undef HAVE_SYS_WAIT_H
 
@@ -221,6 +239,9 @@
 
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
+
+/* Define to 1 if you have the <values.h> header file. */
+#undef HAVE_VALUES_H
 
 /* Define to 1 if you have the `vfork' function. */
 #undef HAVE_VFORK

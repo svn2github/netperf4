@@ -40,9 +40,9 @@ delete this exception statement from your version.
 #include <sys/types.h>
 #endif
 
-/* #ifdef HAVE_SYS_UIO_H */
+#ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
-/* #endif */
+#endif
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -83,7 +83,9 @@ delete this exception statement from your version.
 #include <poll.h>
 #endif
 
+#ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
+#endif
 
 #ifdef HAVE_PTHREAD_H
 #include <pthread.h>
@@ -97,8 +99,9 @@ delete this exception statement from your version.
 #include <glib.h>
 #endif 
 
-/* we need to get the definition of errno */
+#ifdef HAVE_ERRNO_H
 #include <errno.h>
+#endif
 
 #define NETLIB
 

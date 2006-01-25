@@ -49,21 +49,40 @@ char    nettest_id[]="\
 #include "config.h"
 #endif
 
+#ifdef HAVE_STDIO_H
 #include <stdio.h>
+#endif
+
 #ifdef HAVE_VALUES_H
 #include <values.h>
 #endif
+
+#ifdef HAVE_FLOAT_H
 #include <float.h>
+#endif
+
 #ifndef MAXDOUBLE
 #define MAXDOUBLE DBL_MAX
 #endif
 #ifndef MINDOUBLE
 #define MINDOUBLE DBL_MIN
 #endif
+
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
+
+#ifdef HAVE_STRING_H
 #include <string.h>
+#endif
+
+#ifdef HAVE_SIGNAL_H
 #include <signal.h>
+#endif
+
+#ifdef HAVE_ERRNO_H
 #include <errno.h>
+#endif
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -76,10 +95,17 @@ char    nettest_id[]="\
 #include <netinet/in.h>
 #endif
 
+#ifdef HAVE_NETINET_TCP_H
 #include <netinet/tcp.h>
+#endif
 
+#ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
+#endif
+
+#ifdef HAVE_NETDB_H
 #include <netdb.h>
+#endif
 
 #include "netperf.h"
 

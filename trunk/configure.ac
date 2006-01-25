@@ -33,7 +33,7 @@ AC_HAVE_LIBRARY(dl)
 # Checks for header files.
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h malloc.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/socket.h sys/time.h unistd.h math.h arpa/nameser.h resolv.h poll.h pthread.h sched.h dlfcn.h sys/resource.h])
+AC_CHECK_HEADERS([arpa/inet.h arpa/nameser.h arpa/nameser_compat.h dlfcn.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pthread.h pwd.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h ])
 
 # Some platforms require these.  There may be a better way.
 AC_HAVE_LIBRARY(socket)
@@ -69,7 +69,7 @@ AC_TYPE_SIGNAL
 # AC_FUNC_STAT
 # remove pstat_getdynamic (at least for now) since we don't do
 # anything conditional with the check anyway...
-AC_CHECK_FUNCS([alarm bzero gethostbyname gethrtime gettimeofday inet_ntoa memset memcpy munmap select socket sqrt strcasecmp strchr strstr strtoul uname])
+AC_CHECK_FUNCS([gethostbyname gethrtime gettimeofday inet_ntoa memset memcpy socket sqrt strcasecmp strchr strstr strtoul uname])
 
 #AC_CONFIG_SUBDIRS(src/missing)
 
