@@ -75,6 +75,10 @@ delete this exception statement from your version.
 #include <poll.h>
 #endif
 
+#ifdef HAVE_LIMITS_H
+#include <limits.h>
+#endif
+
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
@@ -424,6 +428,7 @@ instantiate_netperf( int sock )
 void
 daemonize()
 {
+  char filename[PATH_MAX];
 
   /* fork off - only the client will return, the parent will exit */
   
@@ -433,13 +438,30 @@ daemonize()
     perror("netserver fork error");
     exit(-1);
   case 0:
-    /* we are the child process. set ourselves up ad the session
+    /* we are the child process. set ourselves up as the session
        leader so we detatch from the parent, and then return to the
        caller so he can do whatever it is he wants to do */
 
     fclose(stdin);
-    fclose(stderr);
 
+    snprintf(filename,
+	     PATH_MAX,
+	     "%s%s%d%s",
+	     NETPERF_DEBUG_LOG_DIR,
+	     NETPERF_DEBUG_LOG_PREFIX,
+	     getpid(),
+	     NETPERF_DEBUG_LOG_SUFFIX);
+    where = freopen(where,filename,"w");
+    if (NULL == where) {
+      fprintf(stderr,
+	      "ERROR netserver could not freopen where to %s errno %d\n",
+	      filename,
+	      errno);
+      fflush(stderr);
+      exit(-1);
+    }
+
+    /* at this point should I close stderr?!? */
     setsid();
 
     /* not all OSes have SIGCLD as SIGCHLD */
@@ -762,6 +784,7 @@ setup_listen_endpoint(char service[]) {
   int               sock;
   int               listenfd     = 0;
   int               loop         = 1;
+  char              filename[PATH_MAX];
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -841,6 +864,25 @@ setup_listen_endpoint(char service[]) {
 	     go ahead and close it */
 	  printf("child closing %d\n",listenfd);
 	  close(listenfd);
+
+	  /* switch-over to our own pid-specific logfile */
+	  snprintf(filename,
+		   PATH_MAX,
+		   "%s%s%d%s",
+		   NETPERF_DEBUG_LOG_DIR,
+		   NETPERF_DEBUG_LOG_PREFIX,
+		   getpid(),
+		   NETPERF_DEBUG_LOG_SUFFIX);
+	  
+	  where = freopen(where,filename,"w");
+	  if (NULL == where) {
+	    fprintf(stderr,
+		    "ERROR netserver could not freopen where to %s errno %d\n",
+		    filename,
+		    errno);
+	    fflush(stderr);
+	    exit(-1);
+	  }
 	  handle_netperf_requests(sock);
 	  /* as the child, if we've no more requests to process - eg
 	     the connection has closed etc, then we might as well just
@@ -916,7 +958,7 @@ main (int argc, char **argv)
 
   program_name = argv[0];
 
-  where = stdout;
+  where = stderr;
 
   decode_command_line(argc, argv);
 

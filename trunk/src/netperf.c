@@ -67,6 +67,10 @@ delete this exception statement from your version.
 #include <unistd.h>
 #endif
 
+#ifdef HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
+
 #ifndef HAVE_GETOPT_LONG
 #include "missing/getopt.h"
 #else
@@ -1366,14 +1370,6 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
 
   set_name      = xmlGetProp(my_cmd,(const xmlChar *)"test_set");
   report_flags  = (char *)xmlGetProp(my_cmd,(const xmlChar *)"report_flags");
-
-  if (NULL == report_flags) {
-    fprintf(where,
-	    "Error: report_flags NULL in %s\n",
-	    __func__);
-    fflush(where);
-    return(NPE_EMPTY_MSG);
-  }
 
   output_file   = (char *)xmlGetProp(my_cmd,(const xmlChar *)"output_file");
 

@@ -2433,15 +2433,17 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
     rd->result_maximum = DBL_MIN;
     rd->outfd          = outfd;
     rd->sd_denominator = 0.0;
-    if (!strcmp(report_flags,"PRINT_RUN")) {
-      rd->print_run  = 1;
-    }
-    if (!strcmp(report_flags,"PRINT_TESTS")) {
-      rd->print_test = 1;
-    }
-    if (!strcmp(report_flags,"PRINT_ALL")) {
-      rd->print_run  = 1;
-      rd->print_test = 1;
+    if (NULL != report_flags) {
+      if (!strcmp(report_flags,"PRINT_RUN")) {
+	rd->print_run  = 1;
+      }
+      if (!strcmp(report_flags,"PRINT_TESTS")) {
+	rd->print_test = 1;
+      }
+      if (!strcmp(report_flags,"PRINT_ALL")) {
+	rd->print_run  = 1;
+	rd->print_test = 1;
+      }
     }
     if (test_set->debug) {
       rd->print_run  = 1;

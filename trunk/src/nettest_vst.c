@@ -5,7 +5,7 @@
 
 #ifndef lint
 char    nettest_id[]="\
-@(#)nettest_vst.c (c) Copyright 2005 Hewlett-Packard Co. $Id: nettest_vst.c 2005-12-23 00:43:09Z sgb $";
+@(#)nettest_vst.c (c) Copyright 2005 Hewlett-Packard Co. $Id$";
 #else
 #define DIRTY
 #define WANT_HISTOGRAM
@@ -2370,15 +2370,18 @@ vst_test_results_init(tset_t *test_set,char *report_flags,char *output)
     rd->result_maximum = DBL_MIN;
     rd->outfd          = outfd;
     rd->sd_denominator = 0.0;
-    if (!strcmp(report_flags,"PRINT_RUN")) {
-      rd->print_run  = 1;
-    }
-    if (!strcmp(report_flags,"PRINT_TESTS")) {
-      rd->print_test = 1;
-    }
-    if (!strcmp(report_flags,"PRINT_ALL")) {
-      rd->print_run  = 1;
-      rd->print_test = 1;
+    /* not all strcmp's play well with NULL pointers. bummer */
+    if (NULL != report_flags) {
+      if (!strcmp(report_flags,"PRINT_RUN")) {
+	rd->print_run  = 1;
+      }
+      if (!strcmp(report_flags,"PRINT_TESTS")) {
+	rd->print_test = 1;
+      }
+      if (!strcmp(report_flags,"PRINT_ALL")) {
+	rd->print_run  = 1;
+	rd->print_test = 1;
+      }
     }
     if (test_set->debug) {
       rd->print_run  = 1;
