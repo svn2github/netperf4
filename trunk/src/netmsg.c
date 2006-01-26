@@ -939,7 +939,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
       loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
       if ((loc_type != NULL) && (loc_value != NULL)) {
-        rc = set_thread_locality(new_test, loc_type, loc_value);
+        rc = set_thread_locality(new_test, (char *)loc_type, (char *)loc_value);
       }
     }
     /* wait for test to initialize */

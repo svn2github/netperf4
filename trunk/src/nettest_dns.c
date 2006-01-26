@@ -65,20 +65,9 @@ char    nettest_dns_id[]="\
 #include <values.h>
 #endif
 
-/* perhaps this needs ifdef coverage, we use it on darwin to get
-   DLB_MAX et al */
-
 #ifdef HAVE_FLOAT_H
 #include <float.h>
 #endif
-
-#ifndef MAXDOUBLE
-#define MAXDOUBLE DBL_MAX
-#endif
-#ifndef MINDOUBLE
-#define MINDOUBLE DBL_MIN
-#endif
-
 
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
@@ -1869,8 +1858,8 @@ dns_test_results_init(tset_t *test_set,char *report_flags,char *output)
     rd->utilization    = &(rd->trans_results[max_count]);
     rd->servdemand     = &(rd->utilization[max_count]);
     rd->run_time       = &(rd->servdemand[max_count]);
-    rd->result_minimum = MAXDOUBLE;
-    rd->result_maximum = MINDOUBLE;
+    rd->result_minimum = DBL_MAX;
+    rd->result_maximum = DBL_MIN;
     rd->outfd          = outfd;
     rd->sd_denominator = 0.0;
     if (!strcmp(report_flags,"PRINT_RUN")) {

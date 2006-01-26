@@ -99,7 +99,8 @@ extern int launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *d
 extern int set_thread_locality(test_t *test, char *loc_type, char *loc_value);
 extern void break_args_explicit(char *s, char *arg1, char *arg2);
 extern int parse_address_family(char family_string[]);
-extern int establish_listen(char *hostname, char *service, int af, socklen_t *addrlenp);
+extern int establish_listen(char *hostname, char *service, 
+			    int af, netperf_socklen_t *addrlenp);
 #ifndef HAVE_GET_EXPIRATION_TIME
 /* we need a proto since we are providing the fuction ourselves */
 extern int get_expiration_time(struct timespec *delta,

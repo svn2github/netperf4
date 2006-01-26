@@ -960,7 +960,7 @@ test thread can connect or communicate with it.
 */
 
 int
-establish_listen(char *hostname, char *service, int af, socklen_t *addrlenp)
+establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrlenp)
 {
   int sockfd;
   int error;

@@ -48,7 +48,9 @@ delete this exception statement from your version.
 #include <string.h>
 #endif
 
+#ifdef HAVE_ERRNO_H
 #include <errno.h>
+#endif
 
 #include "netperf.h"
 #include "netlib.h"
