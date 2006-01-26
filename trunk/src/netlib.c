@@ -413,6 +413,167 @@ display_test_hash()
   }
 }
 
+char *
+npe_to_str(int npe_error) {
+  switch (npe_error) {
+  case NPE_SUCCESS:
+    return("NPE_SUCCESS");
+    break;
+  case  NPE_COMMANDED_TO_EXIT_NETPERF:
+    return("NPE_COMMANDED_TO_EXIT_NETPERF");
+    break;
+  case NPE_TEST_SET_NOT_FOUND:
+    return("NPE_TEST_SET_NOT_FOUND");
+    break;
+  case NPE_BAD_TEST_RANGE:
+    return("NPE_BAD_TEST_RANGE");
+    break;
+  case NPE_BAD_TEST_ID:
+    return(" NPE_BAD_TEST_ID");
+    break;
+  case NPE_SYS_STATS_DROPPED:
+    return("NPE_SYS_STATS_DROPPED");
+    break;
+  case NPE_TEST_STATS_DROPPED:
+    return("NPE_TEST_STATS_DROPPED");
+    break;
+  case NPE_TEST_NOT_FOUND:
+    return("NPE_TEST_NOT_FOUND");
+    break;
+  case NPE_TEST_FOUND_IN_ERROR_STATE:
+    return("NPE_TEST_FOUND_IN_ERROR_STATE");
+    break;
+  case NPE_TEST_INITIALIZED_FAILED:
+    return("NPE_TEST_INITIALIZED_FAILED");
+    break;
+  case NPE_TEST_INIT_FAILED:
+    return("NPE_TEST_INIT_FAILED");
+    break;
+  case NPE_INIT_TEST_XMLCOPYNODE_FAILED:
+    return("NPE_INIT_TEST_XMLCOPYNODE_FAILED");
+    break;
+  case NPE_INIT_TEST_XMLNEWDOC_FAILED:
+    return(" NPE_INIT_TEST_XMLNEWDOC_FAILED");
+    break;
+  case NPE_EMPTY_MSG:
+    return("NPE_EMPTY_MSG");
+    break;
+  case NPE_UNEXPECTED_MSG:
+    return("NPE_UNEXPECTED_MSG");
+    break;
+  case NPE_ALREADY_CONNECTED:
+    return("NPE_ALREADY_CONNECTED");
+    break;
+  case NPE_BAD_VERSION:
+    return("NPE_BAD_VERSION");
+    break;
+  case NPE_XMLCOPYNODE_FAILED:
+    return("NPE_XMLCOPYNODE_FAILED");
+    break;
+  case NPE_PTHREAD_MUTEX_INIT_FAILED:
+    return("NPE_PTHREAD_MUTEX_INIT_FAILED");
+    break;
+  case NPE_PTHREAD_RWLOCK_INIT_FAILED:
+    return("NPE_PTHREAD_RWLOCK_INIT_FAILED");
+    break;
+  case NPE_PTHREAD_COND_WAIT_FAILED:
+    return("NPE_PTHREAD_COND_WAIT_FAILED");
+    break;
+  case NPE_PTHREAD_DETACH_FAILED:
+    return("NPE_PTHREAD_DETACH_FAILED");
+    break;
+  case NPE_PTHREAD_CREATE_FAILED:
+    return("NPE_PTHREAD_CREATE_FAILED");
+    break;
+  case NPE_DEPENDENCY_NOT_PRESENT:
+    return("NPE_DEPENDENCY_NOT_PRESENT");
+    break;
+  case NPE_DEPENDENCY_ERROR:
+    return("NPE_DEPENDENCY_ERROR");
+    break;
+  case NPE_UNKNOWN_FUNCTION_TYPE:
+    return("NPE_UNKNOWN_FUNCTION_TYPE");
+    break;
+  case NPE_FUNC_NAME_TOO_LONG:
+    return("NPE_FUNC_NAME_TOO_LONG");
+    break;
+  case NPE_FUNC_NOT_FOUND:
+    return("NPE_FUNC_NOT_FOUND");
+    break;
+  case NPE_LIBRARY_NOT_LOADED:
+    return("NPE_LIBRARY_NOT_LOADED");
+    break;
+  case NPE_ADD_TO_EVENT_LIST_FAILED:
+    return("NPE_ADD_TO_EVENT_LIST_FAILED");
+    break;
+  case NPE_CONNECT_FAILED:
+    return("NPE_CONNECT_FAILED");
+    break;
+  case NPE_MALLOC_FAILED6:
+    return("NPE_MALLOC_FAILED6");
+    break;
+  case NPE_MALLOC_FAILED5:
+    return("NPE_MALLOC_FAILED5");
+    break;
+  case NPE_MALLOC_FAILED4:
+    return("NPE_MALLOC_FAILED4");
+    break;
+  case NPE_MALLOC_FAILED3:
+    return("NPE_MALLOC_FAILED3");
+    break;
+  case NPE_MALLOC_FAILED2:
+    return("NPE_MALLOC_FAILED2");
+    break;
+  case NPE_MALLOC_FAILED1:
+    return("NPE_MALLOC_FAILED1");
+    break;
+  case NPE_REMOTE_CLOSE:
+    return("NPE_REMOTE_CLOSE");
+    break;
+  case NPE_SEND_VERSION_XMLNEWNODE_FAILED:
+    return("NPE_SEND_VERSION_XMLNEWNODE_FAILED");
+    break;
+  case NPE_SEND_VERSION_XMLSETPROP_FAILED:
+    return("NPE_SEND_VERSION_XMLSETPROP_FAILED");
+    break;
+  case NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED:
+    return("NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED");
+    break;
+  case NPE_SEND_CTL_MSG_XMLCOPYNODE_FAILED:
+    return("NPE_SEND_CTL_MSG_XMLCOPYNODE_FAILED");
+    break;
+  case NPE_SEND_CTL_MSG_XMLNEWNODE_FAILED:
+    return("NPE_SEND_CTL_MSG_XMLNEWNODE_FAILED");
+    break;
+  case NPE_SEND_CTL_MSG_XMLNEWDTD_FAILED:
+    return("NPE_SEND_CTL_MSG_XMLNEWDTD_FAILED");
+    break;
+  case NPE_SEND_CTL_MSG_XMLNEWDOC_FAILED:
+    return("NPE_SEND_CTL_MSG_XMLNEWDOC_FAILED");
+    break;
+  case NPE_SEND_CTL_MSG_FAILURE:
+    return("NPE_SEND_CTL_MSG_FAILURE");
+    break;
+  case NPE_SHASH_ADD_FAILED:
+    return("NPE_SHASH_ADD_FAILED");
+    break;
+  case NPE_XMLPARSEMEMORY_ERROR:
+    return("NPE_XMLPARSEMEMORY_ERROR");
+    break;
+  case NPE_NEG_MSG_BYTES:
+    return("NPE_NEG_MSG_BYTES");
+    break;
+  case NPE_TIMEOUT:
+    return("NPE_TIMEOUT");
+    break;
+  case NPE_SET_THREAD_LOCALITY_FAILED:
+    return("NPE_SET_THREAD_LOCALITY_FAILED");
+    break;
+  default:
+    return("Unmapped Error");
+  }
+}
+
 int
 add_test_to_hash(test_t *new_test)
 {

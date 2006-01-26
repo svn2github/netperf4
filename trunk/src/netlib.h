@@ -70,6 +70,7 @@ extern  void report_test_status(test_t *test);
 extern  void report_servers_test_status(server_t *server);
 extern  GenReport get_report_function(xmlNodePtr cmd);
 extern  const char * netperf_error_name(int rc);
+extern  char * npe_to_str(int npe_error);
 extern  int set_test_locality(test_t  *test,
                               xmlChar *loc_type,
                               xmlChar *loc_value);

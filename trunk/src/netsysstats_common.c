@@ -32,7 +32,9 @@ delete this exception statement from your version.
 
 */
 
+#ifdef HAVE_CONFIG_H
 #include "config.h"
+#endif
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
@@ -59,7 +61,9 @@ delete this exception statement from your version.
 #endif
 #endif
 
+#ifdef HAVE_ERRNO_H
 #include <errno.h>
+#endif
 
 #include "netperf.h"
 

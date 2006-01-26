@@ -1139,6 +1139,12 @@ wait_for_tests_to_initialize()
       while (test->state != TEST_IDLE) {
         if (test->state == TEST_ERROR) {
           rc = NPE_TEST_FOUND_IN_ERROR_STATE;
+	  fprintf(where,
+		  "%s found test %s %s in the error state\n",
+		  __func__,
+		  test->id,
+		  test->test_name);
+	  fflush(where);
           break;
         }
         /* test is not yet initialized wait for it */
@@ -1168,7 +1174,10 @@ wait_for_tests_to_initialize()
     }
   }
   if (debug) {
-    fprintf(where,"exiting wait_for_tests_to_initialize rc = %d\n",rc);
+    fprintf(where,
+	    "exiting wait_for_tests_to_initialize rc = %d %s\n",
+	    rc,
+	    npe_to_str(rc));
     fflush(where);
   }
 
@@ -1360,7 +1369,8 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
 
   if (NULL == report_flags) {
     fprintf(where,
-	    "Error: report_flags NULL in report_stats_command\n");
+	    "Error: report_flags NULL in %s\n",
+	    __func__);
     fflush(where);
     return(NPE_EMPTY_MSG);
   }

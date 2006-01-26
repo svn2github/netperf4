@@ -43,8 +43,10 @@ int
 sys_cpu_util_init(test_t *test) 
 {
 
-  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+  tsd->num_cpus = 1;
   NETPERF_DEBUG_EXIT(test->debug, test->where);
   return NPE_SUCCESS;
 }
