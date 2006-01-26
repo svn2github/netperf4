@@ -451,7 +451,7 @@ daemonize()
 	     NETPERF_DEBUG_LOG_PREFIX,
 	     getpid(),
 	     NETPERF_DEBUG_LOG_SUFFIX);
-    where = freopen(where,filename,"w");
+    where = freopen(filename,"w",where);
     if (NULL == where) {
       fprintf(stderr,
 	      "ERROR netserver could not freopen where to %s errno %d\n",
@@ -874,7 +874,7 @@ setup_listen_endpoint(char service[]) {
 		   getpid(),
 		   NETPERF_DEBUG_LOG_SUFFIX);
 	  
-	  where = freopen(where,filename,"w");
+	  where = freopen(filename,"w",where);
 	  if (NULL == where) {
 	    fprintf(stderr,
 		    "ERROR netserver could not freopen where to %s errno %d\n",
