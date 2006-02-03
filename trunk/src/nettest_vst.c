@@ -2331,6 +2331,7 @@ vst_test_results_init(tset_t *test_set,char *report_flags,char *output)
   vst_results_t *rd;
   FILE          *outfd;
   int            max_count;
+  size_t         malloc_size;
 
   rd        = test_set->report_data;
   max_count = test_set->confidence.max_count;
@@ -2354,10 +2355,14 @@ vst_test_results_init(tset_t *test_set,char *report_flags,char *output)
     outfd = stdout;
   }
   /* allocate and initialize report data */
-  rd = malloc(sizeof(vst_results_t) + 7 * max_count * sizeof(double));
+  malloc_size = sizeof(vst_results_t) + 7 * max_count * sizeof(double);
+  rd = malloc(malloc_size);
   if (rd) {
-    memset(rd, 0,
-           sizeof(sizeof(vst_results_t) + 7 * max_count * sizeof(double)));
+
+    /* original code took sizeof a math equation so memset only zeroed the */
+    /* first sizeof(size_t) bytes.  This should work better  sgb 20060203  */
+
+    memset(rd, 0, malloc_size);
     rd->max_count      = max_count;
     rd->results        = &(rd->results_start);
     rd->xmit_results   = &(rd->results[max_count]);
@@ -2467,9 +2472,9 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
               xmlGetProp(stats, (const xmlChar *)cntr_name[i]));
     }
   }
-  elapsed_seconds = test_cntr[TST_E_SEC] + test_cntr[TST_E_USEC]/1000000;
-  xmit_rate       = test_cntr[TST_X_BYTES]*8/(elapsed_seconds*1000000);
-  recv_rate       = test_cntr[TST_R_BYTES]*8/(elapsed_seconds*1000000);
+  elapsed_seconds = test_cntr[TST_E_SEC] + test_cntr[TST_E_USEC]/1000000.0;
+  xmit_rate       = test_cntr[TST_X_BYTES]*8/(elapsed_seconds*1000000.0);
+  recv_rate       = test_cntr[TST_R_BYTES]*8/(elapsed_seconds*1000000.0);
   xmit_trans_rate = test_cntr[TST_X_TRANS]/elapsed_seconds;
   recv_trans_rate = test_cntr[TST_R_TRANS]/elapsed_seconds;
   if (test_set->debug) {
@@ -2527,7 +2532,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   /* end of printing vst per test instance results */
 }
 
-static void
+static double
 process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
 {
   int            i;
@@ -2621,6 +2626,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(outfd);
   }
   /* end of printing sys stats instance results */
+  return(local_cpus);
 }
 
 static void
@@ -2634,6 +2640,7 @@ process_stats_for_run(tset_t *test_set)
   int            count; 
   int            index;
   int            num_of_tests;
+  double         num_of_cpus;
  
 
   rd        = test_set->report_data;
@@ -2661,6 +2668,7 @@ process_stats_for_run(tset_t *test_set)
   rd->run_time[index]      =  0.0;
 
   num_of_tests  = 0;
+  num_of_cpus   = 0.0;
   while (set_elt != NULL) {
     int stats_for_test;
     test    = set_elt->test;
@@ -2687,7 +2695,7 @@ process_stats_for_run(tset_t *test_set)
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"sys_stats")) {
         /* process system statistics */
-        process_sys_stats(test_set, stats, test->id);
+        num_of_cpus = process_sys_stats(test_set, stats, test->id);
         stats_for_test++;
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"test_stats")) {
@@ -2719,7 +2727,7 @@ process_stats_for_run(tset_t *test_set)
     }
     set_elt = set_elt->next;
   }
-  
+
   if (rd->result_minimum > rd->results[index]) {
     rd->result_minimum = rd->results[index];
   }
@@ -2727,6 +2735,19 @@ process_stats_for_run(tset_t *test_set)
     rd->result_maximum = rd->results[index];
   }
   rd->run_time[index] = rd->run_time[index] / (double)num_of_tests;
+
+  /* now calculate service demand for this test run. Remember the cpu */
+  /* utilization is in the range 0.0 to 1.0 so we need to multiply by */
+  /* the number of cpus and 1,000,000.0 to get to microseconds of cpu */
+  /* time per unit of work.  The result is in transactions per second */
+  /* or in million bits per second so the sd_denominator is factored  */
+  /* in to convert service demand into usec/trans or usec/Kbytes.     */
+
+  if ((rd->results[index] != 0.0) && (num_of_cpus != 0.0)) {
+    rd->servdemand[index] = rd->utilization[index] * num_of_cpus * 1000000.0 /
+                            (rd->results[index] * rd->sd_denominator);
+  }
+  NETPERF_DEBUG_EXIT(test_set->debug,test_set->where);
 }
 
 static void
@@ -2734,45 +2755,93 @@ update_results_and_confidence(tset_t *test_set)
 {
   vst_results_t *rd;
   double         confidence;
+  double         temp;
+  int            loc_debug = 0;
   
   rd        = test_set->report_data;
 
-    /* calculate confidence and summary result values */
+  NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
+
+  /* calculate confidence and summary result values */
   confidence                    = get_confidence(rd->xmit_results,
                                       &(test_set->confidence),
-                                      &(rd->xmit_measured_mean));
+                                      &(rd->xmit_measured_mean),
+                                      &(rd->xmit_interval));
+  if (test_set->debug || loc_debug) {
+    fprintf(test_set->where, 
+            "\txmit_results conf = %.2f%%\tmean = %10f +/- %8f\n",
+            100.0 * confidence, rd->xmit_measured_mean, rd->xmit_interval);
+    fflush(test_set->where);
+  }
   confidence                    = get_confidence(rd->recv_results,
                                       &(test_set->confidence),
-                                      &(rd->recv_measured_mean));
+                                      &(rd->recv_measured_mean),
+                                      &(rd->recv_interval));
+  if (test_set->debug || loc_debug) {
+    fprintf(test_set->where, 
+            "\trecv_results conf = %.2f%%\tmean = %10f +/- %8f\n",
+            100.0 * confidence, rd->recv_measured_mean, rd->recv_interval);
+    fflush(test_set->where);
+  }
   confidence                    = get_confidence(rd->run_time,
                                       &(test_set->confidence),
-                                      &(rd->ave_time));
+                                      &(rd->ave_time),
+                                      &(temp));
   rd->result_confidence         = get_confidence(rd->results,
                                       &(test_set->confidence),
-                                      &(rd->result_measured_mean));
+                                      &(rd->result_measured_mean),
+                                      &(rd->result_interval));
+  if (test_set->debug || loc_debug) {
+    fprintf(test_set->where, 
+            "\tresults      conf = %.2f%%\tmean = %10f +/- %8f\n",
+            100.0 * rd->result_confidence, 
+            rd->result_measured_mean, rd->result_interval);
+    fflush(test_set->where);
+  }
   rd->cpu_util_confidence       = get_confidence(rd->utilization,
                                       &(test_set->confidence),
-                                      &(rd->cpu_util_measured_mean));
+                                      &(rd->cpu_util_measured_mean),
+                                      &(rd->cpu_util_interval));
+  if (test_set->debug || loc_debug) {
+    fprintf(test_set->where, 
+            "\tcpu_util     conf = %.2f%%\tmean = %10f +/- %8f\n",
+            100.0 * rd->cpu_util_confidence, 
+            rd->cpu_util_measured_mean, rd->cpu_util_interval);
+    fflush(test_set->where);
+  }
   rd->service_demand_confidence = get_confidence(rd->servdemand,
                                       &(test_set->confidence),
-                                      &(rd->service_demand_measured_mean));
-  if (rd->result_confidence > rd->cpu_util_confidence) {
-    if (rd->cpu_util_confidence > rd->service_demand_confidence) {
-      confidence  = rd->service_demand_confidence;
-    }
-    else {
-      confidence  = rd->cpu_util_confidence;
-    }
+                                      &(rd->service_demand_measured_mean),
+                                      &(rd->service_demand_interval));
+  if (test_set->debug || loc_debug) {
+    fprintf(test_set->where, 
+            "\tserv_demand  conf = %.2f%%\tmean = %10f +/- %8f\n",
+            100.0 * rd->service_demand_confidence, 
+            rd->service_demand_measured_mean, rd->service_demand_interval);
+    fflush(test_set->where);
+  }
+
+  if (rd->result_confidence >  rd->cpu_util_confidence) {
+    confidence = rd->result_confidence;
   }
   else {
-    if (rd->result_confidence > rd->service_demand_confidence) {
-      confidence  = rd->service_demand_confidence;
-    }
-    else {
-      confidence  = rd->result_confidence;
-    }
+    confidence = rd->cpu_util_confidence;
   }
-  test_set->confidence.value = confidence;
+  if (rd->service_demand_confidence > confidence) {
+    confidence = rd->service_demand_confidence;
+  }
+
+  if (test_set->confidence.min_count > 1) {
+    test_set->confidence.value = test_set->confidence.interval - confidence;
+  }
+  if (test_set->debug || loc_debug) {
+    fprintf(test_set->where, 
+            "\t%3drun confidence = %.2f%%\tcheck value = %f\n",
+            test_set->confidence.count,
+            100.0 * confidence, test_set->confidence.value);
+    fflush(test_set->where);
+  }
+  NETPERF_DEBUG_EXIT(test_set->debug,test_set->where);
 }
 
 static void
@@ -2842,6 +2911,42 @@ print_run_results(tset_t *test_set)
   fflush(outfd);
 }
 
+
+static void
+print_did_not_meet_confidence(tset_t *test_set)
+{
+  vst_results_t *rd;
+  FILE          *outfd;
+
+  rd    = test_set->report_data;
+  outfd = rd->outfd;
+
+  
+  /* print the confidence failed line */
+  fprintf(outfd,"\n");
+  fprintf(outfd,"!!! WARNING\n");
+  fprintf(outfd,"!!! Desired confidence was not achieved within ");
+  fprintf(outfd,"the specified iterations. (%d)\n",
+          test_set->confidence.max_count);
+  fprintf(outfd,
+          "!!! This implies that there was variability in ");
+  fprintf(outfd,
+          "the test environment that\n");
+  fprintf(outfd,
+          "!!! must be investigated before going further.\n");
+  fprintf(outfd,
+          "!!! Confidence intervals: RESULT     : %6.2f%%\n",
+          100.0 * rd->result_confidence);
+  fprintf(outfd,
+          "!!!                       CPU util   : %6.2f%%\n",
+          100.0 * rd->cpu_util_confidence);
+  fprintf(outfd,
+          "!!!                       ServDemand : %6.2f%%\n", 
+          100.0 * rd->service_demand_confidence);
+  fflush(outfd);
+}
+
+
 static void
 print_results_summary(tset_t *test_set)
 {
@@ -2888,14 +2993,14 @@ print_results_summary(tset_t *test_set)
   fprintf(outfd,"A%-3d ",test_set->confidence.count);             /*  0,5 */
   fprintf(outfd,"%-6s ",test_set->id);                            /*  5,7 */
   fprintf(outfd,"%-6.2f ",rd->ave_time);                          /* 12,7 */
-    fprintf(outfd,"%7.2f ",rd->result_measured_mean);             /* 19,8 */
-    fprintf(outfd,"%7.3f ",rd->result_confidence);                /* 27,8 */
-    fprintf(outfd,"%7.2f ",rd->xmit_measured_mean);               /* 35,8 */
-    fprintf(outfd,"%7.2f ",rd->recv_measured_mean);               /* 43,8 */
+  fprintf(outfd,"%7.2f ",rd->result_measured_mean);               /* 19,8 */
+  fprintf(outfd,"%7.3f ",rd->result_interval);                    /* 27,8 */
+  fprintf(outfd,"%7.2f ",rd->xmit_measured_mean);                 /* 35,8 */
+  fprintf(outfd,"%7.2f ",rd->recv_measured_mean);                 /* 43,8 */
   fprintf(outfd,"%6.4f ",rd->cpu_util_measured_mean);             /* 51,7 */
-  fprintf(outfd,"%6.4f ",rd->cpu_util_confidence);                /* 58,7 */
+  fprintf(outfd,"%6.4f ",rd->cpu_util_interval);                  /* 58,7 */
   fprintf(outfd,"%6.3f ",rd->service_demand_measured_mean);       /* 65,7 */
-  fprintf(outfd,"%6.3f ",rd->service_demand_confidence);          /* 72,7 */
+  fprintf(outfd,"%6.3f ",rd->service_demand_interval);            /* 72,7 */
   fprintf(outfd,"\n");                                            /* 79,1 */
   fflush(outfd);
 }
@@ -2917,6 +3022,7 @@ report_vst_test_results(tset_t *test_set, char *report_flags, char *output)
     
   /* process statistics for this run */
   process_stats_for_run(test_set);
+
   /* calculate confidence and summary result values */
   update_results_and_confidence(test_set);
   
@@ -2927,12 +3033,14 @@ report_vst_test_results(tset_t *test_set, char *report_flags, char *output)
   count        = test_set->confidence.count;
   max_count    = test_set->confidence.max_count;
   min_count    = test_set->confidence.min_count;
-  /* always print summary results at end of last call through loop */
-  if (count == max_count) {
 
-/*  if ((count == max_count) || 
-      ((rd->confidence >= 0) && (count >= min_count))) */
+  /* always print summary results at end of last call through loop */
+  if ((count >= max_count) || 
+      ((test_set->confidence.value >= 0) && (count >= min_count))) {
     print_results_summary(test_set);
+    if (test_set->confidence.value < 0) {
+      print_did_not_meet_confidence(test_set);
+    }
   }
 } /* end of report_vst_test_results */
 

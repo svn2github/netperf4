@@ -1423,7 +1423,11 @@ report_stats_command(xmlNodePtr my_cmd, uint32_t junk)
        of any report_data structures that are required across the multiple
        invocations that occur during the loop.  */
 
+    fflush(where);
     if (min_count > 1) {
+      fprintf(where, 
+              "!!! TEST RUN USING CONFIDENCE  max_count = %d  min_count = %d\n",
+              max_count, min_count);
       /* initialize confidence information */
       desired_level = (char*)(xmlGetProp(my_cmd,(const xmlChar *)"confidence"));
       dsrd_interval = (char*)(xmlGetProp(my_cmd,(const xmlChar *)"interval"));

@@ -123,8 +123,15 @@ set_confidence_level(char *desired_level)
     }
   }
   if (level == 0) {
-    fprintf(where,"Invalid confidence_level of %s", desired_level);
-    fprintf(where," was specified! Using default confidence_level of 99%%\n");
+    if (desired_level == NULL) {
+      fprintf(where,"No confidence_level specified!  ");
+    }
+    else {
+      fprintf(where,
+              "Invalid confidence_level of '%s' was specified.\n",
+              desired_level);
+    }
+    fprintf(where, "Using default confidence_level of 99%%\n");
     fflush(where);
     level = 7;
   }
@@ -135,15 +142,30 @@ set_confidence_level(char *desired_level)
 double
 set_confidence_interval(char *desired_interval)
 {
-  int interval;
+  double interval;
+  double requested;
 
-  interval = atof(desired_interval);
-  if ((interval > 0.5) || (interval <= 0.0)) {
-    fprintf(where,"Using default confidence_interval of 0.05 instead of %s\n",
-            desired_interval);
-    fflush(where);
+  requested = 0.0;
+  if (desired_interval != NULL) {
+    requested = atof(desired_interval);
+  }
+  if ((requested <= 0.0) || (requested > 0.5)) {
     interval = 0.05;
   }
+  else {
+    interval = requested;
+  }
+  if (interval != requested) {
+    fprintf(where,"Using default confidence_interval of %.3f",interval);
+    if (desired_interval != NULL) {
+      fprintf(where," instead of %s", desired_interval);
+    }
+  }
+  else {
+    fprintf(where,"Using specified confidence_interval of %.3f",interval);
+  }
+  fprintf(where,"\n");
+  fflush(where);
   return(interval);
 }
 
@@ -211,53 +233,39 @@ sample_stddev(double *values, int count, double *avg)
   return(sqrt(variance));
 }
 
+
+/* get_confidence calculates the measured mean, and confidence interval  */
+/* for given samples. the calculated measured mean is written to the     */
+/* address contained in avg. the computed confidence interval is written */
+/* to the address in intvl. get_confidence returns the calculated        */
+/* confidence range as a percentage/100 of mean.  sgb  2/2/2006          */
+
 double
-get_confidence(double *values, confidence_t *confidence, double *avg)
+get_confidence(values, conf_globals, avg, intvl)
+  double       *values;
+  confidence_t *conf_globals;
+  double       *avg;
+  double       *intvl;
 {
   double mean;
   double sigma;
   double interval;
-  int    count = confidence->count;
-  double delta = -1.0/0.0;
+  int    count = conf_globals->count;
+  double percent;
 
   /* _                          */
   /* X +/- t[a/2] * (s/sqrt(n)) */
   /*                            */
 
   sigma    = sample_stddev(values, count, &mean);
-  if (confidence->count > 1) {
-    interval = tdist(confidence->level, count-1) * sigma / sqrt(count);
-    delta    = (mean * confidence->interval) - (2.0 * interval);
+  if (count > 1) {
+    interval = tdist(conf_globals->level, count-1) * sigma / sqrt(count);
+    percent  = (2.0 * interval) / mean;
   }
+
   *avg     = mean;
+  *intvl   = interval;
 
-  return(delta);
+  return(percent);
 }
 
- /* display_confidence() is called when we could not achieve the */
- /* desired confidence in the results. it will print the achieved */
- /* confidence to "where" raj 11/94 */
-void
-display_confidence(double confidence_result, double confidence_local_cpu)
-
-{
-  fprintf(where,
-          "!!! WARNING\n");
-  fprintf(where,
-          "!!! Desired confidence was not achieved within ");
-  fprintf(where,
-          "the specified iterations.\n");
-  fprintf(where,
-          "!!! This implies that there was variability in ");
-  fprintf(where,
-          "the test environment that\n");
-  fprintf(where,
-          "!!! must be investigated before going further.\n");
-  fprintf(where,
-          "!!! Confidence intervals: Throughput      : %4.1f%%\n",
-           confidence_result *100.0);
-  fprintf(where,
-          "!!!                       Local CPU util  : %4.1f%%\n",
-           confidence_local_cpu *100.0);
-  /* remote cpu is not supported for netperf4 */
-}

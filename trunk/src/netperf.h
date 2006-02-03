@@ -50,7 +50,7 @@ delete this exception statement from your version.
 #define HIST  void*
 #endif
 
-#ifndef WIN32
+#ifdef WIN32
 #define NETPERF_DEBUG_LOG_DIR "c:\\temp\\"
 #define NETPERF_DEBUG_LOG_PREFIX  "netperf"
 #define NETPERF_DEBUG_LOG_SUFFIX  ".log"

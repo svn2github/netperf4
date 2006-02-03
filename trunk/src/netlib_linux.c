@@ -1,5 +1,5 @@
 static char netlib_specific_id[]="\
-@(#)(c) Copyright 2006, Hewlett-Packard Company, $Id: netlib_hpux.c 21 2006-1-19 01:07:54Z burger $";
+@(#)(c) Copyright 2006, Hewlett-Packard Company, $Id$";
 
 /*
 

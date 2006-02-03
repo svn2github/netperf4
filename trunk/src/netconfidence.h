@@ -45,7 +45,10 @@ typedef struct confidence {
   double interval;
 } confidence_t;
 
-extern double get_confidence( double *values, confidence_t *conf, double *mean );
+extern double get_confidence( double       *values,
+                              confidence_t *conf,
+                              double       *mean,
+                              double       *interval );
 
 double set_confidence_interval( char *desired_interval );
 

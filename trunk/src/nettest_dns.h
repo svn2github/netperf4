@@ -127,12 +127,15 @@ typedef struct  dns_results_data {
   double *run_time;
   double ave_time;
   double result_measured_mean;
+  double result_interval;
   double result_confidence;
   double result_minimum;
   double result_maximum;
   double cpu_util_measured_mean;
+  double cpu_util_interval;
   double cpu_util_confidence;
   double service_demand_measured_mean;
+  double service_demand_interval;
   double service_demand_confidence;
   double confidence;
   double sd_denominator;
