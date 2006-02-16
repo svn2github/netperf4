@@ -19,6 +19,8 @@ COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netcon
 netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
+#netperf_DATA = netperf_docs.dtd
+
 # in theory this will cause these header files to be put in the
 # installed headers location, where folks who want to make their own
 # test libraries can find them

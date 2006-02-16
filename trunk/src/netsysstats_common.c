@@ -109,7 +109,6 @@ update_sys_stats(test_t *test)
   dtime->tv_usec = curr->tv_usec - prev->tv_usec;
   dtime->tv_sec  = curr->tv_sec  - prev->tv_sec;
 
-  printf("in update_sys_stats test is %p\n",test);
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   if (test->debug) {

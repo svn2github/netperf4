@@ -114,7 +114,7 @@ char *program_name;
 /* Option flags and variables */
 
 char      *oname = "stdout";                            /* --output */
-FILE      *ofile;
+FILE      *ofile = NULL;
 int        want_quiet;                                  /* --quiet, --silent */
 int        want_brief;                                  /* --brief */
 int        want_verbose;                                /* --verbose */
@@ -177,7 +177,6 @@ static int
 decode_command_line (int argc, char **argv)
 {
   int c;
-  ofile = stdout;
 
   while ((c = getopt_long (argc, argv,
 			   "d"  /* debug */
@@ -231,7 +230,7 @@ decode_command_line (int argc, char **argv)
               exit(1);
             }
           break;
-        case 'p':               /* --output */
+        case 'p':               
           /* we want to open a listen socket at a */
           /* specified port number */
           listen_port = strdup(optarg);
@@ -958,9 +957,49 @@ main (int argc, char **argv)
 
   program_name = argv[0];
 
-  where = stderr;
+  /* if netserver is invoked with any of the -L, -p or -f options it
+     will necessary to setup the listen endpoint.  similarly, if
+     standard in is not a socket, it will be necessary to setup the
+     listen endpoint.  otherwise, we assume we sprang-forth from inetd
+     or the like and should start processing requests. */
+
+  if (getsockname(0, &name, &namelen) == -1) {
+      /* we may not be a child of inetd */
+      if (CHECK_FOR_NOT_SOCKET) {
+	need_setup = 1;
+      }
+  }
 
   decode_command_line(argc, argv);
+
+  if (ofile) {
+    /* send our stuff to wherever the user told us to */
+    where = ofile;
+  }
+  else {
+    /* figure-out where to send it */
+    if (need_setup) {
+      /* for now, we can spit stuff to stderr since we are not a child
+	 of inetd */
+      where = stderr;
+    }
+    else {
+      /* we are a child of inetd, best move where someplace other than
+	 stderr. this needs to be made a bit more clean one of these days */
+      char debugfile[PATH_MAX];
+      sprintf(debugfile,
+	      "%s%s_%d%s",
+	      NETPERF_DEBUG_LOG_DIR,
+	      NETPERF_DEBUG_LOG_PREFIX,
+	      getpid(),
+	      NETPERF_DEBUG_LOG_SUFFIX);
+      where = fopen(debugfile,"w");
+      if (NULL == where) {
+	/* we need to put a warning _somewhere_ but where? */
+	exit(-1);
+      }
+    }
+  }
 
   /* do the work */
   xmlInitParser();
