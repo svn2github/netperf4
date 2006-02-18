@@ -63,7 +63,7 @@ delete this exception statement from your version.
 #include "netconfidence.h"
 
 #define NETPERF_DEFAULT_SERVICE_NAME     "netperf4"
-#define NETPERF_DTD_FILE (const xmlChar *)"./netperf_docs.dtd"
+#define NETPERF_DTD_FILE (const xmlChar *)"netperf_docs.dtd"
 #define NETPERF_VERSION (const xmlChar *)"4"
 #define NETPERF_UPDATE  (const xmlChar *)"0"
 #define NETPERF_FIX     (const xmlChar *)"999"

@@ -998,6 +998,15 @@ main (int argc, char **argv)
 	/* we need to put a warning _somewhere_ but where? */
 	exit(-1);
       }
+      else {
+	/* and since we are a child of inetd, we don't want any stray
+	   stderr stuff from other packages going out on the control
+	   connection, so we should point stderr at where. if there
+	   happens to be anything waiting to be flushed, we probably
+	   best not flush it or fclose stderr lest that push garbage
+	   onto the control connection. raj 2006-02-16 */
+	stderr = where;
+      }
     }
   }
 
