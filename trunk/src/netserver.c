@@ -1005,7 +1005,9 @@ main (int argc, char **argv)
 	   happens to be anything waiting to be flushed, we probably
 	   best not flush it or fclose stderr lest that push garbage
 	   onto the control connection. raj 2006-02-16 */
-	stderr = where;
+	/* but it seems this is a no-no for HP-UX so we'll just ignore
+	   it for now. raj 2006-02-21 */
+	/* stderr = where; */
       }
     }
   }

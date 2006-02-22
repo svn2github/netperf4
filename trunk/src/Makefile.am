@@ -12,14 +12,15 @@ USE_NETLIB_SOURCE=netlib_@NETSYS_SOURCE@.c
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 
-EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netsysstats*.c 
+EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
 
-COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netconfidence.c netconfidence.h 
+COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netmsg.h netconfidence.c netconfidence.h 
 
 netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
-#netperf_DATA = netperf_docs.dtd
+netperfdir = @datadir@/netperf
+netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
 
 # in theory this will cause these header files to be put in the
 # installed headers location, where folks who want to make their own
