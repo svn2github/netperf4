@@ -12,7 +12,7 @@ USE_NETLIB_SOURCE=netlib_@NETSYS_SOURCE@.c
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 
-EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
+EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
 
 COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netmsg.h netconfidence.c netconfidence.h 
 
@@ -59,3 +59,12 @@ missing/getopt1.o: $(srcdir)/missing/getopt1.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getopt1.c
 missing/getopt.o: $(srcdir)/missing/getopt.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getopt.c
+
+# a boatload of assumptions here, but this should create the /etc/xml/catalog
+# with our entry in it. we really should provide some overrides in the 
+# configure script one of these days
+install-data-local:
+	if [ ! -d /etc/xml ]; then /usr/bin/mkdir /etc/xml; chmod 555 /etc/xml; fi
+	if [ ! -f /etc/xml/catalog ]; then xmlcatalog --create --noout /etc/xml/catalog;fi
+	xmlcatalog --noout --add "system" "http://www.netperf.org/netperf_docs.dtd/1.0" "file://$(netperfdir)/netperf_docs.dtd" /etc/xml/catalog
+

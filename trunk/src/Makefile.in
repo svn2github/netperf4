@@ -151,7 +151,7 @@ USE_NETLIB_SOURCE = netlib_@NETSYS_SOURCE@.c
 
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
-EXTRA_DIST = missing/* dirs NetPerf/* NetServer/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
+EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
 
 COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netmsg.h netconfidence.c netconfidence.h 
 
@@ -501,7 +501,7 @@ top_distdir = ..
 distdir = $(top_distdir)/$(PACKAGE)-$(VERSION)
 
 distdir: $(DISTFILES)
-	$(mkinstalldirs) $(distdir)/NetPerf $(distdir)/NetServer $(distdir)/missing
+	$(mkinstalldirs) $(distdir)/NetPerfDir $(distdir)/NetServerDir $(distdir)/missing
 	@srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`; \
 	topsrcdirstrip=`echo "$(top_srcdir)" | sed 's|.|.|g'`; \
 	list='$(DISTFILES)'; for file in $$list; do \
@@ -579,7 +579,8 @@ info: info-am
 
 info-am:
 
-install-data-am: install-includeHEADERS install-netperfDATA
+install-data-am: install-data-local install-includeHEADERS \
+	install-netperfDATA
 
 install-exec-am: install-binPROGRAMS install-libLTLIBRARIES
 
@@ -616,13 +617,14 @@ uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
 	distclean distclean-compile distclean-generic distclean-libtool \
 	distclean-tags distdir dvi dvi-am info info-am install \
 	install-am install-binPROGRAMS install-data install-data-am \
-	install-exec install-exec-am install-includeHEADERS \
-	install-info install-info-am install-libLTLIBRARIES install-man \
-	install-netperfDATA install-strip installcheck installcheck-am \
-	installdirs maintainer-clean maintainer-clean-generic \
-	mostlyclean mostlyclean-compile mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am tags uninstall \
-	uninstall-am uninstall-binPROGRAMS uninstall-includeHEADERS \
+	install-data-local install-exec install-exec-am \
+	install-includeHEADERS install-info install-info-am \
+	install-libLTLIBRARIES install-man install-netperfDATA \
+	install-strip installcheck installcheck-am installdirs \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-compile mostlyclean-generic mostlyclean-libtool pdf \
+	pdf-am ps ps-am tags uninstall uninstall-am \
+	uninstall-binPROGRAMS uninstall-includeHEADERS \
 	uninstall-info-am uninstall-libLTLIBRARIES \
 	uninstall-netperfDATA
 
@@ -635,6 +637,14 @@ missing/getopt1.o: $(srcdir)/missing/getopt1.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getopt1.c
 missing/getopt.o: $(srcdir)/missing/getopt.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getopt.c
+
+# a boatload of assumptions here, but this should create the /etc/xml/catalog
+# with our entry in it. we really should provide some overrides in the 
+# configure script one of these days
+install-data-local:
+	if [ ! -d /etc/xml ]; then /usr/bin/mkdir /etc/xml; chmod 555 /etc/xml; fi
+	if [ ! -f /etc/xml/catalog ]; then xmlcatalog --create --noout /etc/xml/catalog;fi
+	xmlcatalog --noout --add "system" "http://www.netperf.org/netperf_docs.dtd/1.0" "file://$(netperfdir)/netperf_docs.dtd" /etc/xml/catalog
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
 .NOEXPORT:
