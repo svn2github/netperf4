@@ -18,12 +18,14 @@ Usage: netperf-config [OPTION]
 
 Known values for OPTION are:
 
-  --exec-prefix         display netperf exec prefix 
-  --libs		print library linking information
   --cc                  display the compiler used
   --cflags		print pre-processor and compiler flags
-  --modules		module support enabled (TBD)
+  --exec-prefix         display netperf exec prefix 
   --help		display this help and exit
+  --libdir              display netperf's libdir
+  --libs		print library linking information
+  --modules		module support enabled (TBD)
+  --prefix              display the netperf prefix
   --version		output version information
 EOF
 
@@ -50,6 +52,10 @@ while test $# -gt 0; do
 
     --prefix)
 	echo $prefix
+	;;
+
+    --libdir)
+        echo $libdir
 	;;
 
     --exec-prefix)

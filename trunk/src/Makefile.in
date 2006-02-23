@@ -187,7 +187,8 @@ netperf_LDADD = @LIBOBJS@
 netserver_LDADD = @LIBOBJS@
 
 # so far, it does not appear we need this in netserver
-netperf_LDFLAGS = -export-dynamic
+netperf_LDFLAGS = -rpath $(libdir) -export-dynamic
+netserver_LDFLAGS = -rpath $(libdir)
 subdir = src
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -221,7 +222,6 @@ am_netserver_OBJECTS = netserver.$(OBJEXT) $(am__objects_2) \
 	$(am__objects_3)
 netserver_OBJECTS = $(am_netserver_OBJECTS)
 netserver_DEPENDENCIES = @LIBOBJS@
-netserver_LDFLAGS =
 
 DEFAULT_INCLUDES =  -I. -I$(srcdir) -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
@@ -642,7 +642,7 @@ missing/getopt.o: $(srcdir)/missing/getopt.c
 # with our entry in it. we really should provide some overrides in the 
 # configure script one of these days
 install-data-local:
-	if [ ! -d /etc/xml ]; then /usr/bin/mkdir /etc/xml; chmod 555 /etc/xml; fi
+	if [ ! -d /etc/xml ]; then mkdir /etc/xml; chmod 555 /etc/xml; fi
 	if [ ! -f /etc/xml/catalog ]; then xmlcatalog --create --noout /etc/xml/catalog;fi
 	xmlcatalog --noout --add "system" "http://www.netperf.org/netperf_docs.dtd/1.0" "file://$(netperfdir)/netperf_docs.dtd" /etc/xml/catalog
 # Tell versions [3.59,3.63) of GNU make to not export all variables.

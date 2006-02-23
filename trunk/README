@@ -16,7 +16,8 @@ BE SURE TO READ THE MANUAL. EVEN THOUGH IT MAY BE OUTDATED.
 Pointers:
 
 The netperf4 benchmark depends on libxml2.  You must have libxml2 and
-its development environment installed prior to building netperf4.
+its development environment and utilities (eg xmlcatalog) installed
+prior to building netperf4.
 
 
 There is a COPYRIGHT file included.  It is called COPYING because that

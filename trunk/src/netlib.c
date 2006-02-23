@@ -735,6 +735,12 @@ map_la_to_lib(xmlChar *la, char *lib) {
       /* OK, there was no LD_LIBRARY_PATH, was there a SHLIB_PATH? I
 	 wonder which if these should have precedence? */
       temp = getenv("SHLIB_PATH");
+      if (NULL == temp) {
+	/* OK, there were no paths at all, lets do our own internal
+	   path, which one day really aught to be based on $(libdir)
+	   from the make environment. raj 2006-02-22 */
+	temp = ".:/usr/local/lib";
+      }
     }
   }
 

@@ -48,8 +48,8 @@ netperf_LDADD = @LIBOBJS@
 netserver_LDADD = @LIBOBJS@
 
 # so far, it does not appear we need this in netserver
-netperf_LDFLAGS = -export-dynamic
-
+netperf_LDFLAGS = -rpath $(libdir) -export-dynamic
+netserver_LDFLAGS = -rpath $(libdir)
 
 missing/getaddrinfo.o: $(srcdir)/missing/getaddrinfo.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getaddrinfo.c
@@ -64,7 +64,7 @@ missing/getopt.o: $(srcdir)/missing/getopt.c
 # with our entry in it. we really should provide some overrides in the 
 # configure script one of these days
 install-data-local:
-	if [ ! -d /etc/xml ]; then /usr/bin/mkdir /etc/xml; chmod 555 /etc/xml; fi
+	if [ ! -d /etc/xml ]; then mkdir /etc/xml; chmod 555 /etc/xml; fi
 	if [ ! -f /etc/xml/catalog ]; then xmlcatalog --create --noout /etc/xml/catalog;fi
 	xmlcatalog --noout --add "system" "http://www.netperf.org/netperf_docs.dtd/1.0" "file://$(netperfdir)/netperf_docs.dtd" /etc/xml/catalog
 
