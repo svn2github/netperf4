@@ -3,6 +3,7 @@
 bin_PROGRAMS = netperf netserver
 
 AM_CFLAGS = $(NETPERF_CFLAGS)
+AM_CPPFLAGS = -DLIBDIR="$(libdir)" -DNETPERFDIR="$(netperfdir)"
 
 # for now we will use "NETSYS_SOURCE" for both the netsysstats and
 # netlib platform-specific stuff

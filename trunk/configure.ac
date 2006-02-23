@@ -566,5 +566,4 @@ AC_CONFIG_FILES([Makefile
 		 doc/Makefile
 		 netperf-config])
 
-
 AC_OUTPUT

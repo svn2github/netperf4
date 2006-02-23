@@ -25480,7 +25480,6 @@ LIBS="$LIBS $libxml2_libs"
                                         ac_config_files="$ac_config_files Makefile src/Makefile doc/Makefile netperf-config"
 
 
-
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
 # tests run on this system so they can be shared between configure
