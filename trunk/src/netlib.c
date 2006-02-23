@@ -739,7 +739,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
 	/* OK, there were no paths at all, lets do our own internal
 	   path, which one day really aught to be based on $(libdir)
 	   from the make environment. raj 2006-02-22 */
-	temp = ".:/usr/local/lib";
+	temp = ".:"LIBDIR;
       }
     }
   }

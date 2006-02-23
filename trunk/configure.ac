@@ -81,7 +81,7 @@ AC_TYPE_SIGNAL
 # AC_FUNC_STAT
 # remove pstat_getdynamic (at least for now) since we don't do
 # anything conditional with the check anyway...
-AC_CHECK_FUNCS([gethostbyname gethrtime gettimeofday inet_ntoa memset memcpy socket sqrt strcasecmp strchr strstr strtoul uname])
+AC_CHECK_FUNCS([dlopen gethostbyname gethrtime gettimeofday inet_ntoa memset memcpy socket sqrt strcasecmp strchr strstr strtoul uname])
 
 #AC_CONFIG_SUBDIRS(src/missing)
 

@@ -47,6 +47,10 @@ delete this exception statement from your version.
 #include <sys/types.h>
 #endif
 
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
 #ifdef HAVE_SYS_SOCKET_H
 #include <sys/socket.h>
 #endif
@@ -257,22 +261,41 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
   xmlDocPtr  doc = NULL;
   xmlNodePtr root = NULL;
   xmlNsPtr   ns;
+  struct stat buf;
 
   if (debug) {
     if (fname) {
-      fprintf(where,"parse_xml_file called with fname %s\n",fname);
+      fprintf(where,"%s called with fname %s\n",__func__,fname);
     }
     else {
-      fprintf(where,"parse_xml_file called with null fname\n");
-    fflush(where);
+      fprintf(where,"%s called with null fname\n",__func__);
     }
+    fflush(where);
   }
   if (fname == NULL) {
     if (!xmlStrcmp(doctype,(const xmlChar *)"netperf")) {
-      fname = "default_config.xml";
+      if (0 == stat("default_config.xml",&buf)) {
+	fname = "default_config.xml";
+      }
+      else if (0 == stat(NETPERFDIR NETPERF_PATH_SEP "default_config.xml",
+			 &buf)) {
+	fname = NETPERFDIR NETPERF_PATH_SEP "default_config.xml";
+      }
+      else {
+	fname = "missing config file";
+      }
     }
     if (!xmlStrcmp(doctype,(const xmlChar *)"commands")) {
-      fname = "default_commands.xml";
+      if (0 == stat("default_commands.xml",&buf)) {
+	fname = "default_commands.xml";
+      }
+      else if (0 == stat(NETPERFDIR NETPERF_PATH_SEP "default_commands.xml",
+			 &buf)) {
+	fname = NETPERFDIR NETPERF_PATH_SEP "default_commands.xml";
+      }
+      else {
+	fname = "missing commands file";
+      }
     }
   }
 
