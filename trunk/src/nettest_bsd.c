@@ -2440,19 +2440,21 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
     rd->sd_denominator = 0.0;
     if (NULL != report_flags) {
       if (!strcmp(report_flags,"PRINT_RUN")) {
-	rd->print_run  = 1;
+	rd->print_run     = 1;
       }
       if (!strcmp(report_flags,"PRINT_TESTS")) {
-	rd->print_test = 1;
+	rd->print_test    = 1;
       }
       if (!strcmp(report_flags,"PRINT_ALL")) {
-	rd->print_run  = 1;
-	rd->print_test = 1;
+	rd->print_run     = 1;
+	rd->print_test    = 1;
+	rd->print_per_cpu = 1;
       }
     }
     if (test_set->debug) {
-      rd->print_run  = 1;
-      rd->print_test = 1;
+      rd->print_run     = 1;
+      rd->print_test    = 1;
+      rd->print_per_cpu = 1;
     }
     test_set->report_data = rd;
   } else {
@@ -2603,6 +2605,8 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   int            index;
   FILE          *outfd;
   bsd_results_t *rd;
+  char          *value_str;
+  xmlNodePtr     cpu;
   double         elapsed_seconds;
   double         calibration;
   double         local_idle;
@@ -2640,7 +2644,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(test_set->where);
   }
   for (i=0; i<MAX_SYS_CNTRS; i++) {
-    char *value_str =
+    value_str =
        (char *)xmlGetProp(stats, (const xmlChar *)sys_cntr_name[i]);
     if (value_str) {
       sys_cntr[i] = strtod(value_str,NULL);
@@ -2674,6 +2678,31 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(test_set->where);
   }
   rd->utilization[index]  += local_busy;
+
+  if (rd->print_per_cpu) {
+    cpu = stats->xmlChildrenNode;
+    while (cpu != NULL) {
+      if (!xmlStrcmp(cpu->name,(const xmlChar *)"per_cpu_stats")) {
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"cpu_id");
+        fprintf(outfd,"  cpu%2s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"calibration");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"idle_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"user_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"sys_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"int_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"other_count");
+        fprintf(outfd,"%s\n", value_str);
+        fflush(outfd);
+      }
+      cpu = cpu->next;
+    }
+  }
+
   if (rd->print_test) {
     /* Display per test results */
     fprintf(outfd,"%3d  ", count);                    /*  0,5 */
@@ -2762,12 +2791,12 @@ process_stats_for_run(tset_t *test_set)
         /* process system statistics */
         num_of_cpus = process_sys_stats(test_set, stats, test->id);
         stats_for_test++;
-        num_of_tests++;
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"test_stats")) {
         /* process test statistics */
         process_test_stats(test_set, stats, test->id);
         stats_for_test++;
+        num_of_tests++;
       }
       /* other types of nodes just get skipped by this report routine */
       /* delete statistics entry from test */
@@ -3133,7 +3162,7 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
   if ((count >= max_count) || 
       ((test_set->confidence.value >= 0) && (count >= min_count))) {
     print_results_summary(test_set);
-    if (test_set->confidence.value < 0) {
+    if ((test_set->confidence.value < 0) && (min_count > 1)) {
       print_did_not_meet_confidence(test_set);
     }
   }

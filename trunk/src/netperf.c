@@ -770,9 +770,7 @@ wait_for_version_response(server_t *server)
         fprintf(where,"calling recv_control_message\n");
         fflush(where);
       }
-      pthread_rwlock_rdlock(&server->rwlock);
       rc = recv_control_message(server->sock, &message);
-      pthread_rwlock_unlock(&server->rwlock);
       if (rc > 0) {
         if (debug) {
           fprintf(where,"wait_for_version_response ");
@@ -945,6 +943,12 @@ initialize_test(void *data)
   server = find_server_in_hash(test->server_id);
 
   if (rc == NPE_SUCCESS) {
+    if (debug) {
+      fprintf(where,
+              "%s: %s dependencey on %s successfully resolved\n",
+              __func__, test->id, id);
+      fflush(where);
+    }
     /* any dependency has been successfully resolved
        now build the test message to send to the netserver */
     if ((msg = xmlCopyNode(test->node,1)) != NULL) {
@@ -956,6 +960,7 @@ initialize_test(void *data)
             xmlReplaceNode(cur,dep_data);
             break;
           }
+          cur = cur->next;
         }  
       }
       /* is the lock around the send required? */
@@ -966,6 +971,12 @@ initialize_test(void *data)
                                 my_nid);
       pthread_rwlock_unlock(&server->rwlock);
     } else {
+      if (debug) {
+        fprintf(where,
+                "%s: %s xmlCopyNode failed\n",
+                __func__, test->id);
+        fflush(where);
+      }
       rc = NPE_INIT_TEST_XMLCOPYNODE_FAILED;
     }
   }
@@ -1053,9 +1064,7 @@ netperf_worker(void *data)
     fds.revents = 0;
     pthread_mutex_unlock(server->lock);
     if (poll(&fds,1,5000) > 0) {
-      pthread_rwlock_rdlock(&server->rwlock);
       rc = recv_control_message(server->sock, &message);
-      pthread_rwlock_unlock(&server->rwlock);
       if (rc > 0) {
         rc = process_message(server, message);
       } else {

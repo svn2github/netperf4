@@ -127,6 +127,7 @@ typedef struct  bsd_results_data {
   int     max_count;
   int     print_test;
   int     print_run;
+  int     print_per_cpu;
   FILE   *outfd;
   double *results;
   double *xmit_results;
