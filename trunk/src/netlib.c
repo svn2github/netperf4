@@ -40,6 +40,10 @@ delete this exception statement from your version.
 #include <sys/types.h>
 #endif
 
+#ifdef HAVE_SYS_STAT_H
+#include <sys/stat.h>
+#endif
+
 #ifdef HAVE_SYS_UIO_H
 #include <sys/uio.h>
 #endif
@@ -119,6 +123,42 @@ extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 #define HIST  void*
 
 #include "nettest_bsd.h"
+
+/* given a filename, return the first path to the file that stats
+   successfully - which is either the name already given, or that name
+   with NETPERFDIR prepended. */
+
+int
+netperf_complete_filename(char *name, char *full, int fulllen) {
+  char path[PATH_MAX+1];
+  int  ret;
+
+  struct stat buf;
+
+  if (0 == stat(name,&buf)) {
+    /* the name resolved where we are - either there is a match in
+       CWD, or they specified a full path name, I wonder if we need to
+       worry about explicit null termination of full? raj 2006-02-27 */
+    strncpy(full,name,fulllen);
+    ret = 0;
+  }
+  else {
+    /* very simple, even simplistic - since the stat above didn't
+       work, we presume that the name given wasn't a full one, so we
+       just slap the NETPERFDIR and path separator in front of the
+       name and try again. */
+    snprintf(path,PATH_MAX,"%s%s%s",NETPERFDIR,NETPERF_PATH_SEP,name);
+    path[PATH_MAX] = '\0';
+    if (0 == stat(path,&buf)) {
+      strncpy(full,path,fulllen);
+      ret = 0;
+    }
+    else {
+      ret = -1;
+    }
+  }
+  return ret;
+}
 
 #ifdef HAVE_GETHRTIME
 
