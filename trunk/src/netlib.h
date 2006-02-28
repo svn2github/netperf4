@@ -108,6 +108,8 @@ extern int get_expiration_time(struct timespec *delta,
 			       struct timespec *abstime );
 #endif
 
+extern int netperf_complete_filename(char *name, char *full, int fulllen);
+
 /* state machine data structure for process message */
 
 typedef int (*msg_func_t)(xmlNodePtr msg, xmlDocPtr doc, server_t *server);
