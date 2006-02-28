@@ -140,7 +140,8 @@ netperf_complete_filename(char *name, char *full, int fulllen) {
        CWD, or they specified a full path name, I wonder if we need to
        worry about explicit null termination of full? raj 2006-02-27 */
     strncpy(full,name,fulllen);
-    ret = 0;
+    full[fulllen-1] = '\0';
+    ret = strlen(full);
   }
   else {
     /* very simple, even simplistic - since the stat above didn't
@@ -151,7 +152,8 @@ netperf_complete_filename(char *name, char *full, int fulllen) {
     path[PATH_MAX] = '\0';
     if (0 == stat(path,&buf)) {
       strncpy(full,path,fulllen);
-      ret = 0;
+      full[fulllen-1] = '\0';
+      ret = strlen(full);
     }
     else {
       ret = -1;
