@@ -39,7 +39,10 @@ delete this exception statement from your version.
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+
+#ifdef HAVE_PTHREAD_H
 #include <pthread.h>
+#endif
 
 /* we want to get the definition of uint32_t et al */
 #include <stdint.h>
