@@ -401,9 +401,9 @@ report_servers_test_status(server_t *server)
           "srvr","tst","test_name","CURR","TEST","RQST");
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
-    ret = pthread_mutex_lock(&h->hash_lock);
+    ret = NETPERF_MUTEX_LOCK(&h->hash_lock);
     if (ret) {
-      fprintf(where,"__func__ pthread_mutex_lock returned %d\n",ret);
+      fprintf(where,"%s thread mutex lock returned %d\n",__func__,ret);
       fflush(where);
     }
     test = h->test;
@@ -414,9 +414,9 @@ report_servers_test_status(server_t *server)
       }
       test = test->next;
     }
-    ret = pthread_mutex_unlock(&h->hash_lock);
+    ret = NETPERF_MUTEX_UNLOCK(&h->hash_lock);
     if (ret) {
-      fprintf(where,"__func__ pthread_mutex_unlock returned %d\n",ret);
+      fprintf(where,"%s thread mutex unlock returned %d\n",__func__,ret);
       fflush(where);
     }
   }
@@ -613,12 +613,12 @@ add_test_to_hash(test_t *new_test)
   hash_value = TEST_HASH_VALUE(new_test->id);
 
   /* don't forget to add error checking one day */
-  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
 
   new_test->next = test_hash[hash_value].test;
   test_hash[hash_value].test = new_test;
 
-  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
 
   return(NPE_SUCCESS);
 }
@@ -639,7 +639,7 @@ delete_test(const xmlChar *id)
   hash_value = TEST_HASH_VALUE(id);
 
   /* don't forget to add error checking one day */
-  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
 
   prev_test    = &(test_hash[hash_value].test);
   test_pointer = test_hash[hash_value].test;
@@ -654,7 +654,7 @@ delete_test(const xmlChar *id)
     test_pointer = test_pointer->next;
   }
 
-  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
 }
 
 test_t *
@@ -670,7 +670,7 @@ find_test_in_hash(const xmlChar *id)
   hash_value = TEST_HASH_VALUE(id);
 
   /* don't forget to add error checking one day */
-  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
 
   test_pointer = test_hash[hash_value].test;
   while (test_pointer != NULL) {
@@ -681,7 +681,7 @@ find_test_in_hash(const xmlChar *id)
     test_pointer = test_pointer->next;
   }
 
-  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
   return(test_pointer);
 }
 
@@ -1082,12 +1082,25 @@ get_test_function(test_t *test, const xmlChar *func)
 
 
 int
-launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
+launch_thread(NETPERF_THREAD_T *tid, void *(*start_routine)(void *), void *data)
 {
   int rc;
-  pthread_t temp_tid;
 
+#ifdef WITH_GLIB
+  NETPERF_THREAD_T *temp_tid;
 
+  temp_tid = g_thread_create(start_routine,data,FALSE,NULL);
+
+  if (NULL != temp_tid) {
+    rc = 0;
+    *tid = temp_tid;
+  }
+  else {
+    rc = -1;
+  }
+#else
+
+  NETPERF_THREAD_T temp_tid;
   rc = pthread_create(&temp_tid, (pthread_attr_t *)NULL, start_routine, data);
   if (rc != 0) {
     if (debug) {
@@ -1117,6 +1130,7 @@ launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
       rc = NPE_SUCCESS;
     }
   }
+#endif
   return(rc);
 }
 

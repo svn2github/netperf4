@@ -40,8 +40,24 @@ delete this exception statement from your version.
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
-#ifdef HAVE_PTHREAD_H
+#ifdef WITH_GLIB
+#include <glib.h>
+#elif defined(HAVE_PTHREAD_H)
 #include <pthread.h>
+#define NETPERF_MUTEX_T pthread_mutex_t
+#define NETPERF_RWLOCK_T pthread_rwlock_t
+#define NETPERF_THREAD_T pthread_t
+#define NETPERF_COND_T pthread_cond_t
+#define NETPERF_ABS_TIMESPEC struct timespec
+#define NETPERF_ABS_TIMESET(base,a,b) base.tv_sec = a;base.tv_nsec=b;
+#define NETPERF_MUTEX_LOCK pthread_mutex_lock
+#define NETPERF_MUTEX_UNLOCK pthread_mutex_unlock
+#define NETPERF_COND_TIMEDWAIT pthread_cond_timedwait
+#define NETPERF_COND_BROADCAST pthread_cond_broadcast
+#define NETPERF_RWLOCK_WRLOCK pthread_rwlock_wrlock
+#define NETPERF_RWLOCK_UNLOCK pthread_rwlock_unlock
+#else
+#error Netperf4 requires either glib or pthreads
 #endif
 
 /* we want to get the definition of uint32_t et al */
@@ -143,10 +159,10 @@ typedef struct server_instance {
   xmlChar          *id;          /* the id of the server instance. used
                                     in searches and as sanity checks  */
 
-  pthread_rwlock_t rwlock;       /* the mutex used to ensure exclusive
+  NETPERF_RWLOCK_T rwlock;       /* the mutex used to ensure exclusive
                                     access to this servers resources */
 
-  pthread_mutex_t  *lock;        /* the mutex used to ensure exclusive
+  NETPERF_MUTEX_T  *lock;        /* the mutex used to ensure exclusive
                                     access to this servers resources */
 
   xmlNodePtr       node;         /* the xml document node containing the
@@ -167,7 +183,7 @@ typedef struct server_instance {
   char            *err_fn;       /* procedure which placed this server into
                                     the NSRV_ERROR state. */
 
-  pthread_t        tid;          /* the posix thread-id of the server
+  NETPERF_THREAD_T tid;          /* the posix thread-id of the server
                                     instance within netperf.
                                     Will only be stored in the netperf
                                     process not the netserver process. 
@@ -184,8 +200,8 @@ typedef struct server_instance {
 #define SERVER_HASH_BUCKETS 4
 
 typedef struct server_hash_elt {
-  pthread_mutex_t  hash_lock;
-  pthread_cond_t   condition;
+  NETPERF_MUTEX_T  hash_lock;
+  NETPERF_COND_T   *condition;
   server_t        *server;
 } server_hash_t;
 
@@ -257,7 +273,7 @@ typedef struct test_instance {
 
   int        err_no;           /* The errno returned by the failing syscall */
   
-  pthread_t  tid;              /* the posix thread id of the test
+  NETPERF_THREAD_T  tid;       /* the posix thread id of the test
                                   instance within the netserver.
                                   Will only be stored in the netserver
                                   process(es) not the netperf
@@ -321,8 +337,8 @@ typedef struct test_instance {
 
 
 typedef struct test_hash_elt {
-  pthread_mutex_t  hash_lock;
-  pthread_cond_t   condition;
+  NETPERF_MUTEX_T  hash_lock;
+  NETPERF_COND_T   *condition;
   test_t          *test;
 } test_hash_t;
 
@@ -379,8 +395,8 @@ typedef void (*GenReport)(tset_t *test_set,char *report_flags,char *outfile);
 
 
 typedef struct test_set_hash_elt {
-  pthread_mutex_t  hash_lock;
-  pthread_cond_t   condition;
+  NETPERF_MUTEX_T  hash_lock;
+  NETPERF_COND_T   *condition;
   tset_t          *test_set;
 } tset_hash_t;
 

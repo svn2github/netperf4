@@ -576,7 +576,7 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     fprintf(where,"np_idle_message: waiting for mutex\n");
     fflush(where);
   }
-  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
 
   test = test_hash[hash_value].test;
   while (test != NULL) {
@@ -593,7 +593,7 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       fflush(where);
     }
     test->state = TEST_IDLE;
-    rc = pthread_cond_broadcast(&(test_hash[hash_value].condition));
+    rc = NETPERF_COND_BROADCAST(test_hash[hash_value].condition);
     if (debug) {
       fprintf(where," new_state = %d\n",test->state);
       fflush(where);
@@ -603,7 +603,7 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     fprintf(where,"np_idle_message: unlocking mutex\n");
     fflush(where);
   }
-  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
   return(rc);
 }
 
@@ -724,7 +724,7 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   hash_value = TEST_HASH_VALUE(testid);
 
   /* don't forget to add error checking one day */
-  pthread_mutex_lock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
 
   test = test_hash[hash_value].test;
   while (test != NULL) {
@@ -751,14 +751,14 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     } else {
       test->state = TEST_INIT;
     }
-    rc = pthread_cond_broadcast(&(test_hash[hash_value].condition));
+    rc = NETPERF_COND_BROADCAST(test_hash[hash_value].condition);
       
     if (debug) {
       fprintf(where," new_state = %d rc = %d\n",test->state,rc);
       fflush(where);
     }
   }
-  pthread_mutex_unlock(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
   return(rc);
 }
 
