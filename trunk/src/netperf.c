@@ -360,7 +360,13 @@ netperf_init()
   for (i = 0; i < SERVER_HASH_BUCKETS; i++) {
     server_hash[i].server = NULL;
 #ifdef WITH_GLIB
-    server_hash[i].hash_lock = G_STATIC_MUTEX_INIT;
+    server_hash[i].hash_lock = g_mutex_new();
+    if (NULL == server_hash[i].hash_lock) {
+      /* not sure we will even get here */
+      fprintf(where, "%s: g_cond_new error \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
     server_hash[i].condition = g_cond_new();
     if (NULL == server_hash[i].condition) {
       /* not sure we will even get here */
@@ -369,7 +375,16 @@ netperf_init()
       exit(-2);
     }
 #else
-    rc = pthread_mutex_init(&(server_hash[i].hash_lock), NULL);
+    server_hash[i].hash_lock = 
+      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+
+    if (NULL == server_hash[i].hash_lock) {
+      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
+
+    rc = pthread_mutex_init(server_hash[i].hash_lock, NULL);
     if (rc) {
       fprintf(where, "%s: pthread_mutex_init error %d\n",__func__,rc);
       fflush(where);
@@ -396,16 +411,31 @@ netperf_init()
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     test_hash[i].test = NULL;
 #ifdef WITH_GLIB
-    test_hash[i].hash_lock = G_STATIC_MUTEX_INIT;
+    test_hash[i].hash_lock = g_mutex_new();
+    if (NULL == test_hash[i].hash_lock) {
+      /* not sure we will even get here */
+      fprintf(where, "%s: g_mutex_new error \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
     test_hash[i].condition = g_cond_new();
     if (NULL == test_hash[i].condition) {
       /* not sure we will even get here */
-      fprintf(where, "netperf_init: g_cond_new error \n");
+      fprintf(where, "%s: g_cond_new error \n",__func__);
       fflush(where);
       exit(-2);
     }
 #else
-    rc = pthread_mutex_init(&(test_hash[i].hash_lock), NULL);
+    test_hash[i].hash_lock = 
+      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+
+    if (NULL == test_hash[i].hash_lock) {
+      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
+
+    rc = pthread_mutex_init(test_hash[i].hash_lock, NULL);
     if (rc) {
       fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
       fflush(where);
@@ -422,6 +452,61 @@ netperf_init()
     }
 
     rc = pthread_cond_init((test_hash[i].condition), NULL);
+    if (rc) {
+      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
+      fflush(where);
+      exit(-2);
+    }
+#endif
+  }
+
+  /* you know, it might not be a bad idea to also properly initialize
+     the test_set_hash stuff too, nudge nudge to you know who!  */
+
+  for (i = 0; i < TEST_SET_HASH_BUCKETS; i ++) {
+    test_set_hash[i].test_set = NULL;
+#ifdef WITH_GLIB
+    test_set_hash[i].hash_lock = g_mutex_new();
+    if (NULL == test_set_hash[i].hash_lock) {
+      /* not sure we will even get here */
+      fprintf(where, "%s: g_mutex_new error \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
+    test_set_hash[i].condition = g_cond_new();
+    if (NULL == test_set_hash[i].condition) {
+      /* not sure we will even get here */
+      fprintf(where, "%s: g_cond_new error \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
+#else
+    test_set_hash[i].hash_lock = 
+      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+
+    if (NULL == test_set_hash[i].hash_lock) {
+      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
+
+    rc = pthread_mutex_init(test_set_hash[i].hash_lock, NULL);
+    if (rc) {
+      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
+      fflush(where);
+      exit(-2);
+    }
+
+    test_set_hash[i].condition = 
+      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
+
+    if (NULL == test_set_hash[i].condition) {
+      fprintf(where, "netperf_init: unable to malloc a pthread_cond_t \n");
+      fflush(where);
+      exit(-2);
+    }
+
+    rc = pthread_cond_init((test_set_hash[i].condition), NULL);
     if (rc) {
       fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
       fflush(where);
@@ -460,13 +545,13 @@ add_server_to_hash(server_t *new_server) {
   hash_value = ((atoi((char *)new_server->id + 1)) % SERVER_HASH_BUCKETS);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(server_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(server_hash[hash_value].hash_lock);
 
   new_server->next = server_hash[hash_value].server;
-  new_server->lock = &(server_hash[hash_value].hash_lock);
+  new_server->lock = server_hash[hash_value].hash_lock;
   server_hash[hash_value].server = new_server;
 
-  NETPERF_MUTEX_UNLOCK(&(server_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(server_hash[hash_value].hash_lock);
 
   return(NPE_SUCCESS);
 }
@@ -485,7 +570,7 @@ delete_server(const xmlChar *id)
   hash_value = ((atoi((char *)id + 1)) % SERVER_HASH_BUCKETS);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(server_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(server_hash[hash_value].hash_lock);
 
   prev_server    = &(server_hash[hash_value].server);
   server_pointer = server_hash[hash_value].server;
@@ -500,7 +585,7 @@ delete_server(const xmlChar *id)
     server_pointer = server_pointer->next;
   }
 
-  NETPERF_MUTEX_UNLOCK(&(server_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(server_hash[hash_value].hash_lock);
 
 }
 
@@ -517,7 +602,7 @@ find_server_in_hash(const xmlChar *id) {
   hash_value = ((atoi((char *)id + 1)) % SERVER_HASH_BUCKETS);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(server_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(server_hash[hash_value].hash_lock);
 
   server_pointer = server_hash[hash_value].server;
   while (server_pointer != NULL) {
@@ -528,7 +613,7 @@ find_server_in_hash(const xmlChar *id) {
     server_pointer = server_pointer->next;
   }
 
-  NETPERF_MUTEX_UNLOCK(&(server_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(server_hash[hash_value].hash_lock);
 
   return(server_pointer);
 }
@@ -542,13 +627,13 @@ add_test_set_to_hash(tset_t *new_test_set)
   hash_value = TEST_SET_HASH_VALUE(new_test_set->id);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(test_set_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_set_hash[hash_value].hash_lock);
 
   new_test_set->next = test_set_hash[hash_value].test_set;
 
   test_set_hash[hash_value].test_set = new_test_set;
 
-  NETPERF_MUTEX_UNLOCK(&(test_set_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_set_hash[hash_value].hash_lock);
 
   return(NPE_SUCCESS);
 }
@@ -566,7 +651,7 @@ delete_test_set_from_hash(const xmlChar *id)
   hash_value = TEST_SET_HASH_VALUE(id);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(test_set_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_set_hash[hash_value].hash_lock);
 
   test_set_ptr = test_set_hash[hash_value].test_set;
   while (test_set_ptr != NULL) {
@@ -586,7 +671,7 @@ delete_test_set_from_hash(const xmlChar *id)
     }
   }
 
-  NETPERF_MUTEX_UNLOCK(&(test_set_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_set_hash[hash_value].hash_lock);
 
   return(NPE_SUCCESS);
 }
@@ -603,7 +688,7 @@ find_test_set_in_hash(const xmlChar *id)
   hash_value = TEST_SET_HASH_VALUE(id);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(test_set_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_set_hash[hash_value].hash_lock);
 
   test_set_ptr = test_set_hash[hash_value].test_set;
   while (test_set_ptr != NULL) {
@@ -614,7 +699,7 @@ find_test_set_in_hash(const xmlChar *id)
     test_set_ptr = test_set_ptr->next;
   }
 
-  NETPERF_MUTEX_UNLOCK(&(test_set_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_set_hash[hash_value].hash_lock);
   return(test_set_ptr);
 }
 
@@ -743,7 +828,7 @@ instantiate_netservers()
       if (add_server_to_hash(new_server) == NPE_SUCCESS) {
         new_server->node      = this_netserver;
 #ifdef WITH_GLIB
-	new_server->rwlock = G_STATIC_RW_LOCK_INIT;
+	g_static_rw_lock_init(&new_server->rwlock);
 #else
         rc = pthread_rwlock_init(&new_server->rwlock, NULL);
         if (rc) {
@@ -886,7 +971,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
   /* find the dependency in the hash list */
   hash_value = TEST_HASH_VALUE(id);
   h = &(test_hash[hash_value]);
-  NETPERF_MUTEX_LOCK(&h->hash_lock);
+  NETPERF_MUTEX_LOCK(h->hash_lock);
   test = h->test;
   while (test != NULL) {
     if (!xmlStrcmp(test->id,id)) {
@@ -912,42 +997,44 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
 #endif
       /* wait for test to initialize */
       while (test->state == TEST_PREINIT) {
-        NETPERF_MUTEX_UNLOCK(&h->hash_lock);
+        NETPERF_MUTEX_UNLOCK(h->hash_lock);
         if (debug) {
           fprintf(where,
                   "resolve_dependency: waiting on test %s thread %d\n",
                   (char *)id,
-                  test->tid);
+                  test->thread_id);
           fflush(where);
         }
 
-        NETPERF_MUTEX_LOCK(&h->hash_lock);
+        NETPERF_MUTEX_LOCK(h->hash_lock);
 
 #ifdef WITH_GLIB
+	g_cond_timedwait(h->condition, &h->hash_lock, &abstime);
 #else
         get_expiration_time(&delta_time,&abstime);
-#endif
 
-        rc = NETPERF_COND_TIMEDWAIT(h->condition, &h->hash_lock, &abstime);
+
+        rc = pthread_cond_timedwait(h->condition, h->hash_lock, &abstime);
         if (debug) {
             fprintf(where,
                     "resolve_dependency: pthread_cond_wait exited %d\n",rc);
             fflush(where);
         }
+#endif
       }  /* end wait */
       
       /* test has reached at least the TEST_INIT state */
       if (test->state != TEST_ERROR) {
         if (test->dependent_data != NULL) {
           *data = test->dependent_data;
-          NETPERF_MUTEX_UNLOCK(&h->hash_lock);
+          NETPERF_MUTEX_UNLOCK(h->hash_lock);
           rc = NPE_SUCCESS;
           if (debug) {
             fprintf(where,"resolve_dependency: successful for %s\n",
                     (char *)id);
             fflush(where);
           }
-          NETPERF_MUTEX_LOCK(&h->hash_lock);
+          NETPERF_MUTEX_LOCK(h->hash_lock);
         } else {
           rc = NPE_DEPENDENCY_NOT_PRESENT;
         }
@@ -959,7 +1046,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
 
     test = test->next;
   }
-  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
   return(rc);
 }
 
@@ -1022,7 +1109,7 @@ initialize_test(void *data)
                                 msg,
                                 server->id,
                                 my_nid);
-      NETPERF_RWLOCK_UNLOCK(&server->rwlock);
+      NETPERF_RWLOCK_WRITER_UNLOCK(&server->rwlock);
     } else {
       if (debug) {
         fprintf(where,
@@ -1064,16 +1151,16 @@ initialize_tests(server_t *server)
 
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
-    NETPERF_MUTEX_LOCK(&h->hash_lock);
+    NETPERF_MUTEX_LOCK(h->hash_lock);
     test = h->test;
     while (test != NULL) {
       if (test->state_req == TEST_PREINIT) {
         if (!xmlStrcmp(server->id, test->server_id)) {
           /* test is not initialized and belongs to this netserver init it */
           test->state_req = TEST_IDLE;
-          NETPERF_MUTEX_UNLOCK(&h->hash_lock);
-          rc = launch_thread(&test->tid, initialize_test, test);
-          NETPERF_MUTEX_LOCK(&h->hash_lock);
+          NETPERF_MUTEX_UNLOCK(h->hash_lock);
+          rc = launch_thread(&test->thread_id, initialize_test, test);
+          NETPERF_MUTEX_LOCK(h->hash_lock);
           if (rc != NPE_SUCCESS) {
             test->state = TEST_ERROR;
             test->err_rc = rc;
@@ -1089,7 +1176,7 @@ initialize_tests(server_t *server)
         test = test->next;
       }
     }
-    NETPERF_MUTEX_UNLOCK(&h->hash_lock);
+    NETPERF_MUTEX_UNLOCK(h->hash_lock);
   }
 
   NETPERF_DEBUG_EXIT(debug,where);
@@ -1167,12 +1254,12 @@ launch_worker_threads()
   }
   for (i = 0; i < SERVER_HASH_BUCKETS; i ++) {
     h = &server_hash[i];
-    NETPERF_MUTEX_LOCK(&h->hash_lock);
+    NETPERF_MUTEX_LOCK(h->hash_lock);
     server = h->server;
     while (server != NULL) {
       if (server->state_req == NSRV_INIT) {
         /* netserver worker thread needs to be started */
-        NETPERF_MUTEX_UNLOCK(&h->hash_lock);
+        NETPERF_MUTEX_UNLOCK(h->hash_lock);
         if (debug) {
           fprintf(where,"launching thread for netserver %s\n",server->id);
           fflush(where);
@@ -1184,7 +1271,7 @@ launch_worker_threads()
                   server->tid,server->id);
           fflush(where);
         }
-        NETPERF_MUTEX_LOCK(&h->hash_lock);
+        NETPERF_MUTEX_LOCK(h->hash_lock);
         if (rc != NPE_SUCCESS) {
           server->state = NSRV_ERROR;
           server->err_rc = rc;
@@ -1193,7 +1280,7 @@ launch_worker_threads()
       }
       server = server->next;
     }
-    NETPERF_MUTEX_UNLOCK(&h->hash_lock);
+    NETPERF_MUTEX_UNLOCK(h->hash_lock);
   }
 
   NETPERF_DEBUG_EXIT(debug,where);
@@ -1221,10 +1308,7 @@ wait_for_tests_to_initialize()
   }
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
-#ifdef WITH_GLIB
-#else
-    NETPERF_MUTEX_LOCK(&h->hash_lock);
-#endif
+    NETPERF_MUTEX_LOCK(h->hash_lock);
     test = h->test;
     while (test != NULL) {
       while (test->state != TEST_IDLE) {
@@ -1240,16 +1324,17 @@ wait_for_tests_to_initialize()
         }
         /* test is not yet initialized wait for it */
 #ifdef WITH_GLIB
+	g_cond_timedwait(h->condition, &h->hash_lock, &abstime);
 #else
         get_expiration_time(&delta_time,&abstime);
-#endif
-        prc = NETPERF_COND_TIMEDWAIT(h->condition, &h->hash_lock, &abstime);
+
+        prc = pthread_cond_timedwait(h->condition, h->hash_lock, &abstime);
         if (prc != 0) {
           fprintf(where,
             "wait_for_tests_to_initialize: thread conditional wait returned %d\n",prc);
           fflush(where);
         }
-
+#endif
         /* since the mutex was unlocked during the conditional wait
            should the hash chain be restarted in case a new test was
            inserted ? */
@@ -1257,10 +1342,7 @@ wait_for_tests_to_initialize()
       } 
       test = test->next;
     }
-#ifdef WITH_GLIB
-#else
-    NETPERF_MUTEX_UNLOCK(&h->hash_lock);
-#endif
+    NETPERF_MUTEX_UNLOCK(h->hash_lock);
   }
   for (i=0;i < SERVER_HASH_BUCKETS; i++) {
     server = server_hash[i].server;

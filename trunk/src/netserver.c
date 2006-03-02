@@ -271,13 +271,13 @@ add_netperf_to_hash(server_t *new_netperf) {
 
   hash_value = 0;
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(netperf_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(netperf_hash[hash_value].hash_lock);
 
   new_netperf->next = netperf_hash[hash_value].server;
-  new_netperf->lock = &(netperf_hash[hash_value].hash_lock);
+  new_netperf->lock = netperf_hash[hash_value].hash_lock;
   netperf_hash[hash_value].server = new_netperf;
 
-  NETPERF_MUTEX_UNLOCK(&(netperf_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(netperf_hash[hash_value].hash_lock);
 
   return(NPE_SUCCESS);
 }
@@ -297,7 +297,7 @@ delete_netperf(const xmlChar *id)
   hash_value = 0;
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(netperf_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(netperf_hash[hash_value].hash_lock);
 
   prev_server    = &(netperf_hash[hash_value].server);
   server_pointer = netperf_hash[hash_value].server;
@@ -312,7 +312,7 @@ delete_netperf(const xmlChar *id)
     server_pointer = server_pointer->next;
   }
 
-  NETPERF_MUTEX_UNLOCK(&(netperf_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(netperf_hash[hash_value].hash_lock);
 }
 
 
@@ -329,7 +329,7 @@ find_netperf_in_hash(const xmlChar *id)
   hash_value = 0;
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(netperf_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(netperf_hash[hash_value].hash_lock);
 
   server_pointer = netperf_hash[hash_value].server;
   while (server_pointer != NULL) {
@@ -340,7 +340,7 @@ find_netperf_in_hash(const xmlChar *id)
     server_pointer = server_pointer->next;
   }
 
-  NETPERF_MUTEX_UNLOCK(&(netperf_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(netperf_hash[hash_value].hash_lock);
 
   return(server_pointer);
 }
@@ -912,7 +912,13 @@ netserver_init()
   for (i = 0; i < NETPERF_HASH_BUCKETS; i++) {
     netperf_hash[i].server = NULL;
 #ifdef WITH_GLIB
-    netperf_hash[i].hash_lock = G_STATIC_MUTEX_INIT;
+    netperf_hash[i].hash_lock = g_mutex_new();
+    if (NULL == netperf_hash[i].hash_lock) {
+      /* not sure we will even get here */
+      fprintf(where, "%s: g_mutex_new error \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
     netperf_hash[i].condition = g_cond_new();
     if (NULL == netperf_hash[i].condition) {
       /* not sure we will even get here */
@@ -921,7 +927,16 @@ netserver_init()
       exit(-2);
     }
 #else
-    rc = pthread_mutex_init(&(netperf_hash[i].hash_lock), NULL);
+    netperf_hash[i].hash_lock = 
+      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+
+    if (NULL == netperf_hash[i].hash_lock) {
+      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
+
+    rc = pthread_mutex_init(netperf_hash[i].hash_lock, NULL);
     if (rc) {
       fprintf(where, "%s: server pthread_mutex_init error %d\n", __func__, rc);
       fflush(where);
@@ -949,7 +964,13 @@ netserver_init()
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     test_hash[i].test = NULL;
 #ifdef WITH_GLIB
-    test_hash[i].hash_lock = G_STATIC_MUTEX_INIT;
+    test_hash[i].hash_lock = g_mutex_new();
+    if (NULL == test_hash[i].hash_lock) {
+      /* not sure we will even get here */
+      fprintf(where, "%s: g_cond_new error \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
     test_hash[i].condition = g_cond_new();
     if (NULL == test_hash[i].condition) {
       /* not sure we will even get here */
@@ -958,7 +979,16 @@ netserver_init()
       exit(-2);
     }
 #else
-    rc = pthread_mutex_init(&(test_hash[i].hash_lock), NULL);
+    test_hash[i].hash_lock = 
+      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
+
+    if (NULL == test_hash[i].hash_lock) {
+      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
+      fflush(where);
+      exit(-2);
+    }
+
+    rc = pthread_mutex_init(test_hash[i].hash_lock, NULL);
     if (rc) {
       fprintf(where, "%s: test pthread_mutex_init error %d\n", __func__, rc);
       fflush(where);

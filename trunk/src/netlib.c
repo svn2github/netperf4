@@ -91,17 +91,21 @@ delete this exception statement from your version.
 #include <sys/resource.h>
 #endif
 
-#ifdef HAVE_PTHREAD_H
-#include <pthread.h>
-#endif
-
 #ifdef HAVE_DLFCN_H
 #include <dlfcn.h>
 #endif
 
-#if HAVE_GLIB_H
-#include <glib.h>
-#endif 
+#ifdef WITH_GLIB
+# ifdef HAVE_GLIB_H
+#  include <glib.h>
+# endif 
+#else
+# ifdef HAVE_PTHREAD_H
+#  include <pthread.h>
+# endif
+#endif
+
+
 
 #ifdef HAVE_ERRNO_H
 #include <errno.h>
@@ -401,12 +405,8 @@ report_servers_test_status(server_t *server)
           "srvr","tst","test_name","CURR","TEST","RQST");
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
-    ret = NETPERF_MUTEX_LOCK(&h->hash_lock);
-    if (ret) {
-      fprintf(where,"%s thread mutex lock returned %d\n",__func__,ret);
-      fflush(where);
-    }
-    test = h->test;
+    NETPERF_MUTEX_LOCK(h->hash_lock);
+        test = h->test;
 
     while (test != NULL) {
       if (!xmlStrcmp(test->server_id,server->id)) {
@@ -414,11 +414,7 @@ report_servers_test_status(server_t *server)
       }
       test = test->next;
     }
-    ret = NETPERF_MUTEX_UNLOCK(&h->hash_lock);
-    if (ret) {
-      fprintf(where,"%s thread mutex unlock returned %d\n",__func__,ret);
-      fflush(where);
-    }
+    NETPERF_MUTEX_UNLOCK(h->hash_lock);
   }
 }
 
@@ -613,12 +609,12 @@ add_test_to_hash(test_t *new_test)
   hash_value = TEST_HASH_VALUE(new_test->id);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_hash[hash_value].hash_lock);
 
   new_test->next = test_hash[hash_value].test;
   test_hash[hash_value].test = new_test;
 
-  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
 
   return(NPE_SUCCESS);
 }
@@ -639,7 +635,7 @@ delete_test(const xmlChar *id)
   hash_value = TEST_HASH_VALUE(id);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_hash[hash_value].hash_lock);
 
   prev_test    = &(test_hash[hash_value].test);
   test_pointer = test_hash[hash_value].test;
@@ -654,7 +650,7 @@ delete_test(const xmlChar *id)
     test_pointer = test_pointer->next;
   }
 
-  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
 }
 
 test_t *
@@ -670,7 +666,7 @@ find_test_in_hash(const xmlChar *id)
   hash_value = TEST_HASH_VALUE(id);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_hash[hash_value].hash_lock);
 
   test_pointer = test_hash[hash_value].test;
   while (test_pointer != NULL) {
@@ -681,7 +677,7 @@ find_test_in_hash(const xmlChar *id)
     test_pointer = test_pointer->next;
   }
 
-  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
   return(test_pointer);
 }
 
@@ -1081,8 +1077,16 @@ get_test_function(test_t *test, const xmlChar *func)
 }
 
 
+/* I would have used the NETPERF_THREAD_T abstraction, but that would
+   make netlib.h dependent on netperf.h and I'm not sure I want to do
+   that. raj 2006-03-02 */
 int
-launch_thread(NETPERF_THREAD_T *tid, void *(*start_routine)(void *), void *data)
+#ifdef WITH_GLIB
+launch_thread(GThread *tid, void *(*start_routine)(void *), void *data)
+#else
+launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
+#endif
+
 {
   int rc;
 

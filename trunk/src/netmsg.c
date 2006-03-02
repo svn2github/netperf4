@@ -576,7 +576,7 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     fprintf(where,"np_idle_message: waiting for mutex\n");
     fflush(where);
   }
-  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_hash[hash_value].hash_lock);
 
   test = test_hash[hash_value].test;
   while (test != NULL) {
@@ -593,17 +593,23 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       fflush(where);
     }
     test->state = TEST_IDLE;
-    rc = NETPERF_COND_BROADCAST(test_hash[hash_value].condition);
+    /* I'd have liked to have abstracted this with the NETPERF_mumble
+       macros, but the return values differ. raj 2006-03-02 */
+#ifdef WITH_GLIB
+    g_cond_broadcast(test_hash[hash_value].condition);
+#else
+    rc = pthread_cond_broadcast(test_hash[hash_value].condition);
     if (debug) {
       fprintf(where," new_state = %d\n",test->state);
       fflush(where);
     }
+#endif
   }
   if (debug) {
     fprintf(where,"np_idle_message: unlocking mutex\n");
     fflush(where);
   }
-  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
   return(rc);
 }
 
@@ -724,7 +730,7 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   hash_value = TEST_HASH_VALUE(testid);
 
   /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_LOCK(test_hash[hash_value].hash_lock);
 
   test = test_hash[hash_value].test;
   while (test != NULL) {
@@ -751,14 +757,26 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     } else {
       test->state = TEST_INIT;
     }
+
+    /* since the different cond broadcast calls return different
+       things, we cannot use the nice NETPERF_mumble abstractions. */
+#ifdef WITH_GLIB
+
+    g_cond_broadcast(test_hash[hash_value].condition);
+
+#else
+
     rc = NETPERF_COND_BROADCAST(test_hash[hash_value].condition);
-      
+
+#endif      
+
     if (debug) {
       fprintf(where," new_state = %d rc = %d\n",test->state,rc);
       fflush(where);
     }
+
   }
-  NETPERF_MUTEX_UNLOCK(&(test_hash[hash_value].hash_lock));
+  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
   return(rc);
 }
 
@@ -921,16 +939,16 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (rc == NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "test_message: about to launch thread for test %d using func %p\n",
-                new_test->tid,
+                "test_message: about to launch thread %d for test using func %p\n",
+                new_test->thread_id,
                 new_test->test_func);
         fflush(where);
       }
-      rc = launch_thread(&new_test->tid,new_test->test_func,new_test);
+      rc = launch_thread(&new_test->thread_id,new_test->test_func,new_test);
       if (debug) {
         fprintf(where,
-                "test_message: launched thread for test %d\n",
-                new_test->tid);
+                "test_message: launched thread %d for test\n",
+                new_test->thread_id);
         fflush(where);
       }
     }
@@ -948,7 +966,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
         if (debug) {
           fprintf(where,
                   "test_message: waiting on thread %d\n",
-                  new_test->tid);
+                  new_test->thread_id);
           fflush(where);
         }
         sleep(1);
@@ -956,7 +974,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       if (debug) {
         fprintf(where,
                 "test_message: test has finished initialization on thread %d\n",
-                new_test->tid);
+                new_test->thread_id);
         fflush(where);
       }
     }

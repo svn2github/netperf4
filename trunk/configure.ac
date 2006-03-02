@@ -37,15 +37,16 @@ case $target in
 	;;
 esac
 
-# Checks for libraries.
+# Checks for libraries.  the check for pthread has been moved to where
+# we decide if we are using glib or not.
 AC_HAVE_LIBRARY(m)
-AC_HAVE_LIBRARY(pthread)
 AC_HAVE_LIBRARY(dl)
 
-# Checks for header files.
+# Checks for header files. the check for pthread.h has been move to
+# where we decide if we are using glib or not
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([arpa/inet.h arpa/nameser.h arpa/nameser_compat.h dlfcn.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pthread.h pwd.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h ])
+AC_CHECK_HEADERS([arpa/inet.h arpa/nameser.h arpa/nameser_compat.h dlfcn.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pwd.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h ])
 
 # Some platforms require these.  There may be a better way.
 AC_HAVE_LIBRARY(socket)
@@ -134,9 +135,13 @@ if test "${with_glib+set}" = set && test "$with_glib" != no; then
 	glib_cflags=`pkg-config --cflags glib-2.0`
 	glib_libs=`pkg-config --libs glib-2.0`
 	AC_DEFINE([WITH_GLIB],1,[Define to one to use glib instead of direct pthreads])
-else
+   else
 	AC_MSG_ERROR(Cannot find pkg-config and so cannot use glib.)
-fi
+   fi
+else
+# this is going to be pthreads
+  AC_HAVE_LIBRARY(pthread)
+  AC_CHECK_HEADERS([pthread.h])
 fi
 
 # see if we should be enabling histogram support

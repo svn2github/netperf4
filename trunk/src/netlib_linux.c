@@ -83,17 +83,17 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
      grins. raj 2006-01-24 */
 
   if (strcmp(loc_type,"PROC") == 0) {
-    err  = sched_setaffinity(test->tid,
+    err  = sched_setaffinity(test->thread_id,
 			     sizeof(mask),
 			     &mask);
   }
   else if (strcmp(loc_type,"LDOM") == 0) {
-    err  = sched_setaffinity(test->tid,
+    err  = sched_setaffinity(test->thread_id,
 			     sizeof(mask),
 			     &mask);
   }
   else if (strcmp(loc_type,"PSET") == 0) {
-    err  = sched_setaffinity(test->tid,
+    err  = sched_setaffinity(test->thread_id,
 			     sizeof(mask),
 			     &mask);
   }

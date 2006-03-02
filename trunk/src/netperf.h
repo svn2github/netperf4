@@ -42,6 +42,18 @@ delete this exception statement from your version.
 
 #ifdef WITH_GLIB
 #include <glib.h>
+#define NETPERF_MUTEX_T GMutex
+#define NETPERF_RWLOCK_T GStaticRWLock
+#define NETPERF_THREAD_T GThread
+#define NETPERF_COND_T GCond
+#define NETPERF_ABS_TIMESPEC GTimeVal
+#define NETPERF_ABS_TIMESET(base,a,b) base.tv_sec = a;base.tv_usec=b;
+#define NETPERF_MUTEX_LOCK g_mutex_lock
+#define NETPERF_MUTEX_UNLOCK g_mutex_unlock
+#define NETPERF_COND_TIMEDWAIT g_cond_timedwait
+#define NETPERF_COND_BROADCAST g_cond_broadcast
+#define NETPERF_RWLOCK_WRLOCK g_static_rwlock_writer_lock
+#define NETPERF_RWLOCK_WRITER_UNLOCK g_static_rwlock_writer_unlock
 #elif defined(HAVE_PTHREAD_H)
 #include <pthread.h>
 #define NETPERF_MUTEX_T pthread_mutex_t
@@ -55,7 +67,7 @@ delete this exception statement from your version.
 #define NETPERF_COND_TIMEDWAIT pthread_cond_timedwait
 #define NETPERF_COND_BROADCAST pthread_cond_broadcast
 #define NETPERF_RWLOCK_WRLOCK pthread_rwlock_wrlock
-#define NETPERF_RWLOCK_UNLOCK pthread_rwlock_unlock
+#define NETPERF_RWLOCK_WRITER_UNLOCK pthread_rwlock_unlock
 #else
 #error Netperf4 requires either glib or pthreads
 #endif
@@ -200,7 +212,7 @@ typedef struct server_instance {
 #define SERVER_HASH_BUCKETS 4
 
 typedef struct server_hash_elt {
-  NETPERF_MUTEX_T  hash_lock;
+  NETPERF_MUTEX_T  *hash_lock;
   NETPERF_COND_T   *condition;
   server_t        *server;
 } server_hash_t;
@@ -273,15 +285,11 @@ typedef struct test_instance {
 
   int        err_no;           /* The errno returned by the failing syscall */
   
-  NETPERF_THREAD_T  tid;       /* the posix thread id of the test
-                                  instance within the netserver.
-                                  Will only be stored in the netserver
-                                  process(es) not the netperf
-                                  process. this stems from a pthread_t
-                                  being something that is supposed to
-                                  be opaque to the user, so there is
-                                  no way to know how to communicate it
-                                  to another process/host. */
+  NETPERF_THREAD_T thread_id;   /* as the different threads packages
+				   have differnt concepts of what the
+				   opaque thread id should be we will
+				   have to do some interesting
+				   backflips to deal with them */
 
   xmlChar   *test_name;        /* the ASCII name of the test being
                                   performed by this test instance. */
@@ -337,7 +345,7 @@ typedef struct test_instance {
 
 
 typedef struct test_hash_elt {
-  NETPERF_MUTEX_T  hash_lock;
+  NETPERF_MUTEX_T  *hash_lock;
   NETPERF_COND_T   *condition;
   test_t          *test;
 } test_hash_t;
@@ -395,7 +403,7 @@ typedef void (*GenReport)(tset_t *test_set,char *report_flags,char *outfile);
 
 
 typedef struct test_set_hash_elt {
-  NETPERF_MUTEX_T  hash_lock;
+  NETPERF_MUTEX_T  *hash_lock;
   NETPERF_COND_T   *condition;
   tset_t          *test_set;
 } tset_hash_t;

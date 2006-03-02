@@ -96,7 +96,11 @@ extern int send_control_message(const int control_sock, xmlNodePtr body,
 				xmlChar *nid, const xmlChar *fromnid);
 extern int32_t recv_control_message(int control_sock, xmlDocPtr *message);
 extern void report_server_error(server_t *server);
+#ifdef WITH_GLIB
+extern int launch_thread(GThread *tid, void *(*start_routine)(void *), void *data);
+#else
 extern int launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data);
+#endif
 extern int set_thread_locality(test_t *test, char *loc_type, char *loc_value);
 extern void break_args_explicit(char *s, char *arg1, char *arg2);
 extern int parse_address_family(char family_string[]);
@@ -120,7 +124,7 @@ struct msgs {
   unsigned int valid_states;
 };
 
-void netlib_init();
+extern void netlib_init();
 
 void display_test_hash();
 #endif
