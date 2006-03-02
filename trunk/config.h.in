@@ -348,6 +348,9 @@
 /* Define to one to include XTI tests. */
 #undef WANT_XTI
 
+/* Define to one to use glib instead of direct pthreads */
+#undef WITH_GLIB
+
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
 

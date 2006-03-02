@@ -45,7 +45,9 @@ delete this exception statement from your version.
 #endif
 
 /* we want to get the definition of uint32_t et al */
+#ifdef HAVE_STDINT_H
 #include <stdint.h>
+#endif
 
 #ifdef WANT_HISTOGRAM
 #include "netperf_hist.h"

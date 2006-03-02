@@ -122,12 +122,29 @@ else
 	AC_MSG_ERROR(Cannot find xml2-config.)
 fi
 
+AC_ARG_WITH(glib,
+	[AS_HELP_STRING([--with-glib],[attempt to use glib's thread abstractionsrather than direct pthreads])])
+
+glib_cflags=""
+glib_libs=""
+
+if test "${with_glib+set}" = set && test "$with_glib" != no; then
+   AC_CHECK_PROG(have_pkg_config, pkg-config, "yes","no")
+   if test "x$have_pkg_config"="xyes"; then
+	glib_cflags=`pkg-config --cflags glib-2.0`
+	glib_libs=`pkg-config --libs glib-2.0`
+	AC_DEFINE([WITH_GLIB],1,[Define to one to use glib instead of direct pthreads])
+else
+	AC_MSG_ERROR(Cannot find pkg-config and so cannot use glib.)
+fi
+fi
+
 # see if we should be enabling histogram support
 
 AC_MSG_CHECKING(whether to include histogram support)
 
 AC_ARG_ENABLE(histogram,
-	[  --enable-histogram   include individual op timing, may affect result ])
+	[AS_HELP_STRING([--enable-histogram],[include individual op timing, may affect result]) ])
 
 case "$enable_histogram" in
 	yes)
@@ -551,8 +568,8 @@ esac
 	AC_MSG_RESULT("$enable_cpuutil")
 
 # not sure that this is really the right way to do this...help?
-CFLAGS="$CLFAGS $libxml2_cflags"
-LIBS="$LIBS $libxml2_libs"
+CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags"
+LIBS="$LIBS $libxml2_libs $glib_libs"
 
 AC_SUBST(CFLAGS)
 AC_SUBST(LIBS)
