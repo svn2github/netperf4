@@ -97,7 +97,7 @@ extern int send_control_message(const int control_sock, xmlNodePtr body,
 extern int32_t recv_control_message(int control_sock, xmlDocPtr *message);
 extern void report_server_error(server_t *server);
 #ifdef WITH_GLIB
-extern int launch_thread(GThread *tid, void *(*start_routine)(void *), void *data);
+extern int launch_thread(GThread **tid, void *(*start_routine)(void *), void *data);
 #else
 extern int launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data);
 #endif

@@ -44,7 +44,7 @@ delete this exception statement from your version.
 #include <glib.h>
 #define NETPERF_MUTEX_T GMutex
 #define NETPERF_RWLOCK_T GStaticRWLock
-#define NETPERF_THREAD_T GThread
+#define NETPERF_THREAD_T GThread *
 #define NETPERF_COND_T GCond
 #define NETPERF_ABS_TIMESPEC GTimeVal
 #define NETPERF_ABS_TIMESET(base,a,b) base.tv_sec = a;base.tv_usec=b;
@@ -195,7 +195,7 @@ typedef struct server_instance {
   char            *err_fn;       /* procedure which placed this server into
                                     the NSRV_ERROR state. */
 
-  NETPERF_THREAD_T tid;          /* the posix thread-id of the server
+  NETPERF_THREAD_T thread_id;    /* the posix thread-id of the server
                                     instance within netperf.
                                     Will only be stored in the netperf
                                     process not the netserver process. 

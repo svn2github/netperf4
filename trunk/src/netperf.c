@@ -1009,6 +1009,8 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
         NETPERF_MUTEX_LOCK(h->hash_lock);
 
 #ifdef WITH_GLIB
+	g_get_current_time(&abstime);
+	g_time_val_add(&abstime,1000);
 	g_cond_timedwait(h->condition, &h->hash_lock, &abstime);
 #else
         get_expiration_time(&delta_time,&abstime);
@@ -1265,10 +1267,10 @@ launch_worker_threads()
           fflush(where);
         }
         /* netserver worker thread is not yet initialized start it */
-        rc = launch_thread(&server->tid, netperf_worker, server);
+        rc = launch_thread(&server->thread_id, netperf_worker, server);
         if (debug) {
           fprintf(where,"launched thread %d for netserver %s\n",
-                  server->tid,server->id);
+                  server->thread_id,server->id);
           fflush(where);
         }
         NETPERF_MUTEX_LOCK(h->hash_lock);
@@ -1324,6 +1326,8 @@ wait_for_tests_to_initialize()
         }
         /* test is not yet initialized wait for it */
 #ifdef WITH_GLIB
+	g_get_current_time(&abstime);
+	g_time_val_add(&abstime,1000);
 	g_cond_timedwait(h->condition, &h->hash_lock, &abstime);
 #else
         get_expiration_time(&delta_time,&abstime);
@@ -2163,6 +2167,10 @@ main(int argc, char **argv)
   int       rc = NPE_SUCCESS;
 
   program_name = argv[0];
+
+#ifdef WITH_GLIB
+  g_thread_init(NULL);
+#endif
 
   where = stderr;
 

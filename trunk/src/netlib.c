@@ -1082,7 +1082,7 @@ get_test_function(test_t *test, const xmlChar *func)
    that. raj 2006-03-02 */
 int
 #ifdef WITH_GLIB
-launch_thread(GThread *tid, void *(*start_routine)(void *), void *data)
+launch_thread(GThread **tid, void *(*start_routine)(void *), void *data)
 #else
 launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
 #endif
@@ -1091,7 +1091,7 @@ launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
   int rc;
 
 #ifdef WITH_GLIB
-  NETPERF_THREAD_T *temp_tid;
+  NETPERF_THREAD_T temp_tid;
 
   temp_tid = g_thread_create(start_routine,data,FALSE,NULL);
 

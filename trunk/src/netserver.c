@@ -395,7 +395,11 @@ instantiate_netperf( int sock )
           netperf->sock      = sock;
           netperf->state     = NSRV_CONNECTED;
           netperf->state_req = NSRV_WORK;
-          netperf->tid       = -1;
+#ifdef WITH_GLIB
+	  netperf->thread_id       = NULL;
+#else
+          netperf->thread_id       = -1;
+#endif
           netperf->next      = NULL;
 
           /* check the version */
@@ -1027,6 +1031,10 @@ main (int argc, char **argv)
   netperf_socklen_t namelen = sizeof(name);
 
   program_name = argv[0];
+
+#ifdef WITH_GLIB
+  g_thread_init(NULL);
+#endif
 
   /* if netserver is invoked with any of the -L, -p or -f options it
      will necessary to setup the listen endpoint.  similarly, if
