@@ -132,8 +132,11 @@ glib_libs=""
 if test "${with_glib+set}" = set && test "$with_glib" != no; then
    AC_CHECK_PROG(have_pkg_config, pkg-config, "yes","no")
    if test "x$have_pkg_config"="xyes"; then
-	glib_cflags=`pkg-config --cflags glib-2.0`
-	glib_libs=`pkg-config --libs glib-2.0`
+    # while we are using "glib" we are really using gthread it seems so do
+    # the pkg-config thing with that name instead as it seems to be a
+    # proper superset 
+	glib_cflags=`pkg-config --cflags gthread-2.0`
+	glib_libs=`pkg-config --libs gthread-2.0`
 	AC_DEFINE([WITH_GLIB],1,[Define to one to use glib instead of direct pthreads])
    else
 	AC_MSG_ERROR(Cannot find pkg-config and so cannot use glib.)

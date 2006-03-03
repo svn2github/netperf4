@@ -52,8 +52,8 @@ delete this exception statement from your version.
 #define NETPERF_MUTEX_UNLOCK g_mutex_unlock
 #define NETPERF_COND_TIMEDWAIT g_cond_timedwait
 #define NETPERF_COND_BROADCAST g_cond_broadcast
-#define NETPERF_RWLOCK_WRLOCK g_static_rwlock_writer_lock
-#define NETPERF_RWLOCK_WRITER_UNLOCK g_static_rwlock_writer_unlock
+#define NETPERF_RWLOCK_WRLOCK g_static_rw_lock_writer_lock
+#define NETPERF_RWLOCK_WRITER_UNLOCK g_static_rw_lock_writer_unlock
 #elif defined(HAVE_PTHREAD_H)
 #include <pthread.h>
 #define NETPERF_MUTEX_T pthread_mutex_t

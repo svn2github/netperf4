@@ -39,6 +39,16 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#ifdef WITH_GLIB
+# ifdef HAVE_GLIB_H
+#  include <glib.h>
+# endif 
+#else
+# ifdef HAVE_PTHREAD_H
+#  include <pthread.h>
+# endif
+#endif
+
 #ifdef HAVE_STDIO_H
 #include <stdio.h>
 #endif

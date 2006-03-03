@@ -43,6 +43,16 @@ delete this exception statement from your version.
 #include <stdio.h>
 #endif
 
+#ifdef WITH_GLIB
+# ifdef HAVE_GLIB_H
+#  include <glib.h>
+# endif 
+#else
+# ifdef HAVE_PTHREAD_H
+#  include <pthread.h>
+# endif
+#endif
+
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -1011,7 +1021,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
 #ifdef WITH_GLIB
 	g_get_current_time(&abstime);
 	g_time_val_add(&abstime,1000);
-	g_cond_timedwait(h->condition, &h->hash_lock, &abstime);
+	g_cond_timed_wait(h->condition, h->hash_lock, &abstime);
 #else
         get_expiration_time(&delta_time,&abstime);
 
@@ -1328,7 +1338,7 @@ wait_for_tests_to_initialize()
 #ifdef WITH_GLIB
 	g_get_current_time(&abstime);
 	g_time_val_add(&abstime,1000);
-	g_cond_timedwait(h->condition, &h->hash_lock, &abstime);
+	g_cond_timed_wait(h->condition, h->hash_lock, &abstime);
 #else
         get_expiration_time(&delta_time,&abstime);
 
