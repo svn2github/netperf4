@@ -691,6 +691,8 @@ close_netserver()
   } else {
     /* we should never really get here   sgb  2005-12-06 */
     fprintf(where, "%s entered through some unknown path!!!!\n", __func__);
+    fprintf(where, "netperf->state_req = %d \t netperf->err_rc = %d\n",
+            netperf->state_req, netperf->err_rc);
     fflush(where);
     exit(-2);
   }

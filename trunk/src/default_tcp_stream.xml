@@ -1,5 +1,5 @@
 <?xml version="1.0" standalone="no" ?>
-<!DOCTYPE commands SYSTEM "./netperf_docs.dtd" >        
+<!DOCTYPE commands SYSTEM "http://www.netperf.org/netperf_docs.dtd/1.0" >
 <commands xmlns="http://www.netperf.org/ns/netperf">
 <!-- 20 second TCP_STREAM test -->
   <create_test_set set_name="s0" tests_in_set="t0,t1,t2" />

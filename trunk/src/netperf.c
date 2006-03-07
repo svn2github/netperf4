@@ -1331,6 +1331,14 @@ wait_for_tests_to_initialize()
 		  __func__,
 		  test->id,
 		  test->test_name);
+	  fprintf(where,
+                  "err_str='%s'\n",
+                  test->err_str);
+	  fprintf(where,
+                  "err_no=%d\t%s\n",
+                  test->err_no,
+                  npe_to_str(test->err_no));
+                 
 	  fflush(where);
           break;
         }
@@ -1343,7 +1351,7 @@ wait_for_tests_to_initialize()
         get_expiration_time(&delta_time,&abstime);
 
         prc = pthread_cond_timedwait(h->condition, h->hash_lock, &abstime);
-        if (prc != 0) {
+        if (debug && (prc != 0)) {
           fprintf(where,
             "wait_for_tests_to_initialize: thread conditional wait returned %d\n",prc);
           fflush(where);
@@ -2076,11 +2084,10 @@ struct netperf_cmd netperf_cmds[] = {
 static int
 process_command(xmlNodePtr cmd)
 {
-  int loc_debug = 1;
   int rc = NPE_SUCCESS;
   struct netperf_cmd *which_cmd;
   
-  if (debug || loc_debug) {
+  if (debug || want_verbose) {
     fprintf(where,"process_command: received %s command\n",cmd->name);
     fflush(where);
   }

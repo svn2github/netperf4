@@ -1,5 +1,5 @@
 <?xml version="1.0" standalone="no" ?>
-<!DOCTYPE netperf SYSTEM "./netperf_docs.dtd" >        
+<!DOCTYPE netperf SYSTEM "http://www.netperf.org/netperf_docs.dtd/1.0" >
 <netperf xmlns="http://www.netperf.org/ns/netperf">
 <!-- the "netserver" entity gives info on how to contact the netserver -->
 <netserver nid="n1" >
