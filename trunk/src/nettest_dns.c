@@ -2558,7 +2558,7 @@ report_dns_test_results(tset_t *test_set, char *report_flags, char *output)
   if ((count >= max_count) ||
       ((test_set->confidence.value >= 0) && (count >= min_count))) {
     print_results_summary(test_set);
-    if (test_set->confidence.value < 0) {
+    if ((test_set->confidence.value < 0) && (min_count > 1)) {
       print_did_not_meet_confidence(test_set);
     }
   }
