@@ -132,8 +132,8 @@ delete this exception statement from your version.
 #define CHECK_FOR_NOT_SOCKET (WSAGetLastError() == WSAENOTSOCK)
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
 #define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
-#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (len == SOCKET_ERROR && WSAGetLas
-tError() == WSAEINTR)
+#define CHECK_FOR_SEND_ERROR(len) (len >= 0) || \
+        (len == SOCKET_ERROR && WSAGetLastError() == WSAEINTR)
 #define GET_ERRNO WSAGetLastError()
 #define NETPERF_PATH_SEP "\\"
 #else

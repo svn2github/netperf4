@@ -65,6 +65,18 @@ delete this exception statement from your version.
 #include <sys/socket.h>
 #endif
 
+#ifdef HAVE_WINSOCK2_H
+#include <winsock2.h>
+#endif
+
+#ifdef HAVE_WINDOWS_H
+#include <windows.h>
+#endif
+
+#ifdef HAVE_WS2TCPIP_H
+#include <ws2tcpip.h>
+#endif
+
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
