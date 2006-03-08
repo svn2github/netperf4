@@ -42,6 +42,7 @@ delete this exception statement from your version.
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
+
 #if HAVE_INTTYPES_H
 # include <inttypes.h>
 #else

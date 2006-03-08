@@ -36,6 +36,10 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#ifdef HAVE_STDIO_H
+#include <stdio.h>
+#endif
+
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -96,9 +100,8 @@ delete this exception statement from your version.
 #endif
 
 #ifdef WITH_GLIB
-# ifdef HAVE_GLIB_H
-#  include <glib.h>
-# endif 
+# include <glib.h>
+# include <gmodule.h>
 #else
 # ifdef HAVE_PTHREAD_H
 #  include <pthread.h>
@@ -138,6 +141,10 @@ extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 
 #include "nettest_bsd.h"
 
+#ifndef PATH_MAX
+#define PATH_MAX MAX_PATH
+#endif
+
 /* given a filename, return the first path to the file that stats
    successfully - which is either the name already given, or that name
    with NETPERFDIR prepended. */
@@ -149,7 +156,7 @@ netperf_complete_filename(char *name, char *full, int fulllen) {
 
   struct stat buf;
 
-  if (0 == stat(name,&buf)) {
+  if (0 == NETPERF_STAT(name,&buf)) {
     /* the name resolved where we are - either there is a match in
        CWD, or they specified a full path name, I wonder if we need to
        worry about explicit null termination of full? raj 2006-02-27 */
@@ -162,9 +169,9 @@ netperf_complete_filename(char *name, char *full, int fulllen) {
        work, we presume that the name given wasn't a full one, so we
        just slap the NETPERFDIR and path separator in front of the
        name and try again. */
-    snprintf(path,PATH_MAX,"%s%s%s",NETPERFDIR,NETPERF_PATH_SEP,name);
+    NETPERF_SNPRINTF(path,PATH_MAX,"%s%s%s",NETPERFDIR,NETPERF_PATH_SEP,name);
     path[PATH_MAX] = '\0';
-    if (0 == stat(path,&buf)) {
+    if (0 == NETPERF_STAT(path,&buf)) {
       strncpy(full,path,fulllen);
       full[fulllen-1] = '\0';
       ret = strlen(full);
@@ -201,7 +208,7 @@ delta_milli(hrtime_t *begin, hrtime_t *end)
 }
 
 
-#else
+#elif defined HAVE_GETTIMEOFDAY
 
 void
 netperf_timestamp(struct timeval *timestamp)
@@ -253,6 +260,36 @@ delta_milli(struct timeval *begin,struct timeval *end)
   return(usecs/1000);
 
 }
+#else
+
+void
+netperf_timestamp(struct timeval *timestamp)
+{
+  timestamp->tv_sec = 0;
+  timestamp->tv_usec = 0;
+}
+
+ /* return the difference (in micro seconds) between two timeval */
+ /* timestamps */
+int
+delta_micro(struct timeval *begin,struct timeval *end)
+
+{
+
+  return(1000000000);
+
+}
+ /* return the difference (in milliseconds) between two timeval
+    timestamps */
+int
+delta_milli(struct timeval *begin,struct timeval *end)
+
+{
+
+  return(1000000000);
+
+}
+
 #endif /* HAVE_GETHRTIME */
 
 /* This routine will return the two arguments to the calling routine. */
@@ -768,6 +805,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
   char full_path[PATH_MAX];
   char *last;
   char *s;
+  struct stat buf;
 
 
   /* if we have no environment variables, this will not be
@@ -797,11 +835,29 @@ map_la_to_lib(xmlChar *la, char *lib) {
   }
 
   if (NULL != ld_library_path) {
+#ifdef WITH_GLIB
+    gchar **tokens;
+    int tok;
+#endif
     /* OK, start trapsing down the path until we find a match */
     strcpy(ld_library_path,temp);
+#ifdef WITH_GLIB
+    tokens = g_strsplit(ld_library_path,":",15);
+    for (tok = 0; tokens[tok] != NULL; tok++) {
+      g_snprintf(full_path,PATH_MAX,"%s%s%s",temp,NETPERF_PATH_SEP,la);
+      if (g_stat(full_path,&buf) == 0) {
+	/* we have a winner, time to go */
+	break;
+      }
+      else {
+	/* put-back the original la file */
+	strncpy(full_path,(char *)la,PATH_MAX);
+      }
+    }
+    g_strfreev(tokens);
+#else
     s = ld_library_path;
     while ((temp = strtok_r(s,":",&last)) != NULL) {
-      struct stat buf;
       s = NULL;
       snprintf(full_path,PATH_MAX,"%s%s%s",temp,NETPERF_PATH_SEP,la);
       if (stat(full_path,&buf) == 0) {
@@ -813,6 +869,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
 	strncpy(full_path,(char *)la,PATH_MAX);
       }
     }
+#endif
   }
 
   /* so, after all that, is it really a ".la" file or is it some other
@@ -890,16 +947,25 @@ map_la_to_lib(xmlChar *la, char *lib) {
 GenReport
 get_report_function(xmlNodePtr cmd)
 {
-  int tmp = debug;
   xmlChar  *la_file;
   char      lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
-  void     *lib_handle;
   xmlChar  *fname;
   GenReport func;
 
+#ifdef WITH_GLIB
+  gboolean ret;
+  GModule  *lib_handle;
+#else
+  void     *lib_handle;
+#endif
 
+
+  /* first we do the xml stuff */
   la_file   = xmlGetProp(cmd, (const xmlChar *)"library");
+  fname = xmlGetProp(cmd, (const xmlChar *)"function");
+
   map_la_to_lib(la_file,lib_file);
+
   if (debug) {
     fprintf(where,
             "trying to open library file '%s' via '%s'\n",
@@ -907,26 +973,45 @@ get_report_function(xmlNodePtr cmd)
             (char *)la_file);
     fflush(where);
   }
+ 
+  /* now we do the dlopen/gmodule magic */
+
+#ifdef WITH_GLIB
+  lib_handle = g_module_open((const gchar *)lib_file,0);
+#else
   lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
+#endif
   if (debug) {
     fprintf(where,"open of library file '%s' returned %p\n",
             (char *)lib_file, lib_handle);
     if (lib_handle == NULL) {
+#ifdef WITH_GLIB
+      fprintf(where,"g_module_open error '%s'\n",g_module_error());
+#else
       fprintf (where,"dlopen error '%s'\n",dlerror());
+#endif 
     }
     fflush(where);
   }
-  fname = xmlGetProp(cmd, (const xmlChar *)"function");
+
+#ifdef WITH_GLIB
+  ret = g_module_symbol(lib_handle,fname,&func);
+#else
   func  = (GenReport)dlsym(lib_handle,(char *)fname);
+#endif
   if (debug) {
-    fprintf(where,"dlsym of function '%s' returned %p\n",
+    fprintf(where,"symbol lookup of function '%s' returned %p\n",
             fname, func);
     if (func == NULL) {
+#ifdef WITH_GLIB
+      fprintf(where,"g_module_symbol error '%s'\n",g_module_error());
+#else
       fprintf (where,"dlsym error '%s'\n",dlerror());
+#endif
     }
     fflush(where);
   }
-  debug = tmp;
+
   return(func);
 }
 
@@ -934,7 +1019,12 @@ int
 get_test_function(test_t *test, const xmlChar *func)
 {
   int tmp = debug;
+#ifdef WITH_GLIB
+  GModule *lib_handle = test->library_handle;
+  gboolean ret;
+#else
   void    *lib_handle = test->library_handle;
+#endif
   xmlChar *fname;
   void    *fptr = NULL;
   int      fnlen = 0;
@@ -960,12 +1050,20 @@ get_test_function(test_t *test, const xmlChar *func)
               (char *)la_file);
       fflush(where);
     }
+#ifdef WITH_GLIB
+    lib_handle = g_module_open((const gchar *)lib_file,0);
+#else
     lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
+#endif
     if (debug) {
-      fprintf(where,"dlopen of library file '%s' returned handle %p\n",
+      fprintf(where,"open of library file '%s' returned handle %p\n",
               (char *)lib_file, lib_handle);
       if (lib_handle == NULL) {
-        fprintf (where,"dlopen error '%s'\n",dlerror());
+#ifdef WITH_GLIB
+	fprintf(where,"g_module_open error '%s'\n",g_module_error());
+#else
+        fprintf(where,"dlopen error '%s'\n",dlerror());
+#endif
       }
       fflush(where);
     }
@@ -1007,21 +1105,21 @@ get_test_function(test_t *test, const xmlChar *func)
       }
 
       if (!xmlStrcmp(func,(const xmlChar *)"test_clear")) {
-        if (strlen("_clear_stats") < (NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+        if (strlen("_clear_stats") < (size_t)(NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
           strcat(func_name,"_clear_stats");
           rc = NPE_SUCCESS;
         } else {
           rc = NPE_FUNC_NAME_TOO_LONG;
         }
       } else if (!xmlStrcmp(func,(const xmlChar *)"test_stats")) {
-        if (strlen("_get_stats") < (NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+        if (strlen("_get_stats") < (size_t)(NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
           strcat(func_name,"_get_stats");
           rc = NPE_SUCCESS;
         } else {
           rc = NPE_FUNC_NAME_TOO_LONG;
         }
       } else if (!xmlStrcmp(func,(const xmlChar *)"test_decode")) {
-        if (strlen("_decode_stats") < (NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+        if (strlen("_decode_stats") < (size_t)(NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
           strcat(func_name,"_decode_stats");
           rc = NPE_SUCCESS;
         } else {
@@ -1036,12 +1134,20 @@ get_test_function(test_t *test, const xmlChar *func)
       fflush(where);
     }
     if (rc == NPE_SUCCESS) {
+#ifdef WITH_GLIB
+      ret = g_module_symbol(lib_handle,func_name,&fptr);
+#else
       fptr = dlsym(lib_handle,func_name);
+#endif
       if (debug) {
-        fprintf(where,"dlsym of func_name '%s' returned %p\n",
+        fprintf(where,"symbol lookup of func_name '%s' returned %p\n",
                 func_name, fptr);
         if (fptr == NULL) {
+#ifdef WITH_GLIB
+	  fprintf(where,"g_module_symbol error '%s'\n",g_module_error());
+#else
           fprintf (where,"dlsym error '%s'\n",dlerror());
+#endif
         }
         fflush(where);
       }
@@ -1187,7 +1293,7 @@ test thread can connect or communicate with it.
 int
 establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrlenp)
 {
-  int sockfd;
+  SOCKET sockfd;
   int error;
   int count;
   int len = *addrlenp;
@@ -1221,7 +1327,11 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
         fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
         fflush(where);
       }
+#ifdef WITH_GLIB
+      g_usleep(1000);
+#else
       sleep(1);
+#endif
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
 
@@ -1248,14 +1358,15 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
     sockfd = socket(res_temp->ai_family,
                     res_temp->ai_socktype,
                     res_temp->ai_protocol);
-    if (sockfd < 0) {
+    if (sockfd == INVALID_SOCKET) {
       if (debug) {
-        fprintf(where,"establish_listen: socket error try next one\n");
+        fprintf(where,"establish_listen: socket error trying next one\n");
         fflush(where);
       }
       continue;
     }
-    if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(one)) == -1) {
+    if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(one)) == 
+	SOCKET_ERROR) {
       fprintf(where,"establish_listen: SO_REUSEADDR failed\n");
       fflush(where);
     }
@@ -1361,7 +1472,11 @@ establish_control(xmlChar *hostname,
         fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
         fflush(where);
       }
+#ifdef WITH_GLIB
+      g_usleep(1000);
+#else
       sleep(1);
+#endif
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
 
@@ -1402,7 +1517,11 @@ establish_control(xmlChar *hostname,
                 count);
         fflush(where);
       }
+#ifdef WITH_GLIB
+      g_usleep(1000);
+#else
       sleep(1);
+#endif
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
 

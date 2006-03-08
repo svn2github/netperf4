@@ -40,8 +40,38 @@ delete this exception statement from your version.
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+/* still more nested includes to get the uint stuff... */
+#if HAVE_INTTYPES_H
+# include <inttypes.h>
+#else
+# if HAVE_STDINT_H
+#  include <stdint.h>
+# else
+typedef          int        int32_t;
+typedef unsigned int       uint32_t;
+typedef          long long  int64_t;
+typedef unsigned long long uint64_t;
+# endif
+#endif
+
+/* under Windows we need to get the magic for "SOCKET" and one of
+   these next three does it */
+#ifdef HAVE_WINSOCK2_H
+#include <winsock2.h>
+#endif
+
+#ifdef HAVE_WINDOWS_H
+#include <windows.h>
+#endif
+
+#ifdef HAVE_WS2TCPIP_H
+#include <ws2tcpip.h>
+#endif
+
 #ifdef WITH_GLIB
 #include <glib.h>
+#include <glib/gstdio.h>
+#include <glib/gprintf.h>
 #define NETPERF_MUTEX_T GMutex
 #define NETPERF_RWLOCK_T GStaticRWLock
 #define NETPERF_THREAD_T GThread *
@@ -54,6 +84,8 @@ delete this exception statement from your version.
 #define NETPERF_COND_BROADCAST g_cond_broadcast
 #define NETPERF_RWLOCK_WRLOCK g_static_rw_lock_writer_lock
 #define NETPERF_RWLOCK_WRITER_UNLOCK g_static_rw_lock_writer_unlock
+#define NETPERF_STAT g_stat
+#define NETPERF_SNPRINTF g_snprintf
 #elif defined(HAVE_PTHREAD_H)
 #include <pthread.h>
 #define NETPERF_MUTEX_T pthread_mutex_t
@@ -68,13 +100,10 @@ delete this exception statement from your version.
 #define NETPERF_COND_BROADCAST pthread_cond_broadcast
 #define NETPERF_RWLOCK_WRLOCK pthread_rwlock_wrlock
 #define NETPERF_RWLOCK_WRITER_UNLOCK pthread_rwlock_unlock
+#define NETPERF_STAT stat
+#define NETPERF_SNPRINTF snprintf
 #else
 #error Netperf4 requires either glib or pthreads
-#endif
-
-/* we want to get the definition of uint32_t et al */
-#ifdef HAVE_STDINT_H
-#include <stdint.h>
 #endif
 
 #ifdef WANT_HISTOGRAM
@@ -87,10 +116,16 @@ delete this exception statement from your version.
 #define NETPERF_DEBUG_LOG_DIR "c:\\temp\\"
 #define NETPERF_DEBUG_LOG_PREFIX  "netperf"
 #define NETPERF_DEBUG_LOG_SUFFIX  ".log"
+#define netperf_socklen_t socklen_t
+#define close(x) closesocket(x)
+#define strcasecmp(a,b) _stricmp(a,b)
+#define getpid() ((int)GetCurrentProcessId())
 #else
 #define NETPERF_DEBUG_LOG_DIR "/tmp/"
 #define NETPERF_DEBUG_LOG_PREFIX  "netperf"
 #define NETPERF_DEBUG_LOG_SUFFIX  ".log"
+#define INVALID_SOCKET -1
+#define SOCKET_ERROR -1
 #endif
 
 #include "netconfidence.h"
@@ -180,7 +215,7 @@ typedef struct server_instance {
   xmlNodePtr       node;         /* the xml document node containing the
                                     servers configuration data */
 
-  int              sock;         /* the socket over which we communicate
+  SOCKET           sock;         /* the socket over which we communicate
                                     with the server */
 
   ns_state_t       state;        /* in what state is this server

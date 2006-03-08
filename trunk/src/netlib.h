@@ -51,6 +51,10 @@ delete this exception statement from your version.
 #include <sys/socket.h>
 #endif
 
+#ifndef WIN32
+#define SOCKET int
+#endif
+
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
