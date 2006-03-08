@@ -128,6 +128,8 @@ AC_ARG_WITH(glib,
 
 glib_cflags=""
 glib_libs=""
+gmodule_cflags=""
+gmodule_libs=""
 
 if test "${with_glib+set}" = set && test "$with_glib" != no; then
    AC_CHECK_PROG(have_pkg_config, pkg-config, "yes","no")
@@ -135,9 +137,12 @@ if test "${with_glib+set}" = set && test "$with_glib" != no; then
     # while we are using "glib" we are really using gthread it seems so do
     # the pkg-config thing with that name instead as it seems to be a
     # proper superset 
-	glib_cflags=`pkg-config --cflags gthread-2.0`
-	glib_libs=`pkg-config --libs gthread-2.0`
-	AC_DEFINE([WITH_GLIB],1,[Define to one to use glib instead of direct pthreads])
+    glib_cflags=`pkg-config --cflags gthread-2.0`
+    glib_libs=`pkg-config --libs gthread-2.0`
+    # of course, then we start allowing the use of gmodule stuff :)
+    gmodule_cflags=`pkg-config --cflags gmodule-2.0`
+    gmodule_libs=`pkg-config --libs gmodule-2.0`
+    AC_DEFINE([WITH_GLIB],1,[Define to one to use glib instead of direct pthreads])
    else
 	AC_MSG_ERROR(Cannot find pkg-config and so cannot use glib.)
    fi
@@ -576,8 +581,8 @@ esac
 	AC_MSG_RESULT("$enable_cpuutil")
 
 # not sure that this is really the right way to do this...help?
-CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags"
-LIBS="$LIBS $libxml2_libs $glib_libs"
+CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags $gmodule_cflgas"
+LIBS="$LIBS $libxml2_libs $glib_libs $gmodule_libs"
 
 AC_SUBST(CFLAGS)
 AC_SUBST(LIBS)

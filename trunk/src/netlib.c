@@ -844,7 +844,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
 #ifdef WITH_GLIB
     tokens = g_strsplit(ld_library_path,":",15);
     for (tok = 0; tokens[tok] != NULL; tok++) {
-      g_snprintf(full_path,PATH_MAX,"%s%s%s",temp,NETPERF_PATH_SEP,la);
+      g_snprintf(full_path,PATH_MAX,"%s%s%s",tokens[tok],NETPERF_PATH_SEP,la);
       if (g_stat(full_path,&buf) == 0) {
 	/* we have a winner, time to go */
 	break;
@@ -940,7 +940,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
     }
   }
   if (debug) {
-    printf("map_la_to_lib returning '%s' from '%s'\n",lib,(char *)la);
+    fprintf(where,"map_la_to_lib returning '%s' from '%s'\n",lib,(char *)la);
   }
 }
 

@@ -126,6 +126,7 @@ typedef unsigned long long uint64_t;
 #define NETPERF_DEBUG_LOG_SUFFIX  ".log"
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
+#define SOCKET int
 #endif
 
 #include "netconfidence.h"
