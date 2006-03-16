@@ -1,0 +1,116 @@
+BEGIN {
+ # generates configuration file for 32way sut with 32 links
+ # and 32 load generators for test. 
+ # The sut gets 96 receiving tests running in 32 netservers.
+ # Each client get 3 sending tests running in 1 netserver.
+ # The sut also gets a sysstats test to collect system statistics.
+ # Total of 193 separate test threads are configured across 33 systems.
+  max_clnt = 16
+  min_clnt = 9
+  printf("<?xml version=\"1.0\" standalone=\"no\" ?>\n")
+  printf("<!DOCTYPE netperf SYSTEM \"./netperf_docs.dtd\" >\n")
+  printf("<netperf xmlns=\"http://www.netperf.org/ns/netperf\">\n")
+
+ # clients in cabinet 1
+  net[1, 9] = 29
+  net[1,10] = 30
+  net[1,11] = 31
+  net[1,12] = 32
+  net[1,13] = 33
+  net[1,14] = 34
+  net[1,15] = 35
+  net[1,16] = 36
+
+ # clients in cabinet 2
+  net[2, 9] = 37
+  net[2,10] = 38
+  net[2,11] = 39
+  net[2,12] = 40
+  net[2,13] = 41
+  net[2,14] = 42
+  net[2,15] = 43
+  net[2,16] = 44
+
+ # clients in cabinet 3
+  net[3, 9] = 1
+  net[3,10] = 20
+  net[3,11] = 21
+  net[3,12] = 22
+  net[3,13] = 7
+  net[3,14] = 23
+  net[3,15] = 24
+  net[3,16] = 25
+
+ # clients in cabinet 4
+  net[4, 9] = 10
+  net[4,10] = 26
+  net[4,11] = 27
+  net[4,12] = 28
+  net[4,13] = 14
+  net[4,14] = 15
+  net[4,15] = 16
+  net[4,16] = 17
+
+  file[1] = "wld_file1.xml"
+  file[2] = "wld_file2.xml"
+  file[3] = "wld_file3.xml"
+}
+END {
+  # declare tests for netserver running on k14ol101 32way olympia
+  ns  = 0
+  tst = 0
+  printf("<netserver nid=\"n%d\"\n",ns)
+  printf("  remote_host = \"223.0.14.101\" >\n")
+  printf("  <test tid=\"t%d\"\n",tst)
+  printf("    test_name = \"sys_stats\"\n")
+  printf("    library   = \"netsysstats.la\" >\n")
+  printf("  </test>\n")
+  for (clt=min_clnt;clt<=max_clnt;clt++) {
+    for (cab=1;cab<=4;cab++) {
+      if (ns > 0) {
+        printf("<netserver nid=\"n%d\"\n",ns)
+        printf("  remote_host = \"223.0.14.101\" >\n")
+      }
+      for (f=1; f<=3; f++) {
+        tst++
+        printf("  <test tid=\"t%d\"\n",tst)
+        printf("    test_name = \"recv_vst_rr\"\n")
+        printf("    library   = \"nettest_vst.la\" >\n")
+        printf("    <socket_args\n")
+        printf("      local_host = \"192.101.%d.101\"\n",net[cab,clt])
+        printf("      req_size   = \"32783\"\n")
+        printf("      rsp_size   = \"16384\" />\n")
+        printf("  </test>\n")
+      }
+      ns++
+      printf("</netserver>\n")
+    }
+  }
+
+  # declare tests for netservers running on 32 clients
+  dep   = 0
+  depns = 0
+  for (clt=min_clnt;clt<=max_clnt;clt++) {
+    for (cab=1;cab<=4;cab++) {
+      printf("<netserver nid=\"n%d\"\n",ns)
+      printf("  remote_host = \"223.0.%d.%d\" >\n",cab,clt)
+      for (f=1; f<=3; f++) {
+        dep++
+        tst++
+        printf("  <test tid=\"t%d\"\n",tst)
+        printf("    test_name = \"send_vst_rr\"\n")
+        printf("    library   = \"nettest_vst.la\" >\n")
+        printf("    <dependson testid=\"t%d\"\n",dep)
+        printf("      netserverid=\"n%d\" />\n",depns)
+        printf("    <socket_args\n")
+        printf("      local_host = \"192.101.%d.%d\"\n",net[cab,clt],clt)
+        printf("      fill_file     = \"/opt/netperf4/src/%s\" />\n",file[f])
+        printf("  </test>\n")
+      }
+      depns++
+      ns++
+      printf("</netserver>\n")
+    }
+  }
+  printf("</netperf>\n")
+}
