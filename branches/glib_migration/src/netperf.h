@@ -118,6 +118,7 @@ typedef unsigned long long uint64_t;
 #define NETPERF_DEBUG_LOG_SUFFIX  ".log"
 #define netperf_socklen_t socklen_t
 #define close(x) closesocket(x)
+#define CLOSE_SOCKET(x) closesocket(x)
 #define strcasecmp(a,b) _stricmp(a,b)
 #define getpid() ((int)GetCurrentProcessId())
 #else
@@ -127,6 +128,7 @@ typedef unsigned long long uint64_t;
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
 #define SOCKET int
+#define CLOSE_SOCKET(x) close(x)
 #endif
 
 #include "netconfidence.h"
@@ -135,7 +137,7 @@ typedef unsigned long long uint64_t;
 #define NETPERF_DTD_FILE (const xmlChar *)"http://www.netperf.org/netperf_docs.dtd/1.0"
 #define NETPERF_VERSION (const xmlChar *)"4"
 #define NETPERF_UPDATE  (const xmlChar *)"0"
-#define NETPERF_FIX     (const xmlChar *)"999"
+#define NETPERF_FIX     (const xmlChar *)"997"
 
 #define NETPERF_DEBUG_ENTRY(d,w) \
   if (d) { \
