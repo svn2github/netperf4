@@ -158,7 +158,7 @@ char    local_addr_fam_buf[BUFSIZ];
 gboolean set_port_number(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
 
   listen_port = g_strdup(option_value);
-  listen_port_num = atoi(listen_port);
+  listen_port_num = (guint16)atoi(listen_port);
 
   return(TRUE);
 
@@ -624,7 +624,7 @@ instantiate_netperf( int sock )
         g_fprintf(where,"%s: close connection remote close\n", __func__);
         fflush(where);
       }
-      close(sock);
+      CLOSE_SOCKET(sock);
       exit(-1);
     }
     if (rc == NPE_SUCCESS) {
@@ -787,7 +787,7 @@ kill_all_tests()
   empty_hash_buckets = 0;
   while(empty_hash_buckets < TEST_HASH_BUCKETS) {
     empty_hash_buckets = 0;
-    sleep(1);
+    g_usleep(1000000);
     check_test_state();
     for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
       if (test_hash[i].test == NULL) {

@@ -1375,7 +1375,7 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
     }
     fprintf(where,"establish_listen: bind error close and try next\n");
     fflush(where);
-    close(sockfd);
+    CLOSE_SOCKET(sockfd);
   } while ( (res_temp = res_temp->ai_next) != NULL );
 
   if (res_temp == NULL) {
@@ -1385,7 +1385,7 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
   } else if (listen (sockfd,20) == -1) {
     fprintf(where,"establish_listen: setting the listen backlog failed\n");
     fflush(where);
-    close(sockfd);
+    CLOSE_SOCKET(sockfd);
     sockfd = -1;
   } else {
     if (addrlenp) *addrlenp = res_temp->ai_addrlen;
@@ -1603,7 +1603,7 @@ establish_control(xmlChar *hostname,
          don't worry about overheads for socket allocation or
          close. raj 2003-02-24 */
     }
-    close(control_sock);
+    CLOSE_SOCKET(control_sock);
   }
 
   /* we no longer need the addrinfo stuff */

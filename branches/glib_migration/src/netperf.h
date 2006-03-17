@@ -117,10 +117,11 @@ typedef unsigned long long uint64_t;
 #define NETPERF_DEBUG_LOG_PREFIX  "netperf"
 #define NETPERF_DEBUG_LOG_SUFFIX  ".log"
 #define netperf_socklen_t socklen_t
-#define close(x) closesocket(x)
 #define CLOSE_SOCKET(x) closesocket(x)
 #define strcasecmp(a,b) _stricmp(a,b)
 #define getpid() ((int)GetCurrentProcessId())
+#define __func__ __FUNCTION__
+#define PATH_MAX MAXPATHLEN
 #else
 #define NETPERF_DEBUG_LOG_DIR "/tmp/"
 #define NETPERF_DEBUG_LOG_PREFIX  "netperf"
@@ -129,6 +130,7 @@ typedef unsigned long long uint64_t;
 #define SOCKET_ERROR -1
 #define SOCKET int
 #define CLOSE_SOCKET(x) close(x)
+#define GET_ERRNO errno
 #endif
 
 #include "netconfidence.h"
@@ -174,6 +176,9 @@ typedef unsigned long long uint64_t;
         (len == SOCKET_ERROR && WSAGetLastError() == WSAEINTR)
 #define GET_ERRNO WSAGetLastError()
 #define NETPERF_PATH_SEP "\\"
+#ifndef SHUT_WR
+#define SHUT_WR SD_SEND
+#endif
 #else
 #define CHECK_FOR_NOT_SOCKET (errno == ENOTSOCK)
 #define CHECK_FOR_INVALID_SOCKET (temp_socket < 0)

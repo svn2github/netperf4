@@ -1431,7 +1431,7 @@ wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
           }
           if (i) {
             i--;
-            sleep(1);
+            g_usleep(1000000);
           }
           else {
             i = 15;
@@ -1453,7 +1453,7 @@ wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
         }
         if (i) {
           i--;
-          sleep(1);
+          g_usleep(1000000);
         }
         else {
           i = 15;
@@ -2005,7 +2005,7 @@ wait_command(xmlNodePtr cmd, uint32_t junk)
     seconds = 0;
   }
   if (seconds) {
-    sleep(seconds);
+    g_usleep(seconds*1000000);
   }
   return(NPE_SUCCESS);
 }
@@ -2040,7 +2040,7 @@ close_command(xmlNodePtr cmd, uint32_t junk)
   while ((server->state != NSRV_ERROR) &&
          (server->state != NSRV_CLOSE) &&
          (server->state != NSRV_EXIT ))  {
-    sleep(1);
+    g_usleep(1000000);
   }
   delete_server(sid);
   return(rc);

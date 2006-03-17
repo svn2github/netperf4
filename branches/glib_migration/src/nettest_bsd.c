@@ -123,6 +123,18 @@ char    nettest_id[]="\
 #include <netdb.h>
 #endif
 
+#ifdef HAVE_WINSOCK2_H
+#include <winsock2.h>
+#endif
+
+#ifdef HAVE_WINDOWS_H
+#include <windows.h>
+#endif
+
+#ifdef HAVE_WS2TCPIP_H
+#include <ws2tcpip.h>
+#endif
+
 #include "netperf.h"
 
 #include "nettest_bsd.h"
@@ -130,12 +142,10 @@ char    nettest_id[]="\
 #ifdef WIN32
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
 #define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
-#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (len == SOCKET_ERROR && WSAGetLastError() == WSAEINTR) 
 #define GET_ERRNO WSAGetLastError()
 #else
 #define CHECK_FOR_INVALID_SOCKET (temp_socket < 0)
 #define CHECK_FOR_RECV_ERROR(len) (len < 0)
-#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (errno == EINTR)
 #define GET_ERRNO errno
 #endif
 
@@ -282,7 +292,7 @@ generic_test(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -398,7 +408,7 @@ get_dependency_data(test_t *test, int type, int protocol)
         fprintf(test->where,"Sleeping on getaddrinfo EAI_AGAIN\n");
         fflush(test->where);
       }
-      sleep(1);
+      g_usleep(1000000);
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
     
@@ -643,7 +653,7 @@ create_data_socket(test)
 #ifdef SO_SNDBUF
   if (lss_size > 0) {
     if(setsockopt(temp_socket, SOL_SOCKET, SO_SNDBUF,
-                  &lss_size, sizeof(int)) < 0) {
+                  (void *)&lss_size, sizeof(int)) < 0) {
       report_test_failure(test,
                           "create_data_socket",
                           BSDE_SETSOCKOPT_ERROR,
@@ -660,7 +670,7 @@ create_data_socket(test)
 
   if (lsr_size > 0) {
     if(setsockopt(temp_socket, SOL_SOCKET, SO_RCVBUF,
-                  &lsr_size, sizeof(int)) < 0) {
+                  (void *)&lsr_size, sizeof(int)) < 0) {
       report_test_failure(test,
                           "create_data_socket",
                           BSDE_SETSOCKOPT_ERROR,
@@ -928,7 +938,7 @@ bsd_test_init(test_t *test, int type, int protocol)
           fprintf(test->where,"Sleeping on getaddrinfo EAI_AGAIN\n");
           fflush(test->where);
         }
-        sleep(1);
+        g_usleep(1000000);
       }
     } while ((error == EAI_AGAIN) && (count <= 5));
     
@@ -1226,7 +1236,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
     fflush(test->where);
   }
   while (new_state == TEST_LOADED) {
-    sleep(1);
+    g_usleep(1000000);
     new_state = CHECK_REQ_STATE;
   }
   if (test->debug) {
@@ -1240,7 +1250,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
     } else {
-      close(my_data->s_data);
+      CLOSE_SOCKET(my_data->s_data);
       if (test->debug) {
         fprintf(test->where,"%s: waiting in accept\n",proc_name);
         fflush(test->where);
@@ -1442,7 +1452,7 @@ send_tcp_stream_idle_link(test_t *test)
     recv(my_data->s_data,
          my_data->send_ring->buffer_ptr,
          my_data->send_size, 0);
-    close(my_data->s_data);
+    CLOSE_SOCKET(my_data->s_data);
     my_data->s_data = create_data_socket(test);
     if (test->debug) {
       fprintf(test->where,"%s: connecting from LOAD state\n",proc_name);
@@ -1617,7 +1627,7 @@ recv_tcp_stream(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -1664,7 +1674,7 @@ send_tcp_stream(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -1799,7 +1809,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
 
   new_state = CHECK_REQ_STATE;
   while (new_state == TEST_LOADED) {
-    sleep(1);
+    g_usleep(1000000);
     new_state = CHECK_REQ_STATE;
   }
 
@@ -1819,7 +1829,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
                  my_data->recv_ring->buffer_ptr,
                  my_data->req_size, 0);
       }
-      close(my_data->s_data);
+      CLOSE_SOCKET(my_data->s_data);
       if (test->debug) {
         fprintf(test->where,"%s: waiting in accept\n",proc_name);
         fflush(test->where);
@@ -2059,7 +2069,7 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
 
   new_state = CHECK_REQ_STATE;
   while (new_state == TEST_LOADED) {
-    sleep(1);
+    g_usleep(1000000);
     new_state = CHECK_REQ_STATE;
   }
   if (new_state == TEST_IDLE) {
@@ -2078,7 +2088,7 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
                    my_data->recv_ring->buffer_ptr,
                    my_data->rsp_size, 0);
       }
-      close(my_data->s_data);
+      CLOSE_SOCKET(my_data->s_data);
       my_data->s_data = create_data_socket(test);
       if (test->debug) {
         fprintf(test->where,"%s: connecting from LOAD state\n",proc_name);
@@ -2319,7 +2329,7 @@ recv_tcp_rr(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -2366,7 +2376,7 @@ send_tcp_rr(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:

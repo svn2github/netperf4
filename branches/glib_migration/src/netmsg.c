@@ -198,7 +198,7 @@ process_message(server_t *server, xmlDocPtr doc)
           fflush(where);
           server->state = NSRV_ERROR;
           if (server->sock != -1) {
-            close(server->sock);
+            CLOSE_SOCKET(server->sock);
             /* should we delete the server from the server_hash ? sgb */
             break;
           }
@@ -969,7 +969,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
                   new_test->thread_id);
           fflush(where);
         }
-        sleep(1);
+        g_usleep(1000000);
       }  /* end wait */
       if (debug) {
         fprintf(where,

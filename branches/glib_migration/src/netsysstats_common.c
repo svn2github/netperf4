@@ -68,8 +68,6 @@ delete this exception statement from your version.
 
 #include "netperf.h"
 
-#define GET_ERRNO errno
-
 #include "netsysstats.h"
 
 /* variables are kept in the test_specific data section of the test stucture.
@@ -304,13 +302,13 @@ add_per_cpu_attributes(test_t *test,
                        cpu_time_counters_t *cpu,
                        uint32_t num_cpus)
 {
-  int        i;
+  uint32_t        i;
   xmlNodePtr cpu_stats = NULL;
   xmlAttrPtr ap        = NULL;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
   
-  for (i=0;i<num_cpus;i++) {
+  for (i = 0; i < num_cpus; i++) {
     if ((cpu_stats = xmlNewNode(NULL,(xmlChar *)"per_cpu_stats")) != NULL) {
       /* set the properites of the per_cpu_stats -
          the cpu_id counter values  sgb 2005-10-17 */
@@ -550,7 +548,7 @@ sys_stats(test_t *test)
 	}
 	/* check for state transition */
 	if (CHECK_REQ_STATE == TEST_IDLE) {
-	  sleep(1);
+	  g_usleep(1000000);
 	} else if (CHECK_REQ_STATE == TEST_LOADED) {
 	  SET_TEST_STATE(TEST_LOADED);
 	} else if (CHECK_REQ_STATE == TEST_DEAD) {
@@ -569,7 +567,7 @@ sys_stats(test_t *test)
 	}
 	
 	if (CHECK_REQ_STATE == TEST_MEASURE) {
-	  sleep(1);
+	  g_usleep(1000000);
 	} else if (CHECK_REQ_STATE == TEST_LOADED) {
 	  /* get_cpu_time_counters sets current timestamp */
 	  get_cpu_time_counters(tsd->ending_cpu_counters,&(tsd->curr_time),test);
@@ -589,7 +587,7 @@ sys_stats(test_t *test)
 	}
 	
 	if (CHECK_REQ_STATE == TEST_LOADED) {
-	  sleep(1);
+	  g_usleep(1000000);
 	} else if (CHECK_REQ_STATE == TEST_MEASURE) {
 	  /* transitioning to measure state from loaded state set
 	     get_cpu_time_counters sets previous timestamp */
@@ -615,7 +613,7 @@ sys_stats(test_t *test)
     /* do we ever get here? seems that if we do, it would be spinning
        like crazy?!?  raj 2005-10-06 */
     while (GET_TEST_STATE != TEST_DEAD) {
-      sleep(1);
+      g_usleep(1000000);
       if (CHECK_REQ_STATE == TEST_DEAD) {
 	SET_TEST_STATE(TEST_DEAD);
       }
