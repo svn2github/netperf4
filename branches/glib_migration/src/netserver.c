@@ -351,6 +351,7 @@ spawn_new_netserver(int argc, char *argv[], SOCKET control, SOCKET toclose) {
   ret = g_spawn_async_with_pipes(NULL,         /* working dir */
 				 new_argv,     /* argument vector */
 				 NULL,         /* env ptr */
+				 G_SPAWN_SEARCH_PATH |
 				 G_SPAWN_LEAVE_DESCRIPTORS_OPEN, /* flags */
 				 NULL,         /* setup func */
 				 NULL,         /* its arg */
@@ -435,6 +436,7 @@ daemonize(int argc, char *argv[]) {
   ret = g_spawn_async_with_pipes(NULL,         /* working dir */
 				 new_argv,     /* argument vector */
 				 NULL,         /* env ptr */
+				 G_SPAWN_SEARCH_PATH |
 				 G_SPAWN_LEAVE_DESCRIPTORS_OPEN, /* flags */
 				 NULL,         /* setup func */
 				 NULL,         /* its arg */
