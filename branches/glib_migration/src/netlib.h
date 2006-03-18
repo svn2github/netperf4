@@ -136,7 +136,7 @@ typedef struct message_state {
   gboolean have_header;
   gint32  bytes_received;
   gint32  bytes_remaining;
-  gpointer buffer;
+  gchar   *buffer;
 } message_state_t;
 
 extern void netlib_init();
