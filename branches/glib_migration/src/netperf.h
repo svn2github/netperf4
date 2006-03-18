@@ -135,6 +135,8 @@ typedef unsigned long long uint64_t;
 
 #include "netconfidence.h"
 
+#define NETPERF_MESSAGE_HEADER_SIZE sizeof(guint32)
+
 #define NETPERF_DEFAULT_SERVICE_NAME     "netperf4"
 #define NETPERF_DTD_FILE (const xmlChar *)"http://www.netperf.org/netperf_docs.dtd/1.0"
 #define NETPERF_VERSION (const xmlChar *)"4"

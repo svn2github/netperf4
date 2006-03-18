@@ -1632,6 +1632,183 @@ netlib_init()
 }
 
 
+/* loop and grab all the available bytes, but no more than N from the
+   source and return. add the number of bytes received to the
+   bytes_read parameter */
+GIOStatus
+read_n_available_bytes(GIOChannel *source, gchar *data, gsize n, gsize *bytes_read, GError **error) {
+  GIOStatus status;
+
+  gsize bytes_to_read;
+  gsize bytes_this_read;
+  gchar *buffer;
+
+  bytes_to_read = n;
+  *bytes_read = 0;
+  buffer = data + 1;
+
+  while (((status =  g_io_channel_read_chars(source,
+					     buffer,
+					     bytes_to_read,
+					     &bytes_this_read,
+					     error)) ==
+	  G_IO_STATUS_NORMAL) && (bytes_to_read > 0)) {
+    *bytes_read += bytes_this_read;
+    bytes_to_read -= bytes_this_read;
+    buffer = buffer + *bytes_read;
+  }
+  return(status);
+}
+
+/* given a buffer with a complete control message, XML parse it and
+   then send it on its way. */
+gboolean
+xml_parse_control_message(gchar *message, gsize length, gpointer data) {
+  
+  xmlDocPtr xml_message;
+  gboolean ret;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  if ((xml_message = xmlParseMemory(message, length)) != NULL) {
+    /* got the message, run with it */
+    if (debug) {
+      g_fprintf(where,
+		"%s:xmlParseMemory parsed a %d byte message at %p giving doc at %p\n",
+		__func__,
+		length,
+		message,
+		xml_message);
+    }
+    /* send it on its way*/
+    ret = TRUE;
+  }
+  else {
+    if (debug) {
+      g_fprintf(where,
+		"%s: xmlParseMemory gagged on a %d byte message at %p\n",
+		__func__,
+		length,
+		message);
+    }
+    ret = FALSE;
+  }
+  NETPERF_DEBUG_EXIT(debug,where);
+  return(ret);
+}
+
+gboolean
+read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data) {
+  message_state_t *message_state;
+  gsize bytes_read;
+  GError *error = NULL;
+  gchar *ptr;
+  GIOStatus status;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+  message_state = data;
+  if (debug) {
+    g_fprintf(where,
+	      "%s called with cource %p condition %x and data %p\n",
+	      __func__,
+	      source,
+	      condition,
+	      data);
+    if (message_state) {
+      g_fprintf(where,
+		"%s message_state have_header %d bytes_remaining %d buffer %p\n",
+		__func__,
+		message_state->have_header,
+		message_state->bytes_remaining,
+		message_state->buffer);
+    }
+    else {
+      g_error("%s called with null message_state\n",__func__);
+    }
+  }
+
+  /* ok, so here we go... */
+  if (!message_state->have_header) {
+    /* we still have to get the header */
+    if (NULL == message_state->buffer) {
+      /* the very first time round */
+      message_state->bytes_remaining = NETPERF_MESSAGE_HEADER_SIZE;
+      message_state->bytes_received = 0;
+      message_state->buffer = g_malloc(NETPERF_MESSAGE_HEADER_SIZE);
+    }
+    /* now try to grab the rest of the header */
+    ptr = message_state->buffer + message_state->bytes_received;
+    bytes_read = 0;
+    status = read_n_available_bytes(source,
+				    ptr,
+				    message_state->bytes_remaining,
+				    &bytes_read,
+				    &error);
+
+    /* we need some sort of error and status check here don't we? */
+
+    if (G_IO_STATUS_EOF == status) {
+      /* do something when the remote has told us they are going away */
+    }
+    else if ((G_IO_STATUS_ERROR == status) ||
+	     (NULL != error)) {
+      /* do something to deal with an error condition */
+    }
+
+    message_state->bytes_received += bytes_read;
+    message_state->bytes_remaining -= bytes_read;
+
+    /* now, do we have the whole header? */
+    if (message_state->bytes_received == NETPERF_MESSAGE_HEADER_SIZE) {
+      /* setup for the message body */
+      message_state->have_header = TRUE;
+      message_state->bytes_remaining = ntohl(*(int *)message_state->buffer);
+      message_state->bytes_received = 0;
+      g_free(message_state->buffer);
+      message_state->buffer = g_malloc(message_state->bytes_remaining);
+    }
+  }
+
+  /* this is a separate if rather than an else clause because we want
+     to possibly execute this code in addition to the "get the rest of
+     the header" code. I suspect there is some way to do this with
+     less actual code but for now it seems sufficient. besides, we
+     want to make sure we drain the channel fully - otherwise there
+     may be some issues on Windows, maybe something to do with
+     possibly not getting notified of other bytes if we simply came
+     back out to let the event loop call us again. raj 2006-03-17 */
+  if (message_state->have_header) {
+    bytes_read = 0;
+    ptr = message_state->buffer + message_state->bytes_received;
+    status = read_n_available_bytes(source,
+				    ptr,
+				    message_state->bytes_remaining,
+				    &bytes_read,
+				    &error);
+
+    /* we need some sort of error and status check here don't we? */
+
+    if (G_IO_STATUS_EOF == status) {
+      /* do something when the remote has told us they are going away */
+    }
+    else if ((G_IO_STATUS_ERROR == status) ||
+	     (NULL != error)) {
+      /* do something to deal with an error condition */
+    }
+
+    message_state->bytes_received += bytes_read;
+    message_state->bytes_remaining -= bytes_read;
+
+    if (0 == message_state->bytes_remaining) {
+      /* we have an entire message, time to process it */
+    }
+  }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return(TRUE);
+}
+
 int32_t
 recv_control_message(int control_sock, xmlDocPtr *message)
 {

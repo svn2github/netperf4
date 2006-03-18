@@ -40,6 +40,10 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#ifdef WITH_GLIB
+#include <glib.h>
+#endif
+
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #ifdef TIME_WITH_SYS_TIME
@@ -127,6 +131,13 @@ struct msgs {
   msg_func_t msg_func;
   unsigned int valid_states;
 };
+
+typedef struct message_state {
+  gboolean have_header;
+  gint32  bytes_received;
+  gint32  bytes_remaining;
+  gpointer buffer;
+} message_state_t;
 
 extern void netlib_init();
 

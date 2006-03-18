@@ -13,3 +13,6 @@ and "editorial" continuity for subsequent releases.
 Stephen Burger
 Responsible for first working tests and multiple client
 initiailization.
+
+Simon Leinen
+Initial Solaris (9) porting work
