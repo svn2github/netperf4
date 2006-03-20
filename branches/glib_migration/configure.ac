@@ -581,7 +581,7 @@ esac
 	AC_MSG_RESULT("$enable_cpuutil")
 
 # not sure that this is really the right way to do this...help?
-CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags $gmodule_cflgas"
+CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags $gmodule_cflags"
 LIBS="$LIBS $libxml2_libs $glib_libs $gmodule_libs"
 
 AC_SUBST(CFLAGS)
