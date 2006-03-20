@@ -32,19 +32,8 @@ delete this exception statement from your version.
 #ifndef lint
 char    disk_test_id[]="\
 @(#)disktest.c (c) Copyright 2005 Hewlett-Packard Co. $Id: disktest.c 20 2006-2-28 19:45:00Z burger $";
-#else
-#define WANT_HISTOGRAM
 #endif /* lint */
 
-#ifdef WANT_HISTOGRAM
-#define HISTOGRAM_VARS        struct timeval time_one,time_two
-#define HIST_TIMESTAMP(time)  gettimeofday(time,NULL)
-#define HIST_ADD(h,delta)     HIST_add(h,delta)
-#else
-#define HISTOGRAM_VARS       /* variable declarations for histogram go here */
-#define HIST_TIMESTAMP(time) /* time stamp call for histogram goes here */
-#define HIST_ADD(h,delta)    /* call to add data to histogram goes here */
-#endif
 
 /****************************************************************/
 /*                                                              */
@@ -56,6 +45,10 @@ char    disk_test_id[]="\
 /****************************************************************/
 
 
+
+/* turn on histogram capability */
+#define WANT_HISTOGRAM
+
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -409,6 +402,9 @@ disk_test_init(test_t *test)
     fprintf(test->where, "\n");
     fflush(test->where);
   }
+  
+  new_data->read_hist  = HIST_new();
+  new_data->write_hist = HIST_new();
 
   SET_TEST_DATA(test, new_data);
 }
@@ -465,6 +461,7 @@ static xmlNodePtr
 disk_test_get_stats(test_t *test)
 {
   xmlNodePtr  stats = NULL;
+  xmlNodePtr  hist  = NULL;
   xmlAttrPtr  ap    = NULL;
   int         i,j;
   char        value[32];
@@ -480,7 +477,7 @@ disk_test_get_stats(test_t *test)
   }
   if ((stats = xmlNewNode(NULL,(xmlChar *)"test_stats")) != NULL) {
     /* set the properites of the test_stats message -
-       the tid and time stamps/values and counter values  sgb 2004-07-07 */
+       the tid and time stamps/values and counter values  sgb 2006-03-15 */
 
     ap = xmlSetProp(stats,(xmlChar *)"tid",test->id);
     for (i = 0; i < DISK_MAX_COUNTERS; i++) {
@@ -539,6 +536,17 @@ disk_test_get_stats(test_t *test)
           fflush(test->where);
         }
       }
+    }
+    /* add hist_stats entries to the status report */
+    hist = HIST_stats_node(my_data->read_hist, "DISK READ");
+    if (hist != NULL) {
+      fprintf(test->where, "Adding Histogram child\n");
+      fflush(test->where);
+      xmlAddChild(stats,hist);
+    }
+    hist = HIST_stats_node(my_data->write_hist, "DISK WRITE");
+    if (hist != NULL) {
+      xmlAddChild(stats,hist);
     }
     if (ap == NULL) {
       xmlFreeNode(stats);
@@ -941,8 +949,10 @@ do_raw_seq_disk_io(test_t *test)
     if (readIO) {
       bytes = io_read(fd, buf_addr, size, test, (char *)__func__);
       if (state == TEST_MEASURE) {
-        HIST_TIMESTAMP(&time_two);
-        HIST_ADD(my_data->read_hist,delta_macro(&time_one,&time_two));
+        if (my_data->read_hist) {
+          HIST_TIMESTAMP(&time_two);
+          HIST_ADD(my_data->read_hist, &time_one, &time_two);
+        }
         my_data->stats.named.read_calls++;
         my_data->stats.named.bytes_read += bytes;
       }
@@ -950,8 +960,10 @@ do_raw_seq_disk_io(test_t *test)
     else {
       bytes = io_write(fd, buf_addr, size, test, (char *)__func__);
       if (state == TEST_MEASURE) {
-        HIST_TIMESTAMP(&time_two);
-        HIST_ADD(my_data->write_hist,delta_macro(&time_one,&time_two));
+        if (my_data->write_hist) {
+          HIST_TIMESTAMP(&time_two);
+          HIST_ADD(my_data->write_hist, &time_one, &time_two);
+        }
         my_data->stats.named.write_calls++;
         my_data->stats.named.bytes_written += bytes;
       }
@@ -1239,6 +1251,24 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   rd->write_iops[index]      += write_call_rate;
   rd->iops[index]            += iops;
 
+  fprintf(outfd,"%s:print_hist=%d  print_test=%d  print_run=%d\n",
+          __func__, rd->print_hist, rd->print_test, rd->print_run);
+  fflush(outfd);
+  if (rd->print_hist) {
+    xmlNodePtr  hist;
+    hist = stats->xmlChildrenNode;
+    if (hist == NULL) {
+      fprintf(outfd,"%s:No Histogram Node Found\n\n",__func__);
+      fflush(outfd);
+    }
+    while (hist != NULL) {
+      if (!xmlStrcmp(hist->name,(const xmlChar *)"hist_stats")) {
+        HIST_REPORT(outfd, hist);
+      }
+      hist = hist->next;
+    }
+  }
+
   if (rd->print_test) {
     /* Display per test results */
     fprintf(outfd,"%3d  ", count);                    /*  0,5 */
@@ -1259,17 +1289,17 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
 static double
 process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
 {
-  int            i;
-  int            count;
-  int            index;
-  FILE          *outfd;
+  int             i;
+  int             count;
+  int             index;
+  FILE           *outfd;
   disk_results_t *rd;
-  double         elapsed_seconds;
-  double         sys_util;
-  double         calibration;
-  double         local_idle;
-  double         local_busy;
-  double         local_cpus;
+  double          elapsed_seconds;
+  double          sys_util;
+  double          calibration;
+  double          local_idle;
+  double          local_busy;
+  double          local_cpus;
 
 #define MAX_SYS_CNTRS 10
 #define E_SEC         0
@@ -1337,6 +1367,34 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(test_set->where);
   }
   rd->utilization[index]  += local_busy;
+
+  if (rd->print_per_cpu) {
+    xmlNodePtr  cpu;
+    char       *value_str;
+
+    cpu = stats->xmlChildrenNode;
+    while (cpu != NULL) {
+      if (!xmlStrcmp(cpu->name,(const xmlChar *)"per_cpu_stats")) {
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"cpu_id");
+        fprintf(outfd,"  cpu%2s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"calibration");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"idle_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"user_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"sys_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"int_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"other_count");
+        fprintf(outfd,"%s\n", value_str);
+        fflush(outfd);
+      }
+      cpu = cpu->next;
+    }
+  }
+
   if (rd->print_test) {
     /* Display per test results */
     fprintf(outfd,"%3d  ", count);                    /*  0,5 */

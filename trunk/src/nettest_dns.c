@@ -35,15 +35,6 @@ char    nettest_dns_id[]="\
 #include "config.h"
 #endif
 
-#ifdef HISTOGRAM
-#define HISTOGRAM_VARS        struct timeval time_one,time_two
-#define HIST_TIMESTAMP(time)  gettimeofday(time,NULL)
-#define HIST_ADD(h,delta)     HIST_add(h,delta)
-#else
-#define HISTOGRAM_VARS       /* variable declarations for histogram go here */
-#define HIST_TIMESTAMP(time) /* time stamp call for histogram goes here */
-#define HIST_ADD(h,delta)    /* call to add data to histogram goes here */
-#endif
 
 /****************************************************************/
 /*                                                              */
@@ -1524,8 +1515,7 @@ send_dns_rr_meas(test_t *test)
 	/* this is what we want to see */
 	/* code to timestamp enabled by WANT_HISTOGRAM */
 	HIST_TIMESTAMP(&time_two);
-	HIST_ADD(my_data->time_hist,
-		 delta_milli(&(status_entry->sent_time),&time_two));
+	HIST_ADD(my_data->time_hist, &(status_entry->sent_time), &time_two);
 	/* my_data->stats.named.responses_received++; */
 	/* so we can continue to "leverage" the nettest_bsd reporter for
 	   now. raj 2005-11-18 */

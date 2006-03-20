@@ -42,15 +42,6 @@ char    nettest_id[]="\
 #define MAKE_DIRTY(mydata,ring)  /* DIRTY is not currently supported */
 #endif
 
-#ifdef HISTOGRAM
-#define HISTOGRAM_VARS        struct timeval time_one,time_two
-#define HIST_TIMESTAMP(time)  gettimeofday(time,NULL)
-#define HIST_ADD(h,delta)     HIST_add(h,delta)
-#else
-#define HISTOGRAM_VARS       /* variable declarations for histogram go here */
-#define HIST_TIMESTAMP(time) /* time stamp call for histogram goes here */
-#define HIST_ADD(h,delta)    /* call to add data to histogram goes here */
-#endif
 
 /****************************************************************/
 /*                                                              */
@@ -1312,7 +1303,7 @@ recv_tcp_stream_meas(test_t *test)
   }
   /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,&time_one,&time_two);
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
     /* transitioning to loaded state from measure state
@@ -1497,7 +1488,7 @@ send_tcp_stream_meas(test_t *test)
   my_data->send_ring = my_data->send_ring->next;
   /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,&time_one,&time_two);
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
     /* transitioning to loaded state from measure state
@@ -1913,7 +1904,7 @@ recv_tcp_rr_meas(test_t *test)
   }
   /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,&time_one,&time_two);
   my_data->recv_ring = my_data->recv_ring->next;
   my_data->send_ring = my_data->send_ring->next;
   new_state = CHECK_REQ_STATE;
@@ -2164,7 +2155,7 @@ send_tcp_rr_meas(test_t *test)
   }
   /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,delta_micro(&time_one,&time_two));
+  HIST_ADD(my_data->time_hist,&time_one,&time_two);
   my_data->stats.named.trans_sent++;
   my_data->recv_ring = my_data->recv_ring->next;
   my_data->send_ring = my_data->send_ring->next;

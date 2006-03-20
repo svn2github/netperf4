@@ -68,19 +68,19 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
              PTHREAD_BIND_FORCED_NP,
              &spu,
              value,
-             test->tid);
+             test->thread_id);
   }
   else if (strcmp(loc_type,"LDOM") == 0) {
     err  = pthread_ldom_bind_np(
              &ldom,
              value,
-             test->tid);
+             test->thread_id);
   }
   else if (strcmp(loc_type,"PSET") == 0) {
     err  = pthread_pset_bind_np(
              &pset,
              value,
-             test->tid);
+             test->thread_id);
   }
   if (err) {
     if (err == EINVAL) {

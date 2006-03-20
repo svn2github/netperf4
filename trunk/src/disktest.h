@@ -69,6 +69,7 @@ typedef struct  disk_test_data {
 typedef struct  disk_results_data {
   int     max_count;
   int     print_hist;
+  int     print_per_cpu;
   int     print_test;
   int     print_run;
   FILE   *outfd;
