@@ -942,8 +942,15 @@ gboolean  accept_connection(GIOChannel *source,
   SOCKET control_socket;
   SOCKET listen_socket;
   gboolean ret;
+  GIOStatus  status;
+  GIOChannel *control_channel;
+  GError   *error=NULL;
+  global_state_t *global_state;
+  guint   watch_id;
 
   g_fprintf(where,"accepting a new connection\n");
+
+  global_state = data;
 
 #ifdef G_OS_WIN32
   listen_socket = g_io_channel_win32_get_fd(source);
@@ -979,8 +986,39 @@ gboolean  accept_connection(GIOChannel *source,
        "original" way. later we will establish a recv callback for a
        proper glib event loop */
     g_fprintf(where,"accepted a connection but told not to spawn\n");
-    handle_netperf_requests(control_socket);
-    CLOSE_SOCKET(control_socket);
+#ifdef G_OS_WIN32
+    control_channel = g_io_channel_win32_new_socket(control_socket);
+#else
+    control_channel = g_io_channel_unix_new(control_socket);
+#endif
+    status = g_io_channel_set_flags(control_channel,G_IO_FLAG_NONBLOCK,&error);
+    if (error) {
+      g_warning("g_io_channel_set_flags %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    g_print("status after set flags %d control_channel %p\n",status,control_channel);
+    
+    status = g_io_channel_set_encoding(control_channel,NULL,&error);
+    if (error) {
+      g_warning("g_io_channel_set_encoding %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    
+    g_print("status after set_encoding %d\n");
+    
+    g_io_channel_set_buffered(control_channel,FALSE);
+    
+    watch_id = g_io_add_watch(control_channel, 
+			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+			      read_from_control_connection,
+			      data);
+    g_print("added watch id %d\n",watch_id);
   }
 
   return(TRUE);
@@ -1270,6 +1308,7 @@ main(int argc, char **argv)
   GError *error = NULL;
   GIOStatus status;
   GMainLoop *loop;
+  global_state_t *global_state_ptr;
 
 #ifdef G_OS_WIN32
   WSADATA	wsa_data ;
@@ -1393,6 +1432,13 @@ main(int argc, char **argv)
 
   loop = g_main_loop_new(NULL, FALSE);
 
+  global_state_ptr                = g_malloc(sizeof(global_state_t));
+  global_state_ptr->server_hash   = netperf_hash;
+  global_state_ptr->test_hash     = test_hash;
+  global_state_ptr->message_state = g_malloc(sizeof(message_state_t));
+  global_state_ptr->is_netserver  = TRUE;
+  global_state_ptr->loop          = loop;
+
   if (need_setup) {
     listen_sock = setup_listen_endpoint(listen_port);
 #ifdef G_OS_WIN32
@@ -1427,7 +1473,7 @@ main(int argc, char **argv)
     watch_id = g_io_add_watch(control_channel, 
 			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
 			      accept_connection,
-			      loop);
+			      global_state_ptr);
     g_print("added watch id %d\n",watch_id);
 
     g_print("Starting loop to accept stuff...\n");
@@ -1436,7 +1482,46 @@ main(int argc, char **argv)
 
   }
   else {
-    handle_netperf_requests(sock);
+    /* we used to call handle_netperf_requests(sock); here, now we use
+       the loop, luke... */
+#ifdef G_OS_WIN32
+    control_channel = g_io_channel_win32_new_socket(control_socket);
+#else
+    control_channel = g_io_channel_unix_new(control_socket);
+#endif
+    status = g_io_channel_set_flags(control_channel,G_IO_FLAG_NONBLOCK,&error);
+    if (error) {
+      g_warning("g_io_channel_set_flags %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    g_print("status after set flags %d control_channel %p\n",status,control_channel);
+    
+    status = g_io_channel_set_encoding(control_channel,NULL,&error);
+    if (error) {
+      g_warning("g_io_channel_set_encoding %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    
+    g_print("status after set_encoding %d\n");
+    
+    g_io_channel_set_buffered(control_channel,FALSE);
+    
+    /* loop is passed just to have something passed */
+    watch_id = g_io_add_watch(control_channel, 
+			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+			      read_from_control_connection,
+			      global_state_ptr);
+    g_print("added watch id %d\n",watch_id);
+
+    g_print("Starting loop to accept stuff...\n");
+    g_main_loop_run(loop);
+    g_print("Came out of the main loop\n");
   }
 }
 

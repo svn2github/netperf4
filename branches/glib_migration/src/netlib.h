@@ -121,6 +121,7 @@ extern int get_expiration_time(struct timespec *delta,
 #endif
 
 extern int netperf_complete_filename(char *name, char *full, int fulllen);
+extern gboolean read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data);
 
 /* state machine data structure for process message */
 
@@ -138,6 +139,14 @@ typedef struct message_state {
   gint32  bytes_remaining;
   gchar   *buffer;
 } message_state_t;
+
+typedef struct global_state {
+  server_hash_t   *server_hash;   /* where to find netperf/netserver hash */
+  test_hash_t     *test_hash;     /* where to find the test hash */
+  message_state_t *message_state; /* so we can keep track of partials */
+  GMainLoop       *loop;          /* so we can add things to the loop */
+  gboolean        is_netserver;   /* not sure if this is really necessary */
+} global_state_t;
 
 extern void netlib_init();
 

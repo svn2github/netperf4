@@ -999,9 +999,9 @@ get_report_function(xmlNodePtr cmd)
   }
 
 #ifdef WITH_GLIB
-  ret = g_module_symbol(lib_handle,fname,&func);
+  ret  = g_module_symbol(lib_handle,fname,(gpointer *)&func);
 #else
-  func  = (GenReport)dlsym(lib_handle,(char *)fname);
+  func = (GenReport)dlsym(lib_handle,(char *)fname);
 #endif
   if (debug) {
     fprintf(where,"symbol lookup of function '%s' returned %p\n",
@@ -1669,6 +1669,7 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data) {
   int rc = NPE_SUCCESS;
   gboolean ret;
   server_t *netperf;
+  global_state_t *global_state = data;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -1683,14 +1684,14 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data) {
 		xml_message);
     }
     /* lookup its destination and send it on its way */
-    netperf = netperf_hash[0].server;
+    netperf = global_state->server_hash[0].server;
     /* mutex locking is not required because only one netserver thread
        looks at these data structures per sgb */
     rc = process_message(netperf,message);
     if (rc == NPE_SUCCESS) 
       ret = TRUE;
     else
-      ret = false;
+      ret = FALSE;
   }
   else {
     if (debug) {
@@ -1713,9 +1714,11 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
   GError *error = NULL;
   gchar *ptr;
   GIOStatus status;
-
+  int ret;
+  global_state_t *global_state;
   NETPERF_DEBUG_ENTRY(debug,where);
-  message_state = data;
+  global_state = data;
+  message_state = global_state->message_state;
   if (debug) {
     g_fprintf(where,
 	      "%s called with cource %p condition %x and data %p\n",
