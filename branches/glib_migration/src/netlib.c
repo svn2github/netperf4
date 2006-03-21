@@ -1666,7 +1666,9 @@ gboolean
 xml_parse_control_message(gchar *message, gsize length, gpointer data) {
   
   xmlDocPtr xml_message;
+  int rc = NPE_SUCCESS;
   gboolean ret;
+  server_t *netperf;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -1680,8 +1682,15 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data) {
 		message,
 		xml_message);
     }
-    /* send it on its way*/
-    ret = TRUE;
+    /* lookup its destination and send it on its way */
+    netperf = netperf_hash[0].server;
+    /* mutex locking is not required because only one netserver thread
+       looks at these data structures per sgb */
+    rc = process_message(netperf,message);
+    if (rc == NPE_SUCCESS) 
+      ret = TRUE;
+    else
+      ret = false;
   }
   else {
     if (debug) {
@@ -1801,6 +1810,10 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 
     if (0 == message_state->bytes_remaining) {
       /* we have an entire message, time to process it */
+      ret = xml_parse_control_message(message_state->buffer,
+				      message_state->bytes_received,
+				      data);
+      return(ret);
     }
   }
 
