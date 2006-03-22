@@ -1709,7 +1709,7 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data) {
     netperf = global_state->server_hash[0].server;
     /* mutex locking is not required because only one netserver thread
        looks at these data structures per sgb */
-    rc = process_message(netperf,message);
+    rc = process_message(netperf,xml_message);
     if (rc == NPE_SUCCESS) 
       ret = TRUE;
     else
@@ -1743,7 +1743,7 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
   message_state = global_state->message_state;
   if (debug) {
     g_fprintf(where,
-	      "%s called with cource %p condition %x and data %p\n",
+	      "%s called with source %p condition %x and data %p\n",
 	      __func__,
 	      source,
 	      condition,
@@ -1865,6 +1865,14 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
       ret = xml_parse_control_message(message_state->buffer,
 				      message_state->bytes_received,
 				      data);
+      /* let us not forget to reset our message_state shall we?  we
+	 don't really want to re-parse the same message over and over
+	 again... raj 2006-03-22 */
+      message_state->have_header = FALSE;
+      message_state->bytes_received = 0;
+      message_state->bytes_remaining = NETPERF_MESSAGE_HEADER_SIZE;
+      g_free(message_state->buffer);
+      message_state->buffer = NULL;
       return(ret);
     }
   }
