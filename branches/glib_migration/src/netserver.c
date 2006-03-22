@@ -1438,6 +1438,10 @@ main(int argc, char **argv)
   global_state_ptr->message_state = g_malloc(sizeof(message_state_t));
   global_state_ptr->is_netserver  = TRUE;
   global_state_ptr->loop          = loop;
+  global_state_ptr->message_state->have_header = FALSE;
+  global_state_ptr->message_state->bytes_received = 0;
+  global_state_ptr->message_state->bytes_remaining = 4;
+  global_state_ptr->message_state->buffer = NULL;
 
   if (need_setup) {
     listen_sock = setup_listen_endpoint(listen_port);
@@ -1519,7 +1523,7 @@ main(int argc, char **argv)
 			      global_state_ptr);
     g_print("added watch id %d\n",watch_id);
 
-    g_print("Starting loop to accept stuff...\n");
+    g_print("Starting loop to process stuff...\n");
     g_main_loop_run(loop);
     g_print("Came out of the main loop\n");
   }

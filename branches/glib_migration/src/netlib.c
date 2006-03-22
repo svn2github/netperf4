@@ -1642,10 +1642,14 @@ read_n_available_bytes(GIOChannel *source, gchar *data, gsize n, gsize *bytes_re
   gsize bytes_to_read;
   gsize bytes_this_read;
   gchar *buffer;
+  int i;
+  char *foo;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
 
   bytes_to_read = n;
   *bytes_read = 0;
-  buffer = data + 1;
+  buffer = data;
 
   while (((status =  g_io_channel_read_chars(source,
 					     buffer,
@@ -1656,7 +1660,17 @@ read_n_available_bytes(GIOChannel *source, gchar *data, gsize n, gsize *bytes_re
     *bytes_read += bytes_this_read;
     bytes_to_read -= bytes_this_read;
     buffer = buffer + *bytes_read;
+    if (debug) {
+      foo = data;
+      g_fprintf(where,
+		"%s g_io_channel_read_chars returned status %d bytes_this_read %d and error %p\n",
+		__func__,
+		status,
+		bytes_this_read,
+		error);
+    }
   }
+  NETPERF_DEBUG_EXIT(debug,where);
   return(status);
 }
 
@@ -1673,6 +1687,14 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data) {
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
+  if (debug) {
+    g_fprintf(where,
+	      "%s asked to parse %d byte message '%*s'\n",
+	      __func__,
+	      length,
+	      length,
+	      message);
+  }
   if ((xml_message = xmlParseMemory(message, length)) != NULL) {
     /* got the message, run with it */
     if (debug) {
@@ -1726,7 +1748,9 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 	      source,
 	      condition,
 	      data);
-    if (message_state) {
+  }
+  if (message_state) {
+    if (debug) {
       g_fprintf(where,
 		"%s message_state have_header %d bytes_remaining %d buffer %p\n",
 		__func__,
@@ -1734,16 +1758,23 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 		message_state->bytes_remaining,
 		message_state->buffer);
     }
-    else {
-      g_error("%s called with null message_state\n",__func__);
-    }
   }
+  else {
+    g_error("%s called with null message_state\n",__func__);
+  }
+
 
   /* ok, so here we go... */
   if (!message_state->have_header) {
     /* we still have to get the header */
     if (NULL == message_state->buffer) {
       /* the very first time round */
+      if (debug) {
+	g_fprintf(where,
+		  "%s allocating %d byte buffer for netperf control message header\n",
+		  __func__,
+		  NETPERF_MESSAGE_HEADER_SIZE);
+      }
       message_state->bytes_remaining = NETPERF_MESSAGE_HEADER_SIZE;
       message_state->bytes_received = 0;
       message_state->buffer = g_malloc(NETPERF_MESSAGE_HEADER_SIZE);
@@ -1770,12 +1801,30 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
     message_state->bytes_received += bytes_read;
     message_state->bytes_remaining -= bytes_read;
 
+    if (debug) {
+      g_fprintf(where,
+		"%s got %d bytes, setting bytes_recieved to %d and remaining to %d\n",
+		__func__,
+		bytes_read,
+		message_state->bytes_received,
+		message_state->bytes_remaining);
+    }
     /* now, do we have the whole header? */
     if (message_state->bytes_received == NETPERF_MESSAGE_HEADER_SIZE) {
+      int i;
       /* setup for the message body */
       message_state->have_header = TRUE;
-      message_state->bytes_remaining = ntohl(*(int *)message_state->buffer);
+      memcpy(&(message_state->bytes_remaining),
+	     message_state->buffer,
+	     NETPERF_MESSAGE_HEADER_SIZE);
+      message_state->bytes_remaining = ntohl(message_state->bytes_remaining);
       message_state->bytes_received = 0;
+      if (debug) {
+	g_fprintf(where,
+		  "%s has a complete header, now expecting %d bytes of message_body\n",
+		  __func__,
+		  message_state->bytes_remaining);
+      }
       g_free(message_state->buffer);
       message_state->buffer = g_malloc(message_state->bytes_remaining);
     }
