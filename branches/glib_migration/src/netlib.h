@@ -146,6 +146,7 @@ typedef struct global_state {
   message_state_t *message_state; /* so we can keep track of partials */
   GMainLoop       *loop;          /* so we can add things to the loop */
   gboolean        is_netserver;   /* not sure if this is really necessary */
+  gboolean        first_message;  /* do we await the first message? */
 } global_state_t;
 
 extern void netlib_init();

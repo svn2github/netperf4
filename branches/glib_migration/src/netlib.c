@@ -141,6 +141,7 @@ extern FILE * where;
 extern test_hash_t test_hash[TEST_HASH_BUCKETS];
 extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 
+
 #define HIST  void*
 
 #include "nettest_bsd.h"
@@ -148,6 +149,34 @@ extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 #ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
 #endif
+
+/* a kludge until I can better structure the code */
+extern server_hash_t netperf_hash[];
+
+int
+add_server_to_specified_hash(server_hash_t *hash, server_t *new_netperf, gboolean do_hash) {
+
+  int hash_value;
+
+  if (do_hash) {
+    /* at some point this needs to change :) */
+    hash_value = 0;
+  }
+  else {
+    hash_value = 0;
+  }
+
+  /* don't forget to add error checking one day */
+  NETPERF_MUTEX_LOCK(hash[hash_value].hash_lock);
+
+  new_netperf->next = hash[hash_value].server;
+  new_netperf->lock = hash[hash_value].hash_lock;
+  hash[hash_value].server = new_netperf;
+
+  NETPERF_MUTEX_UNLOCK(hash[hash_value].hash_lock);
+
+  return(NPE_SUCCESS);
+}
 
 /* given a filename, return the first path to the file that stats
    successfully - which is either the name already given, or that name
@@ -1631,6 +1660,68 @@ netlib_init()
 {
 }
 
+static gboolean
+allocate_netperf(GIOChannel *source, xmlDocPtr message, gpointer data) {
+  gboolean ret;
+  xmlChar  * from_nid;
+  xmlChar  * my_nid;
+  xmlNodePtr msg;
+  xmlNodePtr cur;
+  server_t *netperf;
+  global_state_t *global_state;
+
+  global_state = data;
+
+  msg = xmlDocGetRootElement(message);
+  if (msg == NULL) {
+    g_fprintf(stderr,"empty document\n");
+    ret = FALSE;
+  } 
+  else {
+    cur = msg->xmlChildrenNode;
+    if (xmlStrcmp(cur->name,(const xmlChar *)"version")!=0) {
+      if (debug) {
+	g_fprintf(where,
+		  "%s: Received an unexpected first message\n", __func__);
+	fflush(where);
+      }
+      ret = FALSE;
+    } 
+    else {
+      /* require the caller to ensure the netperf isn't already around */
+      my_nid   = xmlStrdup(xmlGetProp(msg,(const xmlChar *)"tonid"));
+      from_nid = xmlStrdup(xmlGetProp(msg,(const xmlChar *)"fromnid"));
+
+      if ((netperf = (server_t *)malloc(sizeof(server_t))) == NULL) {
+	g_fprintf(where,"%s: malloc failed\n", __func__);
+	exit(1);
+      }
+      memset(netperf,0,sizeof(server_t));
+      netperf->id        = from_nid;
+      netperf->my_nid    = my_nid;
+#ifdef G_OS_WIN32
+      netperf->sock      = g_io_channel_win32_get_fd(source);
+#else
+      netperf->sock       = g_io_channel_unix_get_fd(source);
+#endif
+      netperf->source    = source;
+      netperf->state     = NSRV_PREINIT;
+      netperf->state_req = NSRV_WORK;
+#ifdef WITH_GLIB
+      netperf->thread_id       = NULL;
+#else
+      netperf->thread_id       = -1;
+#endif
+      netperf->next      = NULL;
+      
+      add_server_to_specified_hash(global_state->server_hash, netperf, FALSE);
+      ret = TRUE;
+    }
+  }
+  return ret;
+}
+
+
 
 /* loop and grab all the available bytes, but no more than N from the
    source and return. add the number of bytes received to the
@@ -1677,7 +1768,7 @@ read_n_available_bytes(GIOChannel *source, gchar *data, gsize n, gsize *bytes_re
 /* given a buffer with a complete control message, XML parse it and
    then send it on its way. */
 gboolean
-xml_parse_control_message(gchar *message, gsize length, gpointer data) {
+xml_parse_control_message(gchar *message, gsize length, gpointer data, GIOChannel *source) {
   
   xmlDocPtr xml_message;
   int rc = NPE_SUCCESS;
@@ -1705,7 +1796,16 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data) {
 		message,
 		xml_message);
     }
-    /* lookup its destination and send it on its way */
+    /* was this the first message on the control connection? */
+    if (global_state->first_message) {
+      allocate_netperf(source,xml_message,data);
+      global_state->first_message = FALSE;
+    }
+
+    /* lookup its destination and send it on its way. we are
+       ass-u-me-ing that there is only one netperf to be found, which
+       ultimately may not be correct so don't forget to come back here
+       then... */
     netperf = global_state->server_hash[0].server;
     /* mutex locking is not required because only one netserver thread
        looks at these data structures per sgb */
@@ -1864,7 +1964,8 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
       /* we have an entire message, time to process it */
       ret = xml_parse_control_message(message_state->buffer,
 				      message_state->bytes_received,
-				      data);
+				      data,
+				      source);
       /* let us not forget to reset our message_state shall we?  we
 	 don't really want to re-parse the same message over and over
 	 again... raj 2006-03-22 */

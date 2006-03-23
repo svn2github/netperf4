@@ -129,7 +129,7 @@ const struct msgs   NP_Msgs[] = {
 };
 
 const struct msgs   NS_Msgs[] = {
-  /* Message name, function,             StateBitMap */
+  /* Message name,     function,                StateBitMap */
 #ifdef OFF
   { "clear",           clear_message,            0x00000000 },
   { "error",           error_message,            0x00000000 },
@@ -328,7 +328,7 @@ ns_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *netperf)
     /* versions match */
     netperf->state      =  NSRV_VERS;
     netperf->state_req  =  NSRV_WORK;
-    rc = send_version_message(netperf,my_nid);
+    rc = send_version_message(netperf,netperf->my_nid);
   } else {
     /* versions don't match */
     if (debug) {
@@ -509,7 +509,7 @@ get_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     rc = send_control_message(server->sock,
                               stats,
                               server->id,
-                              my_nid);
+                              server->my_nid);
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
@@ -544,7 +544,7 @@ get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     rc = send_control_message(server->sock,
                               sys_stats,
                               server->id,
-                              my_nid);
+                              server->my_nid);
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,

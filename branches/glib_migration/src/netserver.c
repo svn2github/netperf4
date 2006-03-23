@@ -116,7 +116,6 @@ int debug = 0;
 
 /* gcc does not like intializing where here */
 FILE *where;
-xmlChar *my_nid=NULL;
 
 #define NETPERF_HASH_BUCKETS 1
 
@@ -566,6 +565,7 @@ instantiate_netperf( int sock )
 {
   int rc=NPE_BAD_VERSION;
   xmlChar  * from_nid;
+  xmlChar  * my_nid;
   xmlDocPtr  message;
   xmlNodePtr msg;
   xmlNodePtr cur;
@@ -606,6 +606,7 @@ instantiate_netperf( int sock )
           }
           memset(netperf,0,sizeof(server_t));
           netperf->id        = from_nid;
+	  netperf->my_nid    = my_nid;
           netperf->sock      = sock;
           netperf->state     = NSRV_CONNECTED;
           netperf->state_req = NSRV_WORK;
@@ -638,6 +639,7 @@ instantiate_netperf( int sock )
   } /* end of while */
   return(rc);
 }
+
 
 
 static void
@@ -744,7 +746,105 @@ check_test_state()
         }
         test->state = new;
         if (msg) {
-          rc = send_control_message(netperf->sock, msg, netperf->id, my_nid);
+          rc = send_control_message(netperf->sock, msg, netperf->id, netperf->my_nid);
+          if (rc != NPE_SUCCESS) {
+            if (debug) {
+              g_fprintf(where,
+                      "%s: send_control_message failed\n", __func__);
+              fflush(where);
+            }
+          }
+        }
+      }
+      test = test->next;
+      if (new == TEST_DEAD) {
+        delete_test(id);
+      }
+    }
+    /* mutex unlocking is not required because only one 
+       netserver thread looks at these data structures sgb */
+  }
+}
+
+/* the periodic callback function that will check test states and
+   report back any changes.  it looks very much like the original
+   check_test_state() routine - for now anyway. it might be nice to
+   one day get this set such that state change notification was
+   immediate... raj 2006-03-23 */
+
+static void
+check_test_state_callback(gpointer data)
+{
+  int           i;
+  uint32_t      orig;
+  uint32_t      new;
+  int           rc;
+  test_t       *test;
+  test_hash_t  *h;
+  xmlNodePtr    msg = NULL;
+  xmlNodePtr    new_node;
+  xmlChar      *id;
+  server_t     *netperf;
+  char          code[8];
+
+  netperf = netperf_hash[0].server;
+
+  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
+    h = &test_hash[i];
+    /* mutex locking is not required because only one 
+       netserver thread looks at these data structures sgb */
+    test = h->test;
+    while (test != NULL) {
+      orig = test->state;
+      new  = test->new_state;
+      if (orig != new) {
+        /* report change in test state */
+        if (debug) {
+          g_fprintf(where,"%s:tid = %s  state %d  new_state %d\n",
+                  __func__, test->id, orig, new);
+          fflush(where);
+        }
+        switch (new) {
+        case TEST_INIT:
+          /* what kind of error checking do we want to add ? */
+          msg = xmlNewNode(NULL,(xmlChar *)"initialized");
+          xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          new_node = xmlCopyNode(test->dependent_data,1);
+          xmlAddChild(msg,new_node);
+          break;
+        case TEST_IDLE:
+          msg = xmlNewNode(NULL,(xmlChar *)"idled");
+          xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          break;
+        case TEST_LOADED:
+          msg = xmlNewNode(NULL,(xmlChar *)"loaded");
+          xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          break;
+        case TEST_MEASURE:
+          msg = xmlNewNode(NULL,(xmlChar *)"measuring");
+          xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          break;
+        case TEST_ERROR:
+          msg = xmlNewNode(NULL,(xmlChar *)"error");
+          xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          xmlSetProp(msg,(xmlChar *)"err_fn",(xmlChar *)test->err_fn);
+          xmlSetProp(msg,(xmlChar *)"err_str",(xmlChar *)test->err_str);
+          sprintf(code,"%d",test->err_rc);
+          xmlSetProp(msg,(xmlChar *)"err_rc",(xmlChar *)code);
+          sprintf(code,"%d",test->err_no);
+          xmlSetProp(msg,(xmlChar *)"err_no",(xmlChar *)code);
+          break;
+        case TEST_DEAD:
+          msg = xmlNewNode(NULL,(xmlChar *)"dead");
+          xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          id = test->id;
+          break;
+        default:
+          break;
+        }
+        test->state = new;
+        if (msg) {
+          rc = send_control_message(netperf->sock, msg, netperf->id, netperf->my_nid);
           if (rc != NPE_SUCCESS) {
             if (debug) {
               g_fprintf(where,
@@ -824,7 +924,7 @@ close_netserver()
       loop = 0;
     }
     if (msg) {
-      rc = send_control_message(netperf->sock, msg, netperf->id, my_nid);
+      rc = send_control_message(netperf->sock, msg, netperf->id, netperf->my_nid);
       if (rc != NPE_SUCCESS) {
         if (debug) {
           g_fprintf(where,
@@ -982,9 +1082,7 @@ gboolean  accept_connection(GIOChannel *source,
     CLOSE_SOCKET(control_socket);  /* don't want to leak descriptors */
   }
   else {
-    /* for now, we will simply start processing requests the
-       "original" way. later we will establish a recv callback for a
-       proper glib event loop */
+    /* lets setup the glib event loop... */
     g_fprintf(where,"accepted a connection but told not to spawn\n");
 #ifdef G_OS_WIN32
     control_channel = g_io_channel_win32_new_socket(control_socket);
@@ -1437,11 +1535,12 @@ main(int argc, char **argv)
   global_state_ptr->test_hash     = test_hash;
   global_state_ptr->message_state = g_malloc(sizeof(message_state_t));
   global_state_ptr->is_netserver  = TRUE;
+  global_state_ptr->first_message = TRUE;
   global_state_ptr->loop          = loop;
-  global_state_ptr->message_state->have_header = FALSE;
-  global_state_ptr->message_state->bytes_received = 0;
+  global_state_ptr->message_state->have_header     = FALSE;
+  global_state_ptr->message_state->bytes_received  = 0;
   global_state_ptr->message_state->bytes_remaining = 4;
-  global_state_ptr->message_state->buffer = NULL;
+  global_state_ptr->message_state->buffer          = NULL;
 
   if (need_setup) {
     listen_sock = setup_listen_endpoint(listen_port);
@@ -1488,11 +1587,13 @@ main(int argc, char **argv)
   else {
     /* we used to call handle_netperf_requests(sock); here, now we use
        the loop, luke... */
+
 #ifdef G_OS_WIN32
     control_channel = g_io_channel_win32_new_socket(control_socket);
 #else
     control_channel = g_io_channel_unix_new(control_socket);
 #endif
+
     status = g_io_channel_set_flags(control_channel,G_IO_FLAG_NONBLOCK,&error);
     if (error) {
       g_warning("g_io_channel_set_flags %s %d %s\n",
@@ -1524,6 +1625,9 @@ main(int argc, char **argv)
     g_print("added watch id %d\n",watch_id);
 
     g_print("Starting loop to process stuff...\n");
+    g_timeout_add(1000,
+		  (GSourceFunc)check_test_state_callback,
+		  global_state_ptr);
     g_main_loop_run(loop);
     g_print("Came out of the main loop\n");
   }

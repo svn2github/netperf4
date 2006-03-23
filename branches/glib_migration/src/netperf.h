@@ -216,6 +216,9 @@ typedef struct server_instance {
   xmlChar          *id;          /* the id of the server instance. used
                                     in searches and as sanity checks  */
 
+  xmlChar          *my_nid;      /* used in netserver, used to be
+				    global */
+
   NETPERF_RWLOCK_T rwlock;       /* the mutex used to ensure exclusive
                                     access to this servers resources */
 
@@ -227,6 +230,9 @@ typedef struct server_instance {
 
   SOCKET           sock;         /* the socket over which we communicate
                                     with the server */
+
+  GIOChannel       *source;      /* the control channel over which we
+				    communicate with the server */
 
   ns_state_t       state;        /* in what state is this server
                                     presently? */
