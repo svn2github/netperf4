@@ -178,6 +178,81 @@ add_server_to_specified_hash(server_hash_t *hash, server_t *new_netperf, gboolea
   return(NPE_SUCCESS);
 }
 
+void
+delete_server_from_specified_hash(server_hash_t *hash, const xmlChar *id, gboolean do_hash)
+{
+
+  /* we presume that the id is of the form [a-zA-Z][0-9]+ and so will
+     call atoi on id and mod that with the SERVER_HASH_BUCKETS */
+
+  int hash_value;
+  server_t  *server_pointer;
+  server_t **prev_server;
+
+  if (do_hash) {
+    hash_value = 0;
+  }
+  else {
+    hash_value = 0;
+  }
+
+  /* don't forget to add error checking one day */
+  NETPERF_MUTEX_LOCK(hash[hash_value].hash_lock);
+
+  prev_server    = &(hash[hash_value].server);
+  server_pointer = hash[hash_value].server;
+  while (server_pointer != NULL) {
+    if (!xmlStrcmp(server_pointer->id,id)) {
+      /* we have a match */
+      *prev_server = server_pointer->next;
+      free(server_pointer);
+      break;
+    }
+    prev_server    = &(server_pointer->next);
+    server_pointer = server_pointer->next;
+  }
+
+  NETPERF_MUTEX_UNLOCK(hash[hash_value].hash_lock);
+}
+
+
+static void
+kill_all_tests_in_hash(test_hash_t *test_hash)
+{
+  int           i;
+  int           empty_hash_buckets;
+  test_t       *test;
+  test_hash_t  *h;
+
+
+  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
+    h = &test_hash[i];
+    /* mutex locking is not required because only one 
+       netserver thread looks at these data structures sgb */
+    test = h->test;
+    while (test != NULL) {
+      /* tell each test to die */
+      test->state_req = TEST_DEAD;
+      test = test->next;
+    }
+  }
+  empty_hash_buckets = 0;
+  while(empty_hash_buckets < TEST_HASH_BUCKETS) {
+    empty_hash_buckets = 0;
+    g_usleep(1000000);
+    /* the original code had a check_test_state() call here, but we
+       can ass-u-me that the check_test_state_callback() timeout
+       function is running in the event loop */
+    for (i = 0; i < TEST_HASH_BUCKETS; i++) {
+      if (test_hash[i].test == NULL) {
+        empty_hash_buckets++;
+      }
+    }
+  }
+}
+
+
+
 /* given a filename, return the first path to the file that stats
    successfully - which is either the name already given, or that name
    with NETPERFDIR prepended. */
@@ -1829,6 +1904,30 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data, GIOChanne
   return(ret);
 }
 
+/* we call this when we get an EOF on the control channel */
+gboolean
+handle_control_connection_eof(GIOChannel *source, gpointer data) {
+  global_state_t *global_state;
+
+  global_state = data;
+  
+  /* right now, this is very simplistic - we just exit the mainloop */
+  g_main_loop_quit(global_state->loop);
+  return(FALSE);
+}
+
+gboolean
+handle_control_connection_error(GIOChannel *source, gpointer data) {
+  global_state_t *global_state;
+
+  global_state = data;
+
+  /* for now, it is rather simple - cause the mainloop to exit which
+     may take quite a bit with it... */
+  g_main_loop_quit(global_state->loop);
+  return(FALSE);
+}
+
 gboolean
 read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data) {
   message_state_t *message_state;
@@ -1891,11 +1990,19 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
     /* we need some sort of error and status check here don't we? */
 
     if (G_IO_STATUS_EOF == status) {
-      /* do something when the remote has told us they are going away */
+      /* do something when the remote has told us they are going away.
+	 it needs to be different based on whether or not we've
+	 spawned from the parent */
+      return(handle_control_connection_eof(source, data));
     }
     else if ((G_IO_STATUS_ERROR == status) ||
 	     (NULL != error)) {
-      /* do something to deal with an error condition */
+      if (debug) {
+	g_fprintf(where,
+		  "%s encountered an error and is unhappy\n",
+		  __func__);
+	exit(-1);
+      }
     }
 
     message_state->bytes_received += bytes_read;
@@ -1951,6 +2058,7 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 
     if (G_IO_STATUS_EOF == status) {
       /* do something when the remote has told us they are going away */
+      return(handle_control_connection_eof(source, data));
     }
     else if ((G_IO_STATUS_ERROR == status) ||
 	     (NULL != error)) {
