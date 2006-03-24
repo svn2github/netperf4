@@ -455,27 +455,6 @@ daemonize(int argc, char *argv[]) {
   exit(0);
 }
 
-static void
-usage (int status)
-{
-  printf ("%s - network-oriented performance benchmarking\n", program_name);
-  printf ("Usage: %s [OPTION]... [FILE]...\n", program_name);
-  printf ("\
-Options:\n\
-  -d, --debug                increase the debugging level\n\
-  -h, --help                 display this help and exit\n\
-  -L, --local host,af        bind control endpoint to host with family af\n\
-  -o, --output NAME          send output to NAME instead of standard output\n\
-  -p, --port port            bind control to portnumber port\n\
-  -q, --quiet, --silent      inhibit usual output\n\
-  --brief                    shorten output\n\
-  -v, --verbose              print more information\n\
-  -V, --version              output version information and exit\n\
-");
-  exit (status);
-}
-
-
 
 int
 add_netperf_to_hash(server_t *new_netperf) {
@@ -1098,7 +1077,7 @@ gboolean  accept_connection(GIOChannel *source,
 		error->message);
       g_clear_error(&error);
     }
-    g_print("status after set flags %d control_channel %p\n",status,control_channel);
+    g_fprintf(where,"status after set flags %d control_channel %p\n",status,control_channel);
     
     status = g_io_channel_set_encoding(control_channel,NULL,&error);
     if (error) {
@@ -1109,7 +1088,7 @@ gboolean  accept_connection(GIOChannel *source,
       g_clear_error(&error);
     }
     
-    g_print("status after set_encoding %d\n");
+    g_fprintf(where,"status after set_encoding %d\n");
     
     g_io_channel_set_buffered(control_channel,FALSE);
     
@@ -1117,7 +1096,7 @@ gboolean  accept_connection(GIOChannel *source,
 			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
 			      read_from_control_connection,
 			      data);
-    g_print("added watch id %d\n",watch_id);
+    g_fprintf(where,"added watch id %d\n",watch_id);
   }
 
   return(TRUE);
@@ -1443,7 +1422,7 @@ main(int argc, char **argv)
   ret = g_option_context_parse(option_context, &argc, &argv, &error);
   if (error) {
     /* it sure would be nice to know how to trigger the help output */
-    g_error("%s g_option_context_parse %s %d %s\n",
+    g_error("%s g_option_context_parse %s %d %s\nUse netserver --help for help\n",
 	      __func__,
 	      g_quark_to_string(error->domain),
 	      error->code,
@@ -1453,7 +1432,7 @@ main(int argc, char **argv)
 
   /* if we daemonize, we will not be returning, and we will be
      starting a whole new instance of this binary, because that is what
-     g_spawn_asyync_with_pipes() does. */
+     g_spawn_async_with_pipes() does. */
   if (want_daemonize) {
     daemonize(orig_argc,orig_argv);
   }
@@ -1558,7 +1537,7 @@ main(int argc, char **argv)
 		error->message);
       g_clear_error(&error);
     }
-    g_print("status after set flags %d control_channel %p\n",status,control_channel);
+    g_fprintf(where,"status after set flags %d control_channel %p\n",status,control_channel);
     
     status = g_io_channel_set_encoding(control_channel,NULL,&error);
     if (error) {
@@ -1569,7 +1548,7 @@ main(int argc, char **argv)
       g_clear_error(&error);
     }
     
-    g_print("status after set_encoding %d\n");
+    g_fprintf(where,"status after set_encoding %d\n");
     
     g_io_channel_set_buffered(control_channel,FALSE);
     
@@ -1578,11 +1557,11 @@ main(int argc, char **argv)
 			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
 			      accept_connection,
 			      global_state_ptr);
-    g_print("added watch id %d\n",watch_id);
+    g_fprintf(where,"added watch id %d\n",watch_id);
 
-    g_print("Starting loop to accept stuff...\n");
+    g_fprintf(where,"Starting loop to accept stuff...\n");
     g_main_loop_run(loop);
-    g_print("Came out of the main loop\n");
+    g_fprintf(where,"Came out of the main loop\n");
 
   }
   else {
@@ -1603,7 +1582,7 @@ main(int argc, char **argv)
 		error->message);
       g_clear_error(&error);
     }
-    g_print("status after set flags %d control_channel %p\n",status,control_channel);
+    g_fprintf(where,"status after set flags %d control_channel %p\n",status,control_channel);
     
     status = g_io_channel_set_encoding(control_channel,NULL,&error);
     if (error) {
@@ -1614,7 +1593,7 @@ main(int argc, char **argv)
       g_clear_error(&error);
     }
     
-    g_print("status after set_encoding %d\n");
+    g_fprintf(where,"status after set_encoding %d\n");
     
     g_io_channel_set_buffered(control_channel,FALSE);
     
@@ -1623,14 +1602,14 @@ main(int argc, char **argv)
 			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
 			      read_from_control_connection,
 			      global_state_ptr);
-    g_print("added watch id %d\n",watch_id);
+    g_fprintf(where,"added watch id %d\n",watch_id);
 
-    g_print("Starting loop to process stuff...\n");
+    g_fprintf(where,"Starting loop to process stuff...\n");
     g_timeout_add(1000,
 		  (GSourceFunc)check_test_state_callback,
 		  global_state_ptr);
     g_main_loop_run(loop);
-    g_print("Came out of the main loop\n");
+    g_fprintf(where,"Came out of the main loop\n");
   }
 }
 
