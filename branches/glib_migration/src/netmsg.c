@@ -52,10 +52,6 @@ delete this exception statement from your version.
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_POLL_H
-#include <poll.h>
-#endif
-
 #ifdef HAVE_SYS_TIME_H
 /* seems that Darwin or at least MacOS X 4.3 needs sys/time with
    sys/resource */

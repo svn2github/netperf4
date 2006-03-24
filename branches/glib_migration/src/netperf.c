@@ -57,6 +57,13 @@ delete this exception statement from your version.
 #include <sys/types.h>
 #endif
 
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIME
+#include <time.h>
+#endif
+#endif
+
 #ifdef HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
@@ -85,8 +92,8 @@ delete this exception statement from your version.
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_POLL_H
-#include <poll.h>
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
 #endif
 
 #ifdef HAVE_UNISTD_H
@@ -906,7 +913,10 @@ static int
 wait_for_version_response(server_t *server)
 {
   int        rc = NPE_SUCCESS;
-  struct     pollfd fds;
+  fd_set     read_fds;
+  fd_set     error_fds;
+  struct timeval timeout;
+
   xmlDocPtr  message;
 
   if (debug) {
@@ -915,11 +925,19 @@ wait_for_version_response(server_t *server)
   }
   NETPERF_MUTEX_LOCK(server->lock);
   while (server->state == NSRV_VERS) {
-    fds.fd      = server->sock;
-    fds.events  = POLLIN;
-    fds.revents = 0;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    FD_ZERO(&read_fds);
+    FD_ZERO(&error_fds);
+    FD_SET(server->sock,&read_fds);
+    FD_SET(server->sock,&error_fds);
+
     NETPERF_MUTEX_UNLOCK(server->lock);
-    if (poll(&fds,1,5000) > 0) {
+    if (select(server->sock + 1,
+	       &read_fds,
+	       NULL,
+	       &error_fds,
+	       &timeout) > 0) {
       if (debug) {
         fprintf(where,"wait_for_version_response ");
         fprintf(where,"calling recv_control_message\n");
@@ -1213,7 +1231,10 @@ netperf_worker(void *data)
 {
   int rc;
   server_t     *server = data;
-  struct pollfd fds;
+  fd_set read_fds;
+  fd_set error_fds;
+  struct timeval timeout;
+
   xmlDocPtr     message;
   
   rc = wait_for_version_response(server);
@@ -1223,11 +1244,19 @@ netperf_worker(void *data)
   NETPERF_MUTEX_LOCK(server->lock);
 
   while (server->state != NSRV_ERROR) {
-    fds.fd      = server->sock;
-    fds.events  = POLLIN;
-    fds.revents = 0;
+    FD_ZERO(&read_fds);
+    FD_ZERO(&error_fds);
+    FD_SET(server->sock,&read_fds);
+    FD_SET(server->sock,&error_fds);
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+
     NETPERF_MUTEX_UNLOCK(server->lock);
-    if (poll(&fds,1,5000) > 0) {
+    if (select(server->sock + 1,
+	       &read_fds,
+	       NULL,
+	       &error_fds,
+	       &timeout) > 0) {
       rc = recv_control_message(server->sock, &message);
       if (rc > 0) {
         rc = process_message(server, message);

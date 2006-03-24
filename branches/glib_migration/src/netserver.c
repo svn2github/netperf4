@@ -85,10 +85,6 @@ delete this exception statement from your version.
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_POLL_H
-#include <poll.h>
-#endif
-
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
@@ -539,86 +535,6 @@ find_netperf_in_hash(const xmlChar *id)
 
 
 
-static int
-instantiate_netperf( int sock )
-{
-  int rc=NPE_BAD_VERSION;
-  xmlChar  * from_nid;
-  xmlChar  * my_nid;
-  xmlDocPtr  message;
-  xmlNodePtr msg;
-  xmlNodePtr cur;
-  server_t * netperf;
-
-  NETPERF_DEBUG_ENTRY(debug,where);
-
-  while (rc != NPE_SUCCESS) {
-    rc = recv_control_message(sock,&message);
-    if (rc > 0) { /* received a message */
-      if (debug) {
-        g_fprintf(where, "Received a control message to doc %p\n", message);
-        fflush(where);
-      }
-      msg = xmlDocGetRootElement(message);
-      if (msg == NULL) {
-        g_fprintf(stderr,"empty document\n");
-        xmlFreeDoc(message);
-        rc = NPE_EMPTY_MSG;
-      } else {
-        cur = msg->xmlChildrenNode;
-        if (xmlStrcmp(cur->name,(const xmlChar *)"version")!=0) {
-          if (debug) {
-            g_fprintf(where,
-                    "%s: Received an unexpected message\n", __func__);
-            fflush(where);
-          }
-          rc = NPE_UNEXPECTED_MSG;
-        } else {
-          /* require the caller to ensure the netperf isn't already around */
-          my_nid   = xmlStrdup(xmlGetProp(msg,(const xmlChar *)"tonid"));
-          from_nid = xmlStrdup(xmlGetProp(msg,(const xmlChar *)"fromnid"));
-
-          if ((netperf = (server_t *)malloc(sizeof(server_t))) == NULL) {
-            g_fprintf(where,"%s: malloc failed\n", __func__);
-            fflush(where);
-            exit(1);
-          }
-          memset(netperf,0,sizeof(server_t));
-          netperf->id        = from_nid;
-	  netperf->my_nid    = my_nid;
-          netperf->sock      = sock;
-          netperf->state     = NSRV_CONNECTED;
-          netperf->state_req = NSRV_WORK;
-#ifdef WITH_GLIB
-	  netperf->thread_id       = NULL;
-#else
-          netperf->thread_id       = -1;
-#endif
-          netperf->next      = NULL;
-
-          /* check the version */
-          rc = ns_version_check(cur,message,netperf);
-        }
-      }
-    } 
-    else {
-      if (debug) {
-        g_fprintf(where,"%s: close connection remote close\n", __func__);
-        fflush(where);
-      }
-      CLOSE_SOCKET(sock);
-      exit(-1);
-    }
-    if (rc == NPE_SUCCESS) {
-      add_netperf_to_hash(netperf);
-    } else {
-      free(netperf);
-    }
-    xmlFreeDoc(message);
-  } /* end of while */
-  return(rc);
-}
-
 
 
 static void
@@ -650,98 +566,6 @@ report_stuck_test_status(server_t *netperf)
       }
       test = test->next;
     }
-  }
-}
-
-static void
-check_test_state()
-{
-  int           i;
-  uint32_t      orig;
-  uint32_t      new;
-  int           rc;
-  test_t       *test;
-  test_hash_t  *h;
-  xmlNodePtr    msg = NULL;
-  xmlNodePtr    new_node;
-  xmlChar      *id;
-  server_t     *netperf;
-  char          code[8];
-
-  netperf = netperf_hash[0].server;
-
-  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
-    h = &test_hash[i];
-    /* mutex locking is not required because only one 
-       netserver thread looks at these data structures sgb */
-    test = h->test;
-    while (test != NULL) {
-      orig = test->state;
-      new  = test->new_state;
-      if (orig != new) {
-        /* report change in test state */
-        if (debug) {
-          g_fprintf(where,"%s:tid = %s  state %d  new_state %d\n",
-                  __func__, test->id, orig, new);
-          fflush(where);
-        }
-        switch (new) {
-        case TEST_INIT:
-          /* what kind of error checking do we want to add ? */
-          msg = xmlNewNode(NULL,(xmlChar *)"initialized");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
-          new_node = xmlCopyNode(test->dependent_data,1);
-          xmlAddChild(msg,new_node);
-          break;
-        case TEST_IDLE:
-          msg = xmlNewNode(NULL,(xmlChar *)"idled");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
-          break;
-        case TEST_LOADED:
-          msg = xmlNewNode(NULL,(xmlChar *)"loaded");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
-          break;
-        case TEST_MEASURE:
-          msg = xmlNewNode(NULL,(xmlChar *)"measuring");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
-          break;
-        case TEST_ERROR:
-          msg = xmlNewNode(NULL,(xmlChar *)"error");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
-          xmlSetProp(msg,(xmlChar *)"err_fn",(xmlChar *)test->err_fn);
-          xmlSetProp(msg,(xmlChar *)"err_str",(xmlChar *)test->err_str);
-          sprintf(code,"%d",test->err_rc);
-          xmlSetProp(msg,(xmlChar *)"err_rc",(xmlChar *)code);
-          sprintf(code,"%d",test->err_no);
-          xmlSetProp(msg,(xmlChar *)"err_no",(xmlChar *)code);
-          break;
-        case TEST_DEAD:
-          msg = xmlNewNode(NULL,(xmlChar *)"dead");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
-          id = test->id;
-          break;
-        default:
-          break;
-        }
-        test->state = new;
-        if (msg) {
-          rc = send_control_message(netperf->sock, msg, netperf->id, netperf->my_nid);
-          if (rc != NPE_SUCCESS) {
-            if (debug) {
-              g_fprintf(where,
-                      "%s: send_control_message failed\n", __func__);
-              fflush(where);
-            }
-          }
-        }
-      }
-      test = test->next;
-      if (new == TEST_DEAD) {
-        delete_test(id);
-      }
-    }
-    /* mutex unlocking is not required because only one 
-       netserver thread looks at these data structures sgb */
   }
 }
 
@@ -842,176 +666,7 @@ check_test_state_callback(gpointer data)
        netserver thread looks at these data structures sgb */
   }
 }
-
 
-
-static void
-kill_all_tests()
-{
-  int           i;
-  int           empty_hash_buckets;
-  test_t       *test;
-  test_hash_t  *h;
-
-
-  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
-    h = &test_hash[i];
-    /* mutex locking is not required because only one 
-       netserver thread looks at these data structures sgb */
-    test = h->test;
-    while (test != NULL) {
-      /* tell each test to die */
-      test->state_req = TEST_DEAD;
-      test = test->next;
-    }
-  }
-  empty_hash_buckets = 0;
-  while(empty_hash_buckets < TEST_HASH_BUCKETS) {
-    empty_hash_buckets = 0;
-    g_usleep(1000000);
-    check_test_state();
-    for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
-      if (test_hash[i].test == NULL) {
-        empty_hash_buckets++;
-      }
-    }
-  }
-}
-
-
-
-static int
-close_netserver()
-{
-  int rc;
-  int loop;
-  server_t     *netperf;
-
-
-  netperf = netperf_hash[0].server;
-  if ((netperf->state_req == NSRV_CLOSE) ||
-      (netperf->state_req == NSRV_EXIT ) ||
-      (netperf->err_rc == NPE_REMOTE_CLOSE)) {
-    xmlNodePtr    msg = NULL;
-    kill_all_tests();
-    msg = xmlNewNode(NULL,(xmlChar *)"closed");
-    if (netperf->state_req == NSRV_CLOSE) {
-      xmlSetProp(msg,(xmlChar *)"flag",(const xmlChar *)"LOOPING");
-      loop = 1;
-    }
-    if (netperf->state_req == NSRV_EXIT) {
-      xmlSetProp(msg,(xmlChar *)"flag",(const xmlChar *)"GONE");
-      loop = 0;
-    }
-    if (msg) {
-      rc = send_control_message(netperf->sock, msg, netperf->id, netperf->my_nid);
-      if (rc != NPE_SUCCESS) {
-        if (debug) {
-          g_fprintf(where,
-                  "%s: send_control_message failed\n", __func__);
-          fflush(where);
-        }
-      }
-    }
-    delete_netperf(netperf->id);
-  } else {
-    /* we should never really get here   sgb  2005-12-06 */
-    g_fprintf(where, "%s entered through some unknown path!!!!\n", __func__);
-    g_fprintf(where, "netperf->state_req = %d \t netperf->err_rc = %d\n",
-            netperf->state_req, netperf->err_rc);
-    fflush(where);
-    exit(-2);
-  }
-  return(loop);
-}
-
-
-static int
-handle_netperf_requests(int sock)
-{
-  int rc = NPE_SUCCESS;
-  struct pollfd fds;
-  xmlDocPtr     message;
-  server_t     *netperf;
-
-  NETPERF_DEBUG_ENTRY(debug,where);
-
-  rc = instantiate_netperf(sock);
-  if (rc != NPE_SUCCESS) {
-    g_fprintf(where,
-            "%s %s: instantiate_netperf  error %d\n",
-            program_name,
-            __func__,
-            rc);
-    fflush(where);
-    exit(rc);
-  }
-  netperf = netperf_hash[0].server;
-  /* mutex locking is not required because only one 
-     netserver thread looks at these data structures sgb */
-  while(netperf->state != NSRV_ERROR) {
-
-    /* check the state of all tests */
-    check_test_state();
-
-    fds.fd      = netperf->sock;
-    fds.events  = POLLIN;
-    fds.revents = 0;
-    /* mutex unlocking is not required because only one 
-       netserver thread looks at these data structures sgb */
-    if (poll(&fds,1,5000) > 0) {
-      /* mutex locking is not required because only one 
-         netserver thread looks at these data structures sgb */
-      rc = recv_control_message(netperf->sock, &message);
-      /* mutex unlocking is not required because only one 
-         netserver thread looks at these data structures sgb */
-      if (rc > 0) {
-        rc = process_message(netperf, message);
-        if (rc) {
-          g_fprintf(where,"process_message returned %d  %s\n",
-                  rc, netperf_error_name(rc));
-          fflush(where);
-        }
-      } else {
-        netperf->state = NSRV_ERROR;
-        netperf->err_fn = (char *)__func__;
-        if (rc == 0) {
-          netperf->err_rc = NPE_REMOTE_CLOSE;
-        } else {
-          g_fprintf(where,"recv_control_message returned %d  %s\n",
-                  rc, netperf_error_name(rc));
-          fflush(where);
-          netperf->err_rc = rc;
-        }
-      }
-    } else {
-      if (debug) {
-        g_fprintf(where,"ho hum, nothing to do\n");
-        fflush(where);
-        report_servers_test_status(netperf);
-      }
-      report_stuck_test_status(netperf);
-    }
-    /* mutex locking is not required because only one 
-       netserver thread looks at these data structures sgb */
-    if (rc != NPE_SUCCESS) {
-      netperf->state  = NSRV_ERROR;
-      netperf->err_rc = rc;
-      netperf->err_fn = (char *)__func__;
-    }
-    if ((netperf->state_req == NSRV_CLOSE) ||
-        (netperf->state_req == NSRV_EXIT ))  {
-      break;
-    }
-  }
-
-  if (rc != NPE_SUCCESS) {
-    report_server_error(netperf);
-  }
-  /* mutex unlocking is not required because only one 
-     netserver thread looks at these data structures sgb */
-  return(close_netserver());
-}
 
 
 /* called when it is time to accept a new control connection off the
@@ -1088,7 +743,7 @@ gboolean  accept_connection(GIOChannel *source,
       g_clear_error(&error);
     }
     
-    g_fprintf(where,"status after set_encoding %d\n");
+    g_fprintf(where,"status after set_encoding %d\n",status);
     
     g_io_channel_set_buffered(control_channel,FALSE);
     
@@ -1107,13 +762,9 @@ static SOCKET
 setup_listen_endpoint(char service[]) {
 
   struct sockaddr   name;
-  struct sockaddr  *peeraddr     = &name;
   int               namelen      = sizeof(name);
   netperf_socklen_t peerlen      = namelen;
-  SOCKET            sock;
   SOCKET            listenfd     = 0;
-  int               loop         = 1;
-  char              filename[PATH_MAX];
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -1238,7 +889,6 @@ static void
 netserver_init()
 {
   int   i;
-  int   rc;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -1548,7 +1198,7 @@ main(int argc, char **argv)
       g_clear_error(&error);
     }
     
-    g_fprintf(where,"status after set_encoding %d\n");
+    g_fprintf(where,"status after set_encoding %d\n",status);
     
     g_io_channel_set_buffered(control_channel,FALSE);
     
@@ -1593,7 +1243,7 @@ main(int argc, char **argv)
       g_clear_error(&error);
     }
     
-    g_fprintf(where,"status after set_encoding %d\n");
+    g_fprintf(where,"status after set_encoding %d\n",status);
     
     g_io_channel_set_buffered(control_channel,FALSE);
     
@@ -1611,5 +1261,6 @@ main(int argc, char **argv)
     g_main_loop_run(loop);
     g_fprintf(where,"Came out of the main loop\n");
   }
+  return(0);
 }
 

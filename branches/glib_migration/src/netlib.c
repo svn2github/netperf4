@@ -40,6 +40,10 @@ delete this exception statement from your version.
 #include <stdio.h>
 #endif
 
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
+#endif
+
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -89,10 +93,6 @@ delete this exception statement from your version.
 #ifdef TIME_WITH_SYS_TIME
 #include <time.h>
 #endif
-#endif
-
-#ifdef HAVE_POLL_H
-#include <poll.h>
 #endif
 
 #ifdef HAVE_SYS_RESOURCE_H
@@ -2103,10 +2103,18 @@ recv_control_message(int control_sock, xmlDocPtr *message)
   char *read_ptr = NULL;
   char *message_base = NULL;
 
-  struct pollfd fds;
+  fd_set read_fds;
+  fd_set error_fds;
+  struct timeval timeout;
 
-  int timeout = 15000;
+  timeout.tv_sec = 15;
+  timeout.tv_usec = 0;
 
+  FD_ZERO(&read_fds);
+  FD_ZERO(&error_fds);
+
+  FD_SET(control_sock,&read_fds);
+  FD_SET(control_sock,&error_fds);
 
   /* one of these days, we probably aught to make sure that what
      message points to is NULL... but only as a debug assert... raj
@@ -2121,20 +2129,31 @@ recv_control_message(int control_sock, xmlDocPtr *message)
   bytes_left = sizeof(uint32_t);
   read_ptr = (char *)&message_len;
   while (bytes_left > 0) {
-    /* precede every recv with a poll() call, so there can be little
+    /* precede every recv with a select() call, so there can be little
        chance of our ever getting hung-up in this routine. raj
        2003-02-26 */
-    fds.fd = control_sock;
-    fds.events = POLLIN;
-    fds.revents = 0;
 
-    /* poll had better return one, or there was either a problem or
+    /* since some selects update the timeout value, we best set it each time */
+    timeout.tv_sec = 15;
+    timeout.tv_usec = 0;
+    
+    FD_ZERO(&read_fds);
+    FD_ZERO(&error_fds);
+    
+    FD_SET(control_sock,&read_fds);
+    FD_SET(control_sock,&error_fds);
+
+    /* select had better return one, or there was either a problem or
        a timeout... */
 
-    if ((counter = poll(&fds, 1, timeout)) != 1) {
+    if ((counter = select(control_sock + 1,
+			  &read_fds, 
+			  NULL, 
+			  &error_fds, 
+			  &timeout)) != 1) {
       if (debug) {
         fprintf(where,
-                "recv_control_message: poll error or timeout. errno %d counter %d\n",
+                "recv_control_message: select error or timeout. errno %d counter %d\n",
                 errno,
                 counter);
         fflush(where);
@@ -2185,19 +2204,32 @@ recv_control_message(int control_sock, xmlDocPtr *message)
   read_ptr = message_base;
 
   while (bytes_left > 0) {
-    /* precede every recv with a poll() call, so there can be little
-       chance of our ever getting hung-up in this routine. raj 2003-02-26 */
-    fds.fd = control_sock;
-    fds.events = POLLIN;
-    fds.revents = 0;
+    /* precede every recv with a select() call, so there can be little
+       chance of our ever getting hung-up in this routine. eventually,
+       we will migrate all this stuff over to the glib IO and event
+       loop constructs. raj 2003-02-26 */
 
-    /* poll had better return one, or there was either a problem or
+    /* since some selects update the timeout value, we best set it each time */
+    timeout.tv_sec = 15;
+    timeout.tv_usec = 0;
+    
+    FD_ZERO(&read_fds);
+    FD_ZERO(&error_fds);
+    
+    FD_SET(control_sock,&read_fds);
+    FD_SET(control_sock,&error_fds);
+
+    /* select had better return one, or there was either a problem or
        a timeout... */
 
-    if ((counter = poll(&fds, 1, 15000)) != 1) {
+    if ((counter = select(control_sock + 1,
+			  &read_fds,
+			  NULL,
+			  &error_fds,
+			  &timeout)) != 1) {
       if (debug) {
         fprintf(where,
-                "recv_control_message: poll error or timeout. errno %d counter %d\n",
+                "recv_control_message: select error or timeout on message body. errno %d counter %d\n",
                 errno,
                 counter);
         fflush(where);
