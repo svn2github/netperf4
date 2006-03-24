@@ -240,7 +240,7 @@ gboolean set_input_source(gchar *option_name, gchar *option_value, gpointer data
     g_fprintf(where,
 	      "%s: cannot open %s for reading\n",
 	      program_name,
-	      optarg);
+	      option_value);
     fflush(where);
     exit(1);
   } 
@@ -292,10 +292,10 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
   }
   if (fname == NULL) {
     if (!xmlStrcmp(doctype,(const xmlChar *)"netperf")) {
-      if (0 == stat("default_config.xml",&buf)) {
+      if (0 == g_stat("default_config.xml",&buf)) {
 	fname = "default_config.xml";
       }
-      else if (0 == stat(NETPERFDIR NETPERF_PATH_SEP "default_config.xml",
+      else if (0 == g_stat(NETPERFDIR NETPERF_PATH_SEP "default_config.xml",
 			 &buf)) {
 	fname = NETPERFDIR NETPERF_PATH_SEP "default_config.xml";
       }
@@ -304,10 +304,10 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
       }
     }
     if (!xmlStrcmp(doctype,(const xmlChar *)"commands")) {
-      if (0 == stat("default_commands.xml",&buf)) {
+      if (0 == g_stat("default_commands.xml",&buf)) {
 	fname = "default_commands.xml";
       }
-      else if (0 == stat(NETPERFDIR NETPERF_PATH_SEP "default_commands.xml",
+      else if (0 == g_stat(NETPERFDIR NETPERF_PATH_SEP "default_commands.xml",
 			 &buf)) {
 	fname = NETPERFDIR NETPERF_PATH_SEP "default_commands.xml";
       }
