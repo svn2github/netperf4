@@ -51,12 +51,13 @@ delete this exception statement from your version.
 #define HISTOGRAM_VARS       /* variable declarations for histogram go here */
 #define HIST_TIMESTAMP(time) /* time stamp call for histogram goes here */
 #define HIST_ADD(h,t1,t2)    /* call to add data to histogram goes here */
+#define HIST_CLEAR(h)        /* call to clear histogram data goes here */
 #define HIST_STATS_NODE(h,n) /* call to get hist statistics node goes here */
 #define HIST_REPORT(fd,h)    /* call to report histogram data goes here */
 
 #define HIST_NEW()           NULL
 
-typedef void *HIST;
+#define HIST   void*
 
 #else
 
@@ -70,6 +71,7 @@ typedef void *HIST;
 #define HIST_ADD(h,t1,t2)     HIST_add(h,delta_micro(t1,t2))
 #endif
 
+#define HIST_CLEAR(h)         HIST_clear(h)
 #define HIST_TIMESTAMP(time)  netperf_timestamp(time)
 #define HIST_NEW()            HIST_new()
 #define HIST_STATS_NODE(h,n)  HIST_stats_node(h,n)
@@ -108,17 +110,17 @@ typedef void *HIST;
 */
 
 struct histogram_struct {
-  int      hundred_nsec[10];
-  int      unit_usec[10];
-  int      ten_usec[10];
-  int      hundred_usec[10];
-  int      unit_msec[10];
-  int      ten_msec[10];
-  int      hundred_msec[10];
-  int      unit_sec[10];
-  int      ten_sec[10];
-  int      ridiculous;
-  int64_t  total;
+  uint64_t   hundred_nsec[10];
+  uint64_t   unit_usec[10];
+  uint64_t   ten_usec[10];
+  uint64_t   hundred_usec[10];
+  uint64_t   unit_msec[10];
+  uint64_t   ten_msec[10];
+  uint64_t   hundred_msec[10];
+  uint64_t   unit_sec[10];
+  uint64_t   ten_sec[10];
+  uint64_t   ridiculous;
+  uint64_t   total;
 };
 
 typedef struct histogram_struct *HIST;
