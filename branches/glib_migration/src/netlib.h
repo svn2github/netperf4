@@ -102,6 +102,10 @@ extern int get_test_function(test_t *test, const xmlChar *func);
 extern int add_test_to_hash(test_t *new_test);
 extern int send_control_message(const int control_sock, xmlNodePtr body,
 				xmlChar *nid, const xmlChar *fromnid);
+extern int write_to_control_connection(GIOChannel *channel, 
+				       xmlNodePtr body,
+				       xmlChar *nid,
+				       const xmlChar *fromnid);
 extern int32_t recv_control_message(int control_sock, xmlDocPtr *message);
 extern void report_server_error(server_t *server);
 #ifdef WITH_GLIB

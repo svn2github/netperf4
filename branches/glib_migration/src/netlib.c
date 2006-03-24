@@ -1928,6 +1928,150 @@ handle_control_connection_error(GIOChannel *source, gpointer data) {
   return(FALSE);
 }
 
+int
+write_to_control_connection(GIOChannel *source,
+			    xmlNodePtr body,
+			    xmlChar *nid,
+			    const xmlChar *fromnid) {
+
+  int rc;
+  int32_t length;
+
+  gchar *chars_to_send;
+
+  xmlDocPtr doc;
+  xmlDtdPtr dtd;
+  xmlNodePtr message_header;
+  xmlNodePtr new_node;
+  char *control_message;
+  int  control_message_len;
+  gsize bytes_written;
+  GError *error = NULL;
+  GIOStatus status;
+
+  if (debug) {
+    fprintf(where,
+            "%s: called with channel %p and message node at %p",
+	    __func__,
+	    source,
+            body);
+    fprintf(where,
+            " type %s destined for nid %s from nid %s\n",
+            body->name,
+            nid,
+            fromnid);
+    fflush(where);
+  }
+
+  if ((doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
+    /* zippity do dah */
+    doc->standalone = 0;
+    dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",NULL,NETPERF_DTD_FILE);
+    if (dtd != NULL) {
+      if (((message_header = xmlNewNode(NULL,(xmlChar *)"message")) != NULL) &&
+          (xmlSetProp(message_header,(xmlChar *)"tonid",nid) != NULL) &&
+          (xmlSetProp(message_header,(xmlChar *)"fromnid",fromnid) != NULL)) {
+        /* zippity ay */
+        xmlDocSetRootElement(doc,message_header);
+        /* it certainly would be nice to not have to do this with two
+           calls... raj 2003-02-28 */
+        if (((new_node = xmlDocCopyNode(body,doc,1)) != NULL) &&
+            (xmlAddChild(message_header, new_node) != NULL)) {
+	  /* IF there were a call where I could specify the buffer,
+	     then we wouldn't have to copy this again to get things
+	     contiguous with the "header" - then again, if the glib IO
+	     channel stuff offered a gathering write call it wouldn't
+	     matter... raj 2006-03-24 */
+          xmlDocDumpMemory(doc,
+                           (xmlChar **)&control_message,
+                           &control_message_len);
+          if (control_message_len > 0) {
+            /* what a wonderful day */
+
+	    chars_to_send = g_malloc(length+NETPERF_MESSAGE_HEADER_SIZE);
+
+	    /* if glib IO channels offered a gathering write, this
+	       silliness wouldn't be necessary.  yes, they offer
+	       buffered I/O and I could do two writes and then a
+	       flush, but dagnabit, if I could just call sendmsg()
+	       before, so no extra copies, no flushes, it certainly
+	       would be nice to be able to do the same with an IO
+	       channel. raj 2006-03-24 */
+
+            /* the message length send via the network does not include
+               the length itself... raj 2003-02-27 */
+            length = htonl(strlen(control_message));
+
+	    /* first copy the "header" ... */
+	    memcpy(chars_to_send,
+		   &length,
+		   NETPERF_MESSAGE_HEADER_SIZE);
+	    if (debug) {
+	      g_fprintf(where,
+			"%s copied %d bytes to %p\n",
+			__func__,
+			NETPERF_MESSAGE_HEADER_SIZE,
+			chars_to_send);
+	    }
+	    /* ... now copy the "data" */
+	    memcpy(chars_to_send+NETPERF_MESSAGE_HEADER_SIZE,
+		   control_message,
+		   control_message_len);
+
+	    if (debug) {
+	      g_fprintf(where,
+			"%s copied %d bytes to %p\n",
+			__func__,
+			control_message_len,
+			chars_to_send+NETPERF_MESSAGE_HEADER_SIZE);
+	    }
+
+	    /* and finally, send the data */
+            status = g_io_channel_write_chars(source,
+					      chars_to_send,
+					      control_message_len +
+					        NETPERF_MESSAGE_HEADER_SIZE,
+					      &bytes_written,
+					      &error);
+
+            if (debug) {
+              /* first display the header */
+              fprintf(where, "Sending %d byte message\n",
+                      control_message_len);
+              fprintf(where, "|%*s| ",control_message_len,control_message);
+              fflush(where);
+            }
+            if (bytes_written == 
+		(control_message_len+NETPERF_MESSAGE_HEADER_SIZE)) {
+	      if (debug) {
+		fprintf(where,"was successful\n");
+	      }
+              rc = NPE_SUCCESS;
+            } else {
+              rc = NPE_SEND_CTL_MSG_FAILURE;
+	      if (debug) {
+		fprintf(where,"failed\n");
+	      }
+            }
+          } else {
+            rc = NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED;
+          }
+        } else {
+          rc = NPE_SEND_CTL_MSG_XMLCOPYNODE_FAILED;
+        }
+      } else {
+        rc = NPE_SEND_CTL_MSG_XMLNEWNODE_FAILED;
+      }
+    } else {
+      rc = NPE_SEND_CTL_MSG_XMLNEWDTD_FAILED;
+    }
+  } else {
+    rc = NPE_SEND_CTL_MSG_XMLNEWDOC_FAILED;
+  }
+  return(rc);
+
+}
+
 gboolean
 read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data) {
   message_state_t *message_state;

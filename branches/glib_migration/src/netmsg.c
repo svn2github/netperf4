@@ -270,14 +270,14 @@ send_version_message(server_t *server, const xmlChar *fromnid)
         (xmlSetProp(message,(xmlChar *)"fix", NETPERF_FIX)     != NULL))  {
       /* still smiling */
       /* almost there... */
-      rc = send_control_message(server->sock,
-                                message,
-                                server->id,
-                                fromnid);
+      rc = write_to_control_connection(server->source,
+				       message,
+				       server->id,
+				       fromnid);
       if (rc != NPE_SUCCESS) {
         if (debug) {
           fprintf(where,
-                  "send_version_message: send_control_message failed\n");
+                  "send_version_message: write_to_control_connection failed\n");
           fflush(where);
         }
       }
@@ -502,14 +502,14 @@ get_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       fflush(where);
     }
     stats = (test->test_stats)(test);
-    rc = send_control_message(server->sock,
-                              stats,
-                              server->id,
-                              server->my_nid);
+    rc = write_to_control_connection(server->source,
+				     stats,
+				     server->id,
+				     server->my_nid);
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "%s: send_control_message failed\n",
+                "%s: write_to_control_connection failed\n",
                 __func__);
         fflush(where);
       }
@@ -537,14 +537,14 @@ get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       fflush(where);
     }
     sys_stats = (test->test_stats)(test);
-    rc = send_control_message(server->sock,
-                              sys_stats,
-                              server->id,
-                              server->my_nid);
+    rc = write_to_control_connection(server->source,
+				     sys_stats,
+				     server->id,
+				     server->my_nid);
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "%s: send_control_message failed\n",
+                "%s: write_to_control_connection failed\n",
                  __func__);
         fflush(where);
       }

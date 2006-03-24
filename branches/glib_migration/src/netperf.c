@@ -558,8 +558,8 @@ display_server_hash()
     server = server_hash[i].server;
     fprintf(where,"server_hash_bucket[%d]=%p\n",i,server_hash[i].server);
     while (server) {
-      fprintf(where,"\tserver->id %s, server->sock %d, server->state %d\n",
-              server->id,server->sock,server->state);
+      fprintf(where,"\tserver->id %s, server->channel %p, server->state %d\n",
+              server->id,server->source,server->state);
       server = server->next;
     }
     fflush(where);
@@ -828,6 +828,8 @@ instantiate_netservers()
   xmlNodePtr  this_netserver;
   server_t   *new_server;
   xmlChar    *netserverid;
+  GIOStatus   status;
+  GError      *error = NULL;
 
   /* first, get the netperf element which was checked at parse time.  The
      netperf element has only netserver elements each with its own unique
@@ -882,6 +884,37 @@ instantiate_netservers()
               new_server->state_req = NSRV_PREINIT;
               rc = NPE_CONNECT_FAILED;
             }
+#ifdef G_OS_WIN32
+	    new_server->source = g_io_channel_win32_new_socket(new_server->sock);
+#else
+	    new_server->source = g_io_channel_unix_new(new_server->sock);
+#endif
+	    status = g_io_channel_set_flags(new_server->source,
+					    G_IO_FLAG_NONBLOCK,
+					    &error);
+	    if (error) {
+	      g_warning("g_io_channel_set_flags %s %d %s\n",
+			g_quark_to_string(error->domain),
+			error->code,
+			error->message);
+	      g_clear_error(&error);
+	    }
+	    g_fprintf(where,
+		      "status after set flags %d new_server->source %p\n",
+		      status,
+		      new_server->source);
+    
+	    status = g_io_channel_set_encoding(new_server->source,NULL,&error);
+	    if (error) {
+	      g_warning("g_io_channel_set_encoding %s %d %s\n",
+			g_quark_to_string(error->domain),
+			error->code,
+			error->message);
+	      g_clear_error(&error);
+	    }
+	    
+	    g_io_channel_set_buffered(new_server->source,FALSE);
+
             new_server->state     = NSRV_CONNECTED;
             new_server->state_req = NSRV_CONNECTED;
           rc = send_version_message(new_server, my_nid);
@@ -1147,10 +1180,10 @@ initialize_test(void *data)
       }
       /* is the lock around the send required? */
       NETPERF_RWLOCK_WRLOCK(&server->rwlock);
-      rc = send_control_message(server->sock,
-                                msg,
-                                server->id,
-                                my_nid);
+      rc = write_to_control_connection(server->source,
+				       msg,
+				       server->id,
+				       my_nid);
       NETPERF_RWLOCK_WRITER_UNLOCK(&server->rwlock);
     } else {
       if (debug) {
@@ -1527,10 +1560,10 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
         server = find_server_in_hash(test->server_id);
         test->state_req = state;
         xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-        rc = send_control_message(server->sock,
-                                  cmd,
-                                  server->id,
-                                  my_nid);
+        rc = write_to_control_connection(server->source,
+					 cmd,
+					 server->id,
+					 my_nid);
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
@@ -1551,10 +1584,10 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
       server = find_server_in_hash(test->server_id);
       test->state_req = state;
       xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-      rc = send_control_message(server->sock,
-                                cmd,
-                                server->id,
-                                my_nid);
+      rc = write_to_control_connection(server->source,
+				       cmd,
+				       server->id,
+				       my_nid);
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
@@ -1973,10 +2006,10 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
         }
         server = find_server_in_hash(test->server_id);
         xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-        rc = send_control_message(server->sock,
-                                  cmd,
-                                  server->id,
-                                  my_nid);
+        rc = write_to_control_connection(server->source,
+					 cmd,
+					 server->id,
+					 my_nid);
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
@@ -1996,10 +2029,10 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
       }
       server = find_server_in_hash(test->server_id);
       xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-      rc = send_control_message(server->sock,
-                                cmd,
-                                server->id,
-                                my_nid);
+      rc = write_to_control_connection(server->source,
+				       cmd,
+				       server->id,
+				       my_nid);
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
@@ -2057,10 +2090,10 @@ close_command(xmlNodePtr cmd, uint32_t junk)
   sid    = xmlGetProp(cmd,(const xmlChar *)"sid");
   server = find_server_in_hash(sid);
   xmlSetProp(cmd,(const xmlChar *)"sid", server->id);
-  rc = send_control_message(server->sock,
-                            cmd,
-                            server->id,
-                            my_nid);
+  rc = write_to_control_connection(server->source,
+				   cmd,
+				   server->id,
+				   my_nid);
   if (rc != NPE_SUCCESS) {
     server->state  = NSRV_ERROR;
     server->err_rc = rc;

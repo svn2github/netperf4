@@ -647,11 +647,14 @@ check_test_state_callback(gpointer data)
         }
         test->state = new;
         if (msg) {
-          rc = send_control_message(netperf->sock, msg, netperf->id, netperf->my_nid);
+          rc = write_to_control_connection(netperf->source,
+					   msg,
+					   netperf->id,
+					   netperf->my_nid);
           if (rc != NPE_SUCCESS) {
             if (debug) {
               g_fprintf(where,
-                      "%s: send_control_message failed\n", __func__);
+                      "%s: write_to_control_connection failed\n", __func__);
               fflush(where);
             }
           }
