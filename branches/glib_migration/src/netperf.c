@@ -183,105 +183,94 @@ static struct option const long_options[] =
   {NULL, 0, NULL, 0}
 };
 
-static void
-usage (int status)
-{
-  printf ("%s - network-oriented performance benchmarking\n", program_name);
-  printf ("Usage: %s [OPTION]... [FILE]...\n", program_name);
-  printf ("\
-Options:\n\
-  -o, --output NAME          send output to NAME instead of standard output\n\
-  -i, --input  NAME          get input from NAME instead of standard input\n\
-  -c, --config NAME          get config from NAME instead of standard input\n\
-  -d, --debug                increase level of debugging output\n\
-  -q, --quiet, --silent      inhibit usual output\n\
-  --brief                    shorten output\n\
-  --verbose                  print more information\n\
-  -h, --help                 display this help and exit\n\
-  -V, --version              output version information and exit\n\
-");
-  exit (status);
-}
 
-/* Set all the option flags according to the switches specified.
-   Return the index of the first non-option argument.  */
-
-static int
-decode_switches (int argc, char **argv)
-{
-  int c;
-
-  ofile = stdout;
-
-  while ((c = getopt_long (argc, argv,
-                           "q"  /* quiet or silent */
-                           "v"  /* verbose */
-                           "o:" /* output */
-                           "i:" /* input */
-                           "c:" /* config */
-			   "d"  /* debug */
-                           "h"  /* help */
-                           "V", /* version */
-                           long_options, (int *) 0)) != EOF) {
-    switch (c) {
-    case 'c':               /* --config */
-      cname = strdup(optarg);
-      break;
-    case 'd':                 /* --debug */
-      debug++;
-      break;
-    case 'o':               /* --output */
-      oname = strdup(optarg);
-      ofile = fopen(oname, "w");
-      if (!ofile) {
-	fprintf(where,
-		"%s: cannot open %s for writing\n",
-		program_name,
-		optarg);
-	fflush(where);
-	exit(1);
-      }
-      break;
-    case 'i':               /* --input */
-      iname = strdup(optarg);
-      ifile = fopen(iname, "r");
-      if (!ifile) {
-	fprintf(where,
-		"%s: cannot open %s for reading\n",
-		program_name,
-		optarg);
-	fflush(where);
-	exit(1);
-      } else {
-	want_batch = 1;
-	fclose(ifile);
-	ifile = NULL;
-      }
-    case 'q':               /* --quiet, --silent */
-      want_quiet = 1;
-      break;
-    case BRIEF_CODE:        /* --brief */
-      want_brief = 1;
-      break;
-    case 'v':               /* --verbose */
-      want_verbose = 1;
-      break;
-    case 'V':
-      printf ("netperf %s.%s.%s\n",
-	      NETPERF_VERSION,
-	      NETPERF_UPDATE,
-	      NETPERF_FIX);
-      exit (0);
-      
-    case 'h':
-      usage (0);
-      
-    default:
-      usage (EXIT_FAILURE);
-    }
+gboolean set_debug(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  if (option_value) {
+    /* set to value */
+    debug = atoi(option_value);
   }
-  return optind;
+  else {
+    /* simple increment */
+    debug++;
+  }
+  return(TRUE);
 }
+
+
+
+gboolean set_verbose(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  if (option_value) {
+    /* set to value */
+    want_verbose = atoi(option_value);
+  }
+  else {
+    /* simple increment */
+    want_verbose++;
+  }
+  return(TRUE);
+}
+  
+
+gboolean show_version(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  g_printf("netserver: %s.%s.%s\n",
+	   NETPERF_VERSION,
+	   NETPERF_UPDATE,
+	   NETPERF_FIX);
+  exit(0);
+}
+
+gboolean set_output_destination(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  oname = g_strdup(option_value);
+  ofile = fopen(oname, "w");
+  if (!ofile) {
+    g_fprintf(stderr,
+	    "%s: cannot open %s for writing\n",
+	    program_name,
+	    option_value);
+    exit(1);
+  }
+  return(TRUE);
+}
+
+gboolean set_input_source(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+
+  iname = g_strdup(option_value);
+  ifile = fopen(iname, "r");
+  if (!ifile) {
+    g_fprintf(where,
+	      "%s: cannot open %s for reading\n",
+	      program_name,
+	      optarg);
+    fflush(where);
+    exit(1);
+  } 
+  else {
+    want_batch = 1;
+    fclose(ifile);
+    ifile = NULL;
+  }
+
+  return(TRUE);
+}
+
+gboolean set_config_source(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  cname = g_strdup(option_value);
+  return(TRUE);
+}
+
+
+static GOptionEntry netperf_entries[] = 
+  {
+    {"output",'o', 0, G_OPTION_ARG_CALLBACK, set_output_destination, "Specify where misc output should go", NULL},
+    {"input",'i',0, G_OPTION_ARG_CALLBACK, set_input_source, "Specify the command file", NULL},
+    {"config", 'c', 0, G_OPTION_ARG_CALLBACK, set_config_source, "Specify the configuration file", NULL},
+    {"debug", 'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, set_debug, "Set the level of debugging output", NULL},
+    {"version", 'V', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, show_version, "Display the netserver version and exit", NULL},
+    {"verbose", 'v', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, set_verbose, "Set verbosity level for output", NULL},
+    {"brief", 'b', 0, G_OPTION_ARG_NONE, &want_brief, "Request brief output", NULL},
+    {"quiet", 'q', 0, G_OPTION_ARG_NONE, &want_quiet, "Display no test banners", NULL},
+    { NULL }
+  };
 
 
 static xmlNodePtr
@@ -2256,6 +2245,9 @@ int
 main(int argc, char **argv)
 {
   int       rc = NPE_SUCCESS;
+  GOptionContext *option_context;
+  gboolean ret;
+  GError *error=NULL;
 
   program_name = argv[0];
 
@@ -2265,7 +2257,18 @@ main(int argc, char **argv)
 
   where = stderr;
 
-  decode_switches(argc, argv);
+  option_context = g_option_context_new(" - netperf4 netperf options");
+  g_option_context_add_main_entries(option_context,netperf_entries, NULL);
+  ret = g_option_context_parse(option_context, &argc, &argv, &error);
+  if (error) {
+    /* it sure would be nice to know how to trigger the help output */
+    g_error("%s g_option_context_parse %s %d %s\nUse netserver --help for help\n",
+	      __func__,
+	      g_quark_to_string(error->domain),
+	      error->code,
+	      error->message);
+    g_clear_error(&error);
+  }
 
   xmlInitParser();
   xmlKeepBlanksDefault(0);
