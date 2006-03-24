@@ -384,7 +384,7 @@ static void
 netperf_init()
 {
   int i;
-  int rc;
+
 
   for (i = 0; i < SERVER_HASH_BUCKETS; i++) {
     server_hash[i].server = NULL;
@@ -1378,7 +1378,7 @@ static int
 wait_for_tests_to_initialize()
 {
   int              rc = NPE_SUCCESS;
-  int              prc;
+
   int              i;
   server_t        *server;
   test_t          *test;

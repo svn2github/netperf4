@@ -135,6 +135,7 @@ delete this exception statement from your version.
 #undef NETLIB
 
 #include "netlib.h"
+#include "netmsg.h"
 
 extern int debug;
 extern FILE * where;
@@ -532,7 +533,7 @@ test_state_to_string(int value, char *string)
 void
 report_test_status(test_t *test)
 {
-  bsd_data_t  *my_data;
+
   char        current[8];
   char        requested[8];
   char        reported[8];
@@ -551,7 +552,7 @@ report_test_status(test_t *test)
 void
 report_servers_test_status(server_t *server)
 {
-  int          ret;
+
   test_hash_t *h;
   test_t      *test;
   int          i;
@@ -911,8 +912,6 @@ map_la_to_lib(xmlChar *la, char *lib) {
   char *temp;
   char *ld_library_path = NULL;
   char full_path[PATH_MAX];
-  char *last;
-  char *s;
   struct stat buf;
 
 
@@ -1808,7 +1807,7 @@ read_n_available_bytes(GIOChannel *source, gchar *data, gsize n, gsize *bytes_re
   gsize bytes_to_read;
   gsize bytes_this_read;
   gchar *buffer;
-  int i;
+
   char *foo;
 
   NETPERF_DEBUG_ENTRY(debug,where);
@@ -2171,7 +2170,6 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
     }
     /* now, do we have the whole header? */
     if (message_state->bytes_received == NETPERF_MESSAGE_HEADER_SIZE) {
-      int i;
       /* setup for the message body */
       message_state->have_header = TRUE;
       memcpy(&(message_state->bytes_remaining),
@@ -2243,6 +2241,7 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 
   return(TRUE);
 }
+
 
 int32_t
 recv_control_message(int control_sock, xmlDocPtr *message)
@@ -2458,122 +2457,6 @@ remote_close:
 
 }
 
-
-/* send_control_message expects to be called with a socket, and an
-   xmlNodePtr containing the element to send in the message. It is also
-   given the netserver nid to which the message is addressed. It will
-   then use these to construct an XML document that encapsulates the message
-   and will send that on its way.  At some point, we may remove the socket
-   parm and have that looked-up to keep things a bit more "abstracted".
-   raj 2003-02-28  sgb 2003-08-22 */
-int
-send_control_message(const int control_sock,
-                     xmlNodePtr body,
-                     xmlChar *nid,
-                     const xmlChar *fromnid)
-{
-  int  rc = NPE_SUCCESS;
-
-  int32_t length;
-  struct iovec hdrtrl[2];     /* used for the sendmsg call */
-  struct msghdr message_hdr;  /* used for the sendmsg call */
-
-  xmlDocPtr doc;
-  xmlDtdPtr dtd;
-  xmlNodePtr message_header;
-  xmlNodePtr new_node;
-  char *control_message;
-  int  control_message_len;
-
-
-  if (debug) {
-    fprintf(where,
-            "send_control_message: called with sock %d and message node at %p",
-            control_sock,
-            body);
-    fprintf(where,
-            " type %s destined for nid %s from nid %s\n",
-            body->name,
-            nid,
-            fromnid);
-    fflush(where);
-  }
-
-  if ((doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
-    /* zippity do dah */
-    doc->standalone = 0;
-    dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",NULL,NETPERF_DTD_FILE);
-    if (dtd != NULL) {
-      if (((message_header = xmlNewNode(NULL,(xmlChar *)"message")) != NULL) &&
-          (xmlSetProp(message_header,(xmlChar *)"tonid",nid) != NULL) &&
-          (xmlSetProp(message_header,(xmlChar *)"fromnid",fromnid) != NULL)) {
-        /* zippity ay */
-        xmlDocSetRootElement(doc,message_header);
-        /* it certainly would be nice to not have to do this with two
-           calls... raj 2003-02-28 */
-        if (((new_node = xmlDocCopyNode(body,doc,1)) != NULL) &&
-            (xmlAddChild(message_header, new_node) != NULL)) {
-          /* my oh my */
-          xmlDocDumpMemory(doc,
-                           (xmlChar **)&control_message,
-                           &control_message_len);
-          if (control_message_len > 0) {
-            /* what a wonderful day */
-            /* the message length send via the network does not include
-               the length itself... raj 2003-02-27 */
-            length = htonl(strlen(control_message));
-
-            /* offset zero is the message length, offset one is the
-               message itself */
-            hdrtrl[0].iov_len  = sizeof(length);
-            hdrtrl[0].iov_base = (void *)&length;
-            hdrtrl[1].iov_len  = control_message_len;
-            hdrtrl[1].iov_base = control_message;
-
-            /* since we are only interested in the msg_iov, and
-               msg_iovlen, and since we would set all the other fields,
-               regardless of "flavor" to a value of 0 (or NULL, which we
-               ass-u-me to == 0), we will just use a memset and then not
-               have to worry about #ifdef'ing for the various flavors of
-               struct msghdr. raj 2003-02-26 */
-
-            memset(&message_hdr,0,sizeof(struct msghdr));
-            message_hdr.msg_iov = hdrtrl;
-            message_hdr.msg_iovlen = 2;
-
-            rc = sendmsg(control_sock,
-                         &message_hdr,
-                         0);
-            if (debug) {
-              /* first display the header */
-              fprintf(where, "Just sent a %d byte message\n",
-                      control_message_len);
-              fprintf(where, "|%*s|\n",control_message_len,control_message);
-              fflush(where);
-            }
-            if (rc == (control_message_len+sizeof(length))) {
-              rc = NPE_SUCCESS;
-            } else {
-              rc = NPE_SEND_CTL_MSG_FAILURE;
-            }
-          } else {
-            rc = NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED;
-          }
-        } else {
-          rc = NPE_SEND_CTL_MSG_XMLCOPYNODE_FAILED;
-        }
-      } else {
-        rc = NPE_SEND_CTL_MSG_XMLNEWNODE_FAILED;
-      }
-    } else {
-      rc = NPE_SEND_CTL_MSG_XMLNEWDTD_FAILED;
-    }
-  } else {
-    rc = NPE_SEND_CTL_MSG_XMLNEWDOC_FAILED;
-  }
-  return(rc);
-}
-
 
 void
 report_server_error(server_t *server)

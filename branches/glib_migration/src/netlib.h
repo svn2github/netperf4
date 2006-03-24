@@ -100,8 +100,6 @@ extern int establish_control(xmlChar *hostname,  xmlChar *port, int remfam,
 			     xmlChar *localhost, xmlChar *localport, int locfam);
 extern int get_test_function(test_t *test, const xmlChar *func);
 extern int add_test_to_hash(test_t *new_test);
-extern int send_control_message(const int control_sock, xmlNodePtr body,
-				xmlChar *nid, const xmlChar *fromnid);
 extern int write_to_control_connection(GIOChannel *channel, 
 				       xmlNodePtr body,
 				       xmlChar *nid,
