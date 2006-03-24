@@ -1988,6 +1988,15 @@ write_to_control_connection(GIOChannel *source,
           if (control_message_len > 0) {
             /* what a wonderful day */
 
+	    length = control_message_len;
+
+	    if (debug) {
+	      g_fprintf(where,
+			"%s allocating %d bytes\n",
+			__func__,
+			length+NETPERF_MESSAGE_HEADER_SIZE);
+	    }
+
 	    chars_to_send = g_malloc(length+NETPERF_MESSAGE_HEADER_SIZE);
 
 	    /* if glib IO channels offered a gathering write, this
