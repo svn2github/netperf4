@@ -1472,7 +1472,9 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
       }
       continue;
     }
-    if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(one)) == 
+    /* The Windows DDK compiler is quite picky about pointers so we
+       cast one as a void to placate it. */
+    if (setsockopt(sockfd,SOL_SOCKET,SO_REUSEADDR,(void *)&one,sizeof(one)) == 
 	SOCKET_ERROR) {
       fprintf(where,"establish_listen: SO_REUSEADDR failed\n");
       fflush(where);
