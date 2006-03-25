@@ -1,1 +1,41 @@
-Netperf4 has yet to be compiled under any flavor of Windows.
+Netperf4 presently compiles under Windows - that is one can get a
+cleanly compiled netperf and netserver binary.
+
+What isn't done yet is compiling nettest_bsd.c (or any of the other
+nettest_mumble.c files) as a DLL to be loaded at runtime, so things
+are not terribly interesting :) The DLL's will entail cloning one of
+NetPerfDir or NetServerDir and munging the sources file therein to
+have a target of DLL and to use the apropriate source file(s).
+
+There are a number of dependencies that have to be satisfied:
+
+libxml2 development and runtime
+  iconv runtime
+  zlib  runtime
+
+For those follow the download links from:
+
+http://www.xmlsoft.org/downloads.html
+
+to Igor Zlatkovic's download site at:
+
+http://www.zlatkovic.com/libxml.en.html
+
+Version 2.6.23 of libxml2, 1.9.1 of iconv and 1.2.3 of zlib are
+presently presumed to be sufficient.  This may change without warning
+as actual tests are run :)
+
+You will also need glib:
+
+glib development and runtime
+  gettext runtime
+
+For those follow the download links from:
+
+http://www.gtk.org/download/  to:
+
+http://www.gtk.org/download/
+
+version 2.8.6 of glib and 0.14.5 of gettext are presently presumed to
+be sufficient.  This may change without warning as actual tests are
+run :)

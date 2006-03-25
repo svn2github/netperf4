@@ -16,3 +16,16 @@ initiailization.
 
 Simon Leinen
 Initial Solaris (9) porting work. Misc bug fixes.
+
+
+I would also like to single-out the following for their indirect
+contributions.
+
+Igor Zlatkovic
+For consumate patience in matters concerning libxml2 under Windows
+
+Tor Lillqvist
+For consumate patience in matters concerning glib-2.0 under Windows
+
+Daniel Veillard
+For consumate patience in patters concerning libxml2 in general
