@@ -4,20 +4,23 @@
 
 <!-- 30 second raw_seq_disk_io test
  -->
-  <create_test_set set_name="s0" tests_in_set="t1" />
-  <wait tid="s0" seconds="120" />
+  <create_test_set set_name="s0" tests_in_set="t0,t1" />
+  <wait tid="s0" />
   <load tid="s0" />
-  <wait tid="s0" seconds="120" />
+  <wait tid="s0" />
   <measure tid="s0" />
   <wait tid="s0" seconds="30" />
   <load tid="s0" />
-  <wait tid="s0" seconds="120" />
+  <wait tid="s0" />
   <get_stats tid="s0" />
+  <wait tid="s0" />
   <clear_stats tid="s0" />
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s0" 
     library="disktest.la"
-    function="report_disk_test_results" />
+    function="report_disk_test_results"
+    report_flags="PRINT_ALL"
+  />
 
 </commands>

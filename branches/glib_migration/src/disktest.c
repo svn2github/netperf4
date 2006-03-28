@@ -32,19 +32,8 @@ delete this exception statement from your version.
 #ifndef lint
 char    disk_test_id[]="\
 @(#)disktest.c (c) Copyright 2005 Hewlett-Packard Co. $Id: disktest.c 20 2006-2-28 19:45:00Z burger $";
-#else
-#define WANT_HISTOGRAM
 #endif /* lint */
 
-#ifdef WANT_HISTOGRAM
-#define HISTOGRAM_VARS        struct timeval time_one,time_two
-#define HIST_TIMESTAMP(time)  gettimeofday(time,NULL)
-#define HIST_ADD(h,delta)     HIST_add(h,delta)
-#else
-#define HISTOGRAM_VARS       /* variable declarations for histogram go here */
-#define HIST_TIMESTAMP(time) /* time stamp call for histogram goes here */
-#define HIST_ADD(h,delta)    /* call to add data to histogram goes here */
-#endif
 
 /****************************************************************/
 /*                                                              */
@@ -56,6 +45,13 @@ char    disk_test_id[]="\
 /****************************************************************/
 
 
+
+/* requires 64 bit file offsets */
+#define _FILE_OFFSET_BITS 64
+
+/* turn on histogram capability */
+#define WANT_HISTOGRAM
+
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -280,8 +276,9 @@ static void
 disk_test_init(test_t *test)
 {
   disk_data_t *new_data;
-  xmlNodePtr  args;
-  xmlChar    *string;
+  xmlNodePtr   args;
+  xmlChar     *string;
+  int          loc_debug = 0;
   
 
   new_data = (disk_data_t *)malloc(sizeof(disk_data_t));
@@ -307,13 +304,23 @@ disk_test_init(test_t *test)
       new_data->read = 1.0;
     }
 
-    string =  xmlGetProp(args,(const xmlChar *)"chunk");
+    string =  xmlGetProp(args,(const xmlChar *)"disk_io_size");
+    if (test->debug || loc_debug) {
+      fprintf(test->where,
+              "%s:%s  disk_io_size = '%s'\n", test->id, __func__, string);
+      fflush(test->where);
+    }
     if (string) {
       new_data->chunk = strtoul((char *)string,NULL,10);
     } else {
       new_data->chunk = 8;
     }
-    string =  xmlGetProp(args,(const xmlChar *)"chunk_units");
+    string =  xmlGetProp(args,(const xmlChar *)"disk_io_units");
+    if (test->debug || loc_debug) {
+      fprintf(test->where,
+              "%s:%s  disk_io_units = '%s'\n", test->id, __func__, string);
+      fflush(test->where);
+    }
     if (string) {
       if (strstr((char *)string,"KB")) {
         new_data->chunk *= 1024;
@@ -329,13 +336,23 @@ disk_test_init(test_t *test)
       new_data->chunk *= 1024;
     }
 
-    string =  xmlGetProp(args,(const xmlChar *)"size");
+    string =  xmlGetProp(args,(const xmlChar *)"disk_test_size");
+    if (test->debug || loc_debug) {
+      fprintf(test->where,
+              "%s:%s  disk_test_size = '%s'\n", test->id, __func__, string);
+      fflush(test->where);
+    }
     if (string) {
       new_data->testSize = strtoull((char *)string,NULL,10);
     } else {
       new_data->testSize = 0;
     }
-    string =  xmlGetProp(args,(const xmlChar *)"size_units");
+    string =  xmlGetProp(args,(const xmlChar *)"disk_test_units");
+    if (test->debug || loc_debug) {
+      fprintf(test->where,
+              "%s:%s  disk_test_units = '%s'\n", test->id, __func__, string);
+      fflush(test->where);
+    }
     if (string) {
       if (strstr((char *)string,"KB")) {
         new_data->testSize *= 1024;
@@ -390,7 +407,7 @@ disk_test_init(test_t *test)
                         DISK_MALLOC_FAILED,
                         "malloc failed in disk_test_init");
   }
-  if (test->debug) {
+  if (test->debug || loc_debug) {
     fprintf(test->where,
             "%s:%s  file_name = '%s'\n", test->id, __func__, 
             new_data->file_name);
@@ -401,6 +418,9 @@ disk_test_init(test_t *test)
             "%s:%s  chunk = %ld\n", test->id, __func__, 
             new_data->chunk);
     fprintf(test->where,
+            "%s:%s  testSize = %lld\n", test->id, __func__, 
+            new_data->testSize);
+    fprintf(test->where,
             "%s:%s  scsi_immreport = %d\n", test->id, __func__, 
             new_data->scsi_immreport);
     fprintf(test->where,
@@ -409,6 +429,9 @@ disk_test_init(test_t *test)
     fprintf(test->where, "\n");
     fflush(test->where);
   }
+  
+  new_data->read_hist  = HIST_new();
+  new_data->write_hist = HIST_new();
 
   SET_TEST_DATA(test, new_data);
 }
@@ -442,6 +465,8 @@ disk_test_clear_stats(disk_data_t *my_data)
   for (i = 0; i < DISK_MAX_COUNTERS; i++) {
     my_data->stats.counter[i] = 0;
   }
+  HIST_CLEAR(my_data->read_hist);
+  HIST_CLEAR(my_data->write_hist);
   my_data->elapsed_time.tv_usec = 0;
   my_data->elapsed_time.tv_sec  = 0;
   gettimeofday(&(my_data->prev_time),NULL);
@@ -465,10 +490,11 @@ static xmlNodePtr
 disk_test_get_stats(test_t *test)
 {
   xmlNodePtr  stats = NULL;
+  xmlNodePtr  hist  = NULL;
   xmlAttrPtr  ap    = NULL;
   int         i,j;
-  char        value[32];
-  char        name[32];
+  char        value[64];
+  char        name[64];
   uint64_t    loc_cnt[DISK_MAX_COUNTERS];
 
   disk_data_t *my_data = GET_TEST_DATA(test);
@@ -480,7 +506,7 @@ disk_test_get_stats(test_t *test)
   }
   if ((stats = xmlNewNode(NULL,(xmlChar *)"test_stats")) != NULL) {
     /* set the properites of the test_stats message -
-       the tid and time stamps/values and counter values  sgb 2004-07-07 */
+       the tid and time stamps/values and counter values  sgb 2006-03-15 */
 
     ap = xmlSetProp(stats,(xmlChar *)"tid",test->id);
     for (i = 0; i < DISK_MAX_COUNTERS; i++) {
@@ -540,6 +566,21 @@ disk_test_get_stats(test_t *test)
         }
       }
     }
+    /* add hist_stats entries to the status report */
+    if (my_data->stats.named.read_calls > 0) {
+      snprintf(name,32,"DISK_READ test %s",test->id);
+      hist = HIST_stats_node(my_data->read_hist, name);
+      if (hist != NULL) {
+        xmlAddChild(stats,hist);
+      }
+    }
+    if (my_data->stats.named.write_calls > 0) {
+      snprintf(name,63,"DISK_WRITE test %s",test->id);
+      hist = HIST_stats_node(my_data->write_hist, name);
+      if (hist != NULL) {
+        xmlAddChild(stats,hist);
+      }
+    }
     if (ap == NULL) {
       xmlFreeNode(stats);
       stats = NULL;
@@ -562,7 +603,7 @@ fix_up_parms(test_t *test)
   off_t         max_chunk;
   off_t         value;
   char         *buf;
-  int           loc_debug = 1;
+  int           loc_debug = 0;
 
 
   my_data     = GET_TEST_DATA(test);
@@ -589,20 +630,19 @@ fix_up_parms(test_t *test)
 
   /* default end_position */
   if (my_data->end_pos == 0) {
-    if (my_data->start_pos < my_data->devSize) {
-      my_data->end_pos = my_data->testSize -  my_data->start_pos;
+    if (my_data->start_pos < (my_data->devSize - (my_data->chunk * 2))) {
+      my_data->end_pos = my_data->start_pos + my_data->testSize;
     }
     else {
       my_data->end_pos = my_data->testSize;
     }
-    my_data->end_pos = my_data->end_pos = my_data->sectSize;
   }
   
   if (my_data->testSize > my_data->devSize) {
     report_test_failure(test,
                         (char *)__func__,
-                        DISK_SIZE_TO_LARGE,
-                        "size value is larger than device capacity");
+                        DISK_TEST_SIZE_TO_LARGE,
+                        "disk test size is larger than device capacity");
   }
   else if (my_data->start_pos > (my_data->devSize - my_data->testSize)) {
     report_test_failure(test,
@@ -616,11 +656,17 @@ fix_up_parms(test_t *test)
                         DISK_END_POS_TO_LARGE,
                         "end_postion value is past end of device");
   }
-  else if (my_data->chunk > (my_data->testSize/2)) {
+  else if (my_data->end_pos > (my_data->start_pos + my_data->testSize)) {
     report_test_failure(test,
                         (char *)__func__,
                         DISK_END_POS_TO_LARGE,
-                        "end_postion value is past end of device");
+                        "end_postion value is past end of testSize");
+  }
+  else if (my_data->chunk > (my_data->testSize/2)) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        DISK_IO_SIZE_TO_LARGE,
+                        "disk io size is too large");
   }
   my_data->where = my_data->start_pos;
   
@@ -630,30 +676,30 @@ fix_up_parms(test_t *test)
   buf = (char *)(((long)buf + (long)value - 1) & ~((long)value -1));
   my_data->buffer_start = buf;
 
-  if (test->debug) {
+  if (test->debug || loc_debug) {
     fprintf(test->where,
-            "%s:%s  testSize = %ld\n", test->id, __func__, 
+            "%s:%s  testSize = %lld\n", test->id, __func__, 
             my_data->testSize);
     fprintf(test->where,
             "%s:%s  chunk = %ld\n", test->id, __func__, 
             my_data->chunk);
     fprintf(test->where,
-            "%s:%s  start_position = %ld\n", test->id, __func__, 
+            "%s:%s  start_position = %lld\n", test->id, __func__, 
             my_data->start_pos);
     fprintf(test->where,
-            "%s:%s  end_position = %ld\n", test->id, __func__, 
+            "%s:%s  end_position = %lld\n", test->id, __func__, 
             my_data->end_pos);
     fprintf(test->where,
-            "%s:%s  devSize = %ld\n", test->id, __func__, 
+            "%s:%s  devSize = %lld\n", test->id, __func__, 
             my_data->devSize);
     fprintf(test->where,
-            "%s:%s  diskSize = %ld\n", test->id, __func__, 
+            "%s:%s  diskSize = %lld\n", test->id, __func__, 
             my_data->diskSize);
     fprintf(test->where,
-            "%s:%s  sectSize = %ld\n", test->id, __func__, 
+            "%s:%s  sectSize = %lld\n", test->id, __func__, 
             my_data->sectSize);
     fprintf(test->where,
-            "%s:%s  where = %ld\n", test->id, __func__, 
+            "%s:%s  where = %lld\n", test->id, __func__, 
             my_data->where);
     fprintf(test->where,
             "%s:%s  buffer_start = %p\n", test->id, __func__, 
@@ -676,6 +722,7 @@ raw_disk_init(test_t *test)
   struct capacity           scsi_capacity;
   capacity_type             capacity;
   int                       ir_flag;
+  int                       loc_debug = 0;
 
 
   my_data     = GET_TEST_DATA(test);
@@ -898,10 +945,9 @@ do_raw_seq_disk_io(test_t *test)
   xfer_size = my_data->testSize;
   
   if (test->debug) {
-    fprintf(test->where, "%s: debug    = %d\n",  __func__, test->debug);
-    fprintf(test->where, "%s: testSize = %ld\n", __func__, xfer_size);
-    fprintf(test->where, "%s: size     = %ld\n", __func__, size);
-    fprintf(test->where, "%s: where    = %ld\n", __func__, where);
+    fprintf(test->where, "%s: testSize = %lld\n", __func__, xfer_size);
+    fprintf(test->where, "%s: size     = %ld\n",  __func__, size);
+    fprintf(test->where, "%s: where    = %lld\n", __func__, where);
     fflush(test->where);
   }
   if (my_data->read != 0.0) {
@@ -941,8 +987,10 @@ do_raw_seq_disk_io(test_t *test)
     if (readIO) {
       bytes = io_read(fd, buf_addr, size, test, (char *)__func__);
       if (state == TEST_MEASURE) {
-        HIST_TIMESTAMP(&time_two);
-        HIST_ADD(my_data->read_hist,delta_macro(&time_one,&time_two));
+        if (my_data->read_hist) {
+          HIST_TIMESTAMP(&time_two);
+          HIST_ADD(my_data->read_hist, &time_one, &time_two);
+        }
         my_data->stats.named.read_calls++;
         my_data->stats.named.bytes_read += bytes;
       }
@@ -950,8 +998,10 @@ do_raw_seq_disk_io(test_t *test)
     else {
       bytes = io_write(fd, buf_addr, size, test, (char *)__func__);
       if (state == TEST_MEASURE) {
-        HIST_TIMESTAMP(&time_two);
-        HIST_ADD(my_data->write_hist,delta_macro(&time_one,&time_two));
+        if (my_data->write_hist) {
+          HIST_TIMESTAMP(&time_two);
+          HIST_ADD(my_data->write_hist, &time_one, &time_two);
+        }
         my_data->stats.named.write_calls++;
         my_data->stats.named.bytes_written += bytes;
       }
@@ -1117,15 +1167,17 @@ disk_test_results_init(tset_t *test_set,char *report_flags,char *output)
         rd->print_test = 1;
       }
       if (!strcmp(report_flags,"PRINT_ALL")) {
-        rd->print_hist = 1;
-        rd->print_run  = 1;
-        rd->print_test = 1;
+        rd->print_hist    = 1;
+        rd->print_run     = 1;
+        rd->print_test    = 1;
+        rd->print_per_cpu = 1;
       }
     }
     if (test_set->debug) {
-      rd->print_hist = 1;
-      rd->print_run  = 1;
-      rd->print_test = 1;
+      rd->print_hist    = 1;
+      rd->print_run     = 1;
+      rd->print_test    = 1;
+      rd->print_per_cpu = 1;
     }
     test_set->report_data = rd;
   }
@@ -1154,7 +1206,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   double         write_rate;
   double         read_call_rate;
   double         write_call_rate;
-  double         seek_rate;
+  double         seek_call_rate;
 
 #define TST_E_SEC         0
 #define TST_E_USEC        1
@@ -1211,7 +1263,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   write_rate       = test_cntr[TST_W_BYTES] / (elapsed_seconds*1024.0*1024.0);
   read_call_rate   = test_cntr[TST_R_CALLS] / elapsed_seconds;
   write_call_rate  = test_cntr[TST_W_CALLS] / elapsed_seconds;
-  seek_rate        = test_cntr[TST_S_CALLS] / elapsed_seconds;
+  seek_call_rate   = test_cntr[TST_S_CALLS] / elapsed_seconds;
   iops             = read_call_rate + write_call_rate;
   if (test_set->debug) {
     fprintf(test_set->where,"\tread_rate = %7g\t%7g\n",
@@ -1222,6 +1274,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
             read_call_rate, test_cntr[TST_R_CALLS]);
     fprintf(test_set->where,"\twrite_call_rate = %7g\t%7g\n",
             write_call_rate, test_cntr[TST_W_CALLS]);
+    fprintf(test_set->where,"\tseek_call_rate = %7g\t%7g\n",
+            seek_call_rate, test_cntr[TST_S_CALLS]);
     fflush(test_set->where);
   }
   if (rd->sd_denominator == 0.0) {
@@ -1239,17 +1293,33 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   rd->write_iops[index]      += write_call_rate;
   rd->iops[index]            += iops;
 
+  if (rd->print_hist) {
+    xmlNodePtr  hist;
+    hist = stats->xmlChildrenNode;
+    if (hist == NULL) {
+      fprintf(outfd,"%s:No Histogram Node Found\n\n",__func__);
+      fflush(outfd);
+    }
+    while (hist != NULL) {
+      if (!xmlStrcmp(hist->name,(const xmlChar *)"hist_stats")) {
+        HIST_REPORT(outfd, hist);
+      }
+      hist = hist->next;
+    }
+  }
+
   if (rd->print_test) {
     /* Display per test results */
     fprintf(outfd,"%3d  ", count);                    /*  0,5 */
     fprintf(outfd,"%-6s ",  tid);                     /*  5,7 */
     fprintf(outfd,"%-6.2f ",elapsed_seconds);         /* 12,7 */
-      fprintf(outfd,"%7.2f ",iops);                   /* 19,8 */
-      fprintf(outfd,"%7.2f ",read_call_rate);         /* 27.8 */
-      fprintf(outfd,"%7.2f ",write_call_rate);        /* 35,8 */
-      fprintf(outfd,"%7.2f ",read_rate);              /* 43,8 */
-      fprintf(outfd,"%7.2f ",write_rate);             /* 51,8 */
-      fprintf(outfd,"%7.4f ",seek_rate);              /* 59,8 */
+    fprintf(outfd,"%7.2f ",iops);                     /* 19,8 */
+    fprintf(outfd,"%7.2f ",read_call_rate);           /* 27.8 */
+    fprintf(outfd,"%7.2f ",write_call_rate);          /* 35,8 */
+    fprintf(outfd,"%7.2f ",read_rate);                /* 43,8 */
+    fprintf(outfd,"%7.2f ",write_rate);               /* 51,8 */
+    fprintf(outfd,"%7.4f ",seek_call_rate);           /* 59,8 */
+    fprintf(outfd,"%7.2f ",iops/seek_call_rate);      /* 67,8 */
     fprintf(outfd,"\n");
     fflush(outfd);
   }
@@ -1259,17 +1329,17 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
 static double
 process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
 {
-  int            i;
-  int            count;
-  int            index;
-  FILE          *outfd;
+  int             i;
+  int             count;
+  int             index;
+  FILE           *outfd;
   disk_results_t *rd;
-  double         elapsed_seconds;
-  double         sys_util;
-  double         calibration;
-  double         local_idle;
-  double         local_busy;
-  double         local_cpus;
+  double          elapsed_seconds;
+  double          sys_util;
+  double          calibration;
+  double          local_idle;
+  double          local_busy;
+  double          local_cpus;
 
 #define MAX_SYS_CNTRS 10
 #define E_SEC         0
@@ -1337,6 +1407,34 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(test_set->where);
   }
   rd->utilization[index]  += local_busy;
+
+  if (rd->print_per_cpu) {
+    xmlNodePtr  cpu;
+    char       *value_str;
+
+    cpu = stats->xmlChildrenNode;
+    while (cpu != NULL) {
+      if (!xmlStrcmp(cpu->name,(const xmlChar *)"per_cpu_stats")) {
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"cpu_id");
+        fprintf(outfd,"  cpu%2s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"calibration");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"idle_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"user_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"sys_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"int_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"other_count");
+        fprintf(outfd,"%s\n", value_str);
+        fflush(outfd);
+      }
+      cpu = cpu->next;
+    }
+  }
+
   if (rd->print_test) {
     /* Display per test results */
     fprintf(outfd,"%3d  ", count);                    /*  0,5 */
@@ -1484,7 +1582,7 @@ update_results_and_confidence(tset_t *test_set)
   disk_results_t *rd;
   double          confidence;
   double          temp;
-  int             loc_debug = 1;
+  int             loc_debug = 0;
 
   rd        = test_set->report_data;
 
@@ -1519,7 +1617,7 @@ update_results_and_confidence(tset_t *test_set)
                                       &(test_set->confidence),
                                       &(rd->ave_time),
                                       &(temp));
-  rd->iops_confidence         = get_confidence(rd->iops,
+  rd->iops_confidence           = get_confidence(rd->iops,
                                       &(test_set->confidence),
                                       &(rd->iops_measured_mean),
                                       &(rd->iops_interval));
@@ -1565,22 +1663,26 @@ update_results_and_confidence(tset_t *test_set)
   if (rd->service_demand_confidence > confidence) {
     confidence = rd->service_demand_confidence;
   }
-  if (rd->write_confidence > confidence) {
-    confidence = rd->write_confidence;
+  if (rd->write_measured_mean > 0.0) {
+    if (rd->write_confidence > confidence) {
+      confidence = rd->write_confidence;
+    }
   }
-  if (rd->read_confidence > confidence) {
-    confidence = rd->read_confidence;
+  if (rd->read_measured_mean > 0.0) {
+    if (rd->read_confidence > confidence) {
+      confidence = rd->read_confidence;
+    }
   }
 
   if (test_set->confidence.min_count > 1) {
     test_set->confidence.value = test_set->confidence.interval - confidence;
-  }
-  if (test_set->debug || loc_debug) {
-    fprintf(test_set->where,
-            "\t%3drun confidence = %.2f%%\tcheck value = %f\n",
-            test_set->confidence.count,
-            100.0 * confidence, test_set->confidence.value);
-    fflush(test_set->where);
+    if (test_set->debug || loc_debug) {
+      fprintf(test_set->where,
+              "\t%3d run confidence = %.2f%%\tcheck value = %f\n",
+              test_set->confidence.count,
+              100.0 * confidence, test_set->confidence.value);
+      fflush(test_set->where);
+    }
   }
   NETPERF_DEBUG_EXIT(test_set->debug,test_set->where);
 }
@@ -1619,39 +1721,55 @@ print_run_results(tset_t *test_set)
   /* Display per run header */
   fprintf(outfd,"\n");
   for (i=0;i < HDR_LINES; i++) {
-    fprintf(outfd,"%-3s ",field1[i]);                         /*  0,4 */
-    fprintf(outfd,"%-4s ",field2[i]);                         /*  4,5 */
-    fprintf(outfd,"%-6s ",field3[i]);                         /*  9,7 */
-    fprintf(outfd,"%7s ",field4[i]);                          /* 16,8 */
-    fprintf(outfd,"%6s ",field5[i]);                          /* 23,7 */
-    fprintf(outfd,"%6s ",field6[i]);                          /* 31,7 */
-    fprintf(outfd,"%6s ",field7[i]);                          /* 38,7 */
-    fprintf(outfd,"%6s ",field8[i]);                          /* 45,7 */
+    fprintf(outfd,"%-3s ",field1[i]);                         /*  0,4  */
+    fprintf(outfd,"%-4s ",field2[i]);                         /*  4,5  */
+    fprintf(outfd,"%-6s ",field3[i]);                         /*  9,7  */
+    fprintf(outfd,"%9s ",field4[i]);                          /* 16,10 */
+    if (rd->read_results[index] > 0.0) {
+      fprintf(outfd,"%7s ",field5[i]);                        /* 26,8  */
+    }
+    if (rd->write_results[index] > 0.0) {
+      fprintf(outfd,"%7s ",field6[i]);                        /* 34,8  */
+    }
+    fprintf(outfd,"%7s ",field7[i]);                          /* 42,8  */
+    fprintf(outfd,"%7s ",field8[i]);                          /* 45,8  */
     if (index > 0) {
-      fprintf(outfd,"%5s ",field9[i]);                        /* 52,6 */
-      fprintf(outfd,"%5s ",field10[i]);                       /* 58,6 */
-      fprintf(outfd,"%5s ",field11[i]);                       /* 64,6 */
-      fprintf(outfd,"%6s ",field12[i]);                       /* 70,7 */
-      fprintf(outfd,"%6s ",field13[i]);                       /* 77,7 */
+      fprintf(outfd,"%6s ",field9[i]);                        /* 52,7  */
+      if (rd->read_results[index] > 0.0) {
+        fprintf(outfd,"%6s ",field10[i]);                     /* 58,7  */
+      }
+      if (rd->write_results[index] > 0.0) {
+        fprintf(outfd,"%6s ",field11[i]);                     /* 64,7  */
+      }
+      fprintf(outfd,"%7s ",field12[i]);                       /* 70,8  */
+      fprintf(outfd,"%7s", field13[i]);                       /* 87,8  */
     }
     fprintf(outfd,"\n");
   }
 
   /* Display per run results */
-  fprintf(outfd,"%-3d ", count);                              /*  0,4 */
-  fprintf(outfd,"%-4s ",test_set->id);                        /*  4,5 */
-  fprintf(outfd,"%-6.2f ",rd->run_time[index]);               /*  9,7 */
-  fprintf(outfd,"%7.2f ",rd->iops[index]);                    /* 16,8 */
-  fprintf(outfd,"%6.1f ",rd->read_results[index]);            /* 24,7 */
-  fprintf(outfd,"%6.1f ",rd->write_results[index]);           /* 31,7 */
-  fprintf(outfd,"%6.4f ",rd->utilization[index]);             /* 38,7 */
-  fprintf(outfd,"%6.3f ",rd->servdemand[index]);              /* 45,7 */
+  fprintf(outfd,"%-3d ", count);                              /*  0,4  */
+  fprintf(outfd,"%-4s ",test_set->id);                        /*  4,5  */
+  fprintf(outfd,"%-6.2f ",rd->run_time[index]);               /*  9,7  */
+  fprintf(outfd,"%9.2f ",rd->iops[index]);                    /* 16,10 */
+  if (rd->read_results[index] > 0.0) {
+    fprintf(outfd,"%7.2f ",rd->read_results[index]);          /* 26,8  */
+  }
+  if (rd->write_results[index] > 0.0) {
+    fprintf(outfd,"%7.2f ",rd->write_results[index]);         /* 34,8  */
+  }
+  fprintf(outfd,"%7.5f ",rd->utilization[index]);             /* 42,8  */
+  fprintf(outfd,"%7.3f ",rd->servdemand[index]);              /* 50,8  */
   if (index > 0) {
-    fprintf(outfd,"%5.2f ",rd->iops_interval);                /* 52,6 */
-    fprintf(outfd,"%5.1f ",rd->read_interval);                /* 58,6 */
-    fprintf(outfd,"%5.1f ",rd->write_interval);               /* 64,6 */
-    fprintf(outfd,"%6.4f ",rd->cpu_util_interval);            /* 70,7 */
-    fprintf(outfd,"%6.3f ",rd->service_demand_interval);      /* 77,7 */
+    fprintf(outfd,"%6.2f ",rd->iops_interval);                /* 58,7  */
+    if (rd->read_results[index] > 0.0) {
+      fprintf(outfd,"%6.3f ",rd->read_interval);              /* 65,7  */
+    }
+    if (rd->write_results[index] > 0.0) {
+      fprintf(outfd,"%6.3f ",rd->write_interval);             /* 72,7  */
+    }
+    fprintf(outfd,"%7.5f ",rd->cpu_util_interval);            /* 79,8  */
+    fprintf(outfd,"%7.4f", rd->service_demand_interval);      /* 87,8  */
   }
   fprintf(outfd,"\n");
   fflush(outfd);
@@ -1681,14 +1799,18 @@ print_did_not_meet_confidence(tset_t *test_set)
   fprintf(outfd,
           "!!! must be investigated before going further.\n");
   fprintf(outfd,
-          "!!! Confidence intervals: RESULT     : %6.2f%%\n",
+          "!!! Confidence intervals: IOP_RATE   : %6.2f%%\n",
           100.0 * rd->iops_confidence);
-  fprintf(outfd,
-          "!!! Confidence intervals: RESULT     : %6.2f%%\n",
+  if (rd->read_measured_mean > 0.0) {
+    fprintf(outfd,
+          "!!! Confidence intervals: READ_RATE  : %6.2f%%\n",
           100.0 * rd->read_confidence);
-  fprintf(outfd,
-          "!!! Confidence intervals: RESULT     : %6.2f%%\n",
+  }
+  if (rd->write_measured_mean > 0.0) {
+    fprintf(outfd,
+          "!!! Confidence intervals: WRITE_RATE : %6.2f%%\n",
           100.0 * rd->write_confidence);
+  }
   fprintf(outfd,
           "!!!                       CPU util   : %6.2f%%\n",
           100.0 * rd->cpu_util_confidence);
@@ -1729,36 +1851,44 @@ print_results_summary(tset_t *test_set)
   /* Print the summary header */
   fprintf(outfd,"\n");
   for (i = 0; i < HDR_LINES; i++) {
-    fprintf(outfd,"%-3s ",field1[i]);                             /*  0,4 */
-    fprintf(outfd,"%-4s ",field2[i]);                             /*  4,5 */
-    fprintf(outfd,"%-6s ",field3[i]);                             /*  9,7 */
-    fprintf(outfd,"%7s ",field4[i]);                              /* 16,8 */
-    fprintf(outfd,"%5s ",field5[i]);                              /* 24,6 */
-    fprintf(outfd,"%6s ",field6[i]);                              /* 30,7 */
-    fprintf(outfd,"%5s ",field7[i]);                              /* 37,6 */
-    fprintf(outfd,"%6s ",field8[i]);                              /* 43,7 */
-    fprintf(outfd,"%5s ",field9[i]);                              /* 50,6 */
-    fprintf(outfd,"%6s ",field10[i]);                             /* 56,7 */
-    fprintf(outfd,"%6s ",field11[i]);                             /* 63,7 */
-    fprintf(outfd,"%6s ",field12[i]);                             /* 70,7 */
-    fprintf(outfd,"%6s ",field13[i]);                             /* 77,7 */
+    fprintf(outfd,"%-3s ",field1[i]);                             /*  0,4  */
+    fprintf(outfd,"%-4s ",field2[i]);                             /*  4,5  */
+    fprintf(outfd,"%-6s ",field3[i]);                             /*  9,7  */
+    fprintf(outfd,"%9s ",field4[i]);                              /* 16,10 */
+    fprintf(outfd,"%6s ",field5[i]);                              /* 26,7  */
+    if (rd->read_measured_mean > 0.0) {
+      fprintf(outfd,"%7s ",field6[i]);                            /* 33,8  */
+      fprintf(outfd,"%6s ",field7[i]);                            /* 41,7  */
+    }
+    if (rd->write_measured_mean > 0.0) {
+      fprintf(outfd,"%7s ",field8[i]);                            /* 48,8  */
+      fprintf(outfd,"%6s ",field9[i]);                            /* 56,7  */
+    }
+    fprintf(outfd,"%7s ",field10[i]);                             /* 65,8  */
+    fprintf(outfd,"%7s ",field11[i]);                             /* 73,8  */
+    fprintf(outfd,"%7s ",field12[i]);                             /* 81,8  */
+    fprintf(outfd,"%7s", field13[i]);                             /* 89,8  */
     fprintf(outfd,"\n");
   }
 
   /* print the summary results line */
-  fprintf(outfd,"A%-2d ",test_set->confidence.count);             /*  0,4 */
-  fprintf(outfd,"%-4s ",test_set->id);                            /*  4,5 */
-  fprintf(outfd,"%-6.2f ",rd->ave_time);                          /*  9,7 */
-  fprintf(outfd,"%7.0f ",rd->iops_measured_mean);                 /* 16,8 */
-  fprintf(outfd,"%5.2f ",rd->iops_interval);                      /* 24,6 */
-  fprintf(outfd,"%6.1f ",rd->read_measured_mean);                 /* 30,7 */
-  fprintf(outfd,"%5.1f ",rd->read_interval);                      /* 37,6 */
-  fprintf(outfd,"%6.1f ",rd->write_measured_mean);                /* 43,7 */
-  fprintf(outfd,"%5.1f ",rd->write_interval);                     /* 50,6 */
-  fprintf(outfd,"%6.4f ",rd->cpu_util_measured_mean);             /* 56,7 */
-  fprintf(outfd,"%6.4f ",rd->cpu_util_interval);                  /* 63,7 */
-  fprintf(outfd,"%6.3f ",rd->service_demand_measured_mean);       /* 70,7 */
-  fprintf(outfd,"%6.3f ",rd->service_demand_interval);            /* 77,7 */
+  fprintf(outfd,"A%-2d ",test_set->confidence.count);             /*  0,4  */
+  fprintf(outfd,"%-4s ",test_set->id);                            /*  4,5  */
+  fprintf(outfd,"%-6.2f ",rd->ave_time);                          /*  9,7  */
+  fprintf(outfd,"%9.2f ",rd->iops_measured_mean);                 /* 16,10 */
+  fprintf(outfd,"%6.2f ",rd->iops_interval);                      /* 26,7  */
+  if (rd->read_measured_mean > 0.0) {
+    fprintf(outfd,"%7.2f ",rd->read_measured_mean);               /* 33,8  */
+    fprintf(outfd,"%6.3f ",rd->read_interval);                    /* 41,7  */
+  }
+  if (rd->write_measured_mean > 0.0) {
+    fprintf(outfd,"%7.2f ",rd->write_measured_mean);              /* 48,8  */
+    fprintf(outfd,"%6.3f ",rd->write_interval);                   /* 56,7  */
+  }
+  fprintf(outfd,"%7.5f ",rd->cpu_util_measured_mean);             /* 65,8  */
+  fprintf(outfd,"%7.5f ",rd->cpu_util_interval);                  /* 73,8  */
+  fprintf(outfd,"%7.3f ",rd->service_demand_measured_mean);       /* 81,8  */
+  fprintf(outfd,"%7.4f", rd->service_demand_interval);            /* 89,8  */
   fprintf(outfd,"\n");
   fflush(outfd);
 }

@@ -18,15 +18,7 @@ char    nettest_id[]="\
 #define MAKE_DIRTY(mydata,ring)  /* DIRTY is not currently supported */
 #endif
 
-#ifdef WANT_HISTOGRAM
-#define HISTOGRAM_VARS        struct timeval time_one,time_two
-#define HIST_TIMESTAMP(time)  gettimeofday(time,NULL)
-#define HIST_ADD(h,delta)     HIST_add(h,delta)
-#else
-#define HISTOGRAM_VARS       /* variable declarations for histogram go here */
-#define HIST_TIMESTAMP(time) /* time stamp call for histogram goes here */
-#define HIST_ADD(h,delta)    /* call to add data to histogram goes here */
-#endif
+
 
 /****************************************************************/
 /*                                                              */
@@ -1774,7 +1766,7 @@ recv_vst_rr_meas(test_t *test)
     }
     /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_two);
-    HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
     get_next_vst_transaction(test);
   }
   new_state = CHECK_REQ_STATE;
@@ -2073,7 +2065,7 @@ send_vst_rr_meas(test_t *test)
     }
     /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_two);
-    HIST_ADD(my_data->time_hist,delta_macro(&time_one,&time_two));
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
     my_data->stats.named.trans_sent++;
     get_next_vst_transaction(test);
     if (len == 0) {

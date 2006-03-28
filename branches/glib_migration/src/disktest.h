@@ -69,6 +69,7 @@ typedef struct  disk_test_data {
 typedef struct  disk_results_data {
   int     max_count;
   int     print_hist;
+  int     print_per_cpu;
   int     print_test;
   int     print_run;
   FILE   *outfd;
@@ -108,7 +109,8 @@ enum {
   DISK_MAX_ERROR = -32,
   DISK_XMLSETPROP_ERROR,
   DISK_XMLNEWNODE_ERROR,
-  DISK_SIZE_TO_LARGE,
+  DISK_IO_SIZE_TO_LARGE,
+  DISK_TEST_SIZE_TO_LARGE,
   DISK_START_POS_TO_LARGE,
   DISK_END_POS_TO_LARGE,
   DISK_TEST_STAT_FAILED,

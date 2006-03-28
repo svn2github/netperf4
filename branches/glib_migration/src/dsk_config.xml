@@ -2,19 +2,19 @@
 <!DOCTYPE netperf SYSTEM "http://www.netperf.org/netperf_docs.dtd/1.0" >        
 <netperf xmlns="http://www.netperf.org/ns/netperf">
 <!-- This is just another boring comment -->
-<netserver nid="n1"
-  remote_host = "223.0.14.101" >
-<!-- comment out sys_stats test for now
+<netserver nid="n1" >
+<!-- test to get cpu utilization -->
   <test tid="t0"
     test_name = "sys_stats"
     library   = "netsysstats.la" >
   </test>
- -->
+<!-- test to do raw sequential disk io i
+     you must place a valid raw disk file in file_name  -->
   <test tid="t1"
     test_name = "raw_seq_disk_io"
     library   = "disktest.la" >
     <disk_args
-      file_name = "/dev/rdsk/c4t6d0"  />
+      file_name = "/dev/rdsk/junk"  />
   </test>
 </netserver>
 </netperf>

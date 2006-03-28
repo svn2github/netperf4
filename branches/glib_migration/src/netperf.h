@@ -106,11 +106,7 @@ typedef unsigned long long uint64_t;
 #error Netperf4 requires either glib or pthreads
 #endif
 
-#ifdef WANT_HISTOGRAM
 #include "netperf_hist.h"
-#else
-#define HIST  void*
-#endif
 
 #ifdef WIN32
 #define NETPERF_DEBUG_LOG_DIR "c:\\temp\\"

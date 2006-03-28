@@ -143,9 +143,243 @@ extern test_hash_t test_hash[TEST_HASH_BUCKETS];
 extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 
 
-#define HIST  void*
+HIST
+HIST_new(void){
+  HIST h;
+  h = (HIST) malloc(sizeof(struct histogram_struct));
+  if (h) {
+    HIST_clear(h);
+  }
+  return h;
+}
 
-#include "nettest_bsd.h"
+void
+HIST_clear(HIST h){
+  int i;
+  for(i = 0; i < 10; i++){
+#ifdef HAVE_GETHRTIME
+    h->hundred_nsec[i] = 0;
+#endif
+    h->unit_usec[i] = 0;
+    h->ten_usec[i] = 0;
+    h->hundred_usec[i] = 0;
+    h->unit_msec[i] = 0;
+    h->ten_msec[i] = 0;
+    h->hundred_msec[i] = 0;
+    h->unit_sec[i] = 0;
+    h->ten_sec[i] = 0;
+  }
+  h->ridiculous = 0;
+  h->total = 0;
+}
+
+#ifdef HAVE_GETHRTIME
+
+void
+HIST_add_nano(register HIST h, hrtime_t *begin, hrtime_t *end)
+{
+  register int64_t val;
+
+  val = (*end) - (*begin);
+  h->total++;
+  val = val/100;
+  if (val <= 9) h->hundred_nsec[val]++;
+  else {
+    val = val/10;
+    if (val <= 9) h->unit_usec[val]++;
+    else {
+      val = val/10;
+      if (val <= 9) h->ten_usec[val]++;
+      else {
+        val = val/10;
+        if (val <= 9) h->hundred_usec[val]++;
+        else {
+          val = val/10;
+          if (val <= 9) h->unit_msec[val]++;
+          else {
+            val = val/10;
+            if (val <= 9) h->ten_msec[val]++;
+            else {
+              val = val/10;
+              if (val <= 9) h->hundred_msec[val]++;
+              else {
+                val = val/10;
+                if (val <= 9) h->unit_sec[val]++;
+                else {
+                  val = val/10;
+                  if (val <= 9) h->ten_sec[val]++;
+                  else h->ridiculous++;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+#endif
+
+
+void
+HIST_add(register HIST h, int time_delta)
+{
+  register int val;
+  h->total++;
+  val = time_delta;
+  if(val <= 9) h->unit_usec[val]++;
+  else {
+    val = val/10;
+    if(val <= 9) h->ten_usec[val]++;
+    else {
+      val = val/10;
+      if(val <= 9) h->hundred_usec[val]++;
+      else {
+        val = val/10;
+        if(val <= 9) h->unit_msec[val]++;
+        else {
+          val = val/10;
+          if(val <= 9) h->ten_msec[val]++;
+          else {
+            val = val/10;
+            if(val <= 9) h->hundred_msec[val]++;
+            else {
+              val = val/10;
+              if(val <= 9) h->unit_sec[val]++;
+              else {
+                val = val/10;
+                if(val <= 9) h->ten_sec[val]++;
+                else h->ridiculous++;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+
+static xmlAttrPtr
+set_hist_attribute(xmlNodePtr hist, char *name, uint64_t *row)
+{
+  int         i,j;
+  xmlAttrPtr  ap   = NULL;
+  char        values[256];
+  
+  values[0] = 0;
+  for (i = 0, j = 0; i < 10; i++) {
+    j += snprintf(&(values[j]), 256-j, ":%5lld", row[i]);
+  }
+  ap = xmlSetProp(hist, (xmlChar *)name, (xmlChar *)values);
+  return(ap);
+}
+
+
+xmlNodePtr
+HIST_stats_node(HIST h, char *name)
+{
+  int         i,j;
+  xmlNodePtr  hist;
+  xmlAttrPtr  ap;
+  char        value_str[32];
+  
+
+  if ((hist = xmlNewNode(NULL,(xmlChar *)"hist_stats")) != NULL) {
+    ap = xmlSetProp(hist, (xmlChar *)"hist_name", (xmlChar *)name);
+#ifdef HAVE_GETHRTIME
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "hundred_nsec", h->hundred_nsec);
+    }
+#endif
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "unit_usec", h->unit_usec);
+    }
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "ten_usec", h->ten_usec);
+    }
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "hundred_usec", h->hundred_usec);
+    }
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "unit_msec", h->unit_msec);
+    }
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "ten_msec", h->ten_msec);
+    }
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "hundred_msec", h->hundred_msec);
+    }
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "unit_sec", h->unit_sec);
+    }
+    if (ap != NULL) {
+      ap = set_hist_attribute(hist, "ten_sec", h->ten_sec);
+    }
+    if (ap != NULL) {
+      sprintf(value_str,": %4lld",h->ridiculous);
+      ap = xmlSetProp(hist, (xmlChar *)"plus_100_sec", (xmlChar *)value_str);
+    }
+    if (ap != NULL) {
+      sprintf(value_str,": %4lld",h->total);
+      ap = xmlSetProp(hist, (xmlChar *)"hist_total", (xmlChar *)value_str);
+    }
+    if (ap == NULL) {
+      xmlFreeNode(hist);
+      hist = NULL;
+    }
+  }
+  return(hist);
+}
+
+
+void
+HIST_report(FILE *fd, xmlNodePtr hist)
+{
+   int         i;
+   xmlChar    *string;
+   
+   string = xmlGetProp(hist, (const xmlChar *)"hist_name");
+   fprintf(fd, "\nHISTOGRAM REPORT for %s\n", string);
+   fprintf(fd, "              ");
+   for (i=0; i<10; i++) {
+     fprintf(fd, ":%5d",i);
+   }
+   fprintf(fd, "\n");
+   fprintf(fd, "--------------");
+   for (i=0; i<10; i++) {
+     fprintf(fd, "+-----");
+   }
+   fprintf(fd, "\n");
+   string = xmlGetProp(hist, (const xmlChar *)"hundred_nsec");
+   if (string) {
+     fprintf(fd, "HUNDRED_NSEC  %s\n", string);
+   }
+   string = xmlGetProp(hist, (const xmlChar *)"unit_usec");
+   fprintf(fd, "UNIT_USEC     %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"ten_usec");
+   fprintf(fd, "TEN_USEC      %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"hundred_usec");
+   fprintf(fd, "HUNDRED_USEC  %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"unit_msec");
+   fprintf(fd, "UNIT_MSEC     %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"ten_msec");
+   fprintf(fd, "TEN_MSEC      %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"hundred_msec");
+   fprintf(fd, "HUNDRED_MSEC  %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"unit_sec");
+   fprintf(fd, "UNIT_SEC      %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"ten_sec");
+   fprintf(fd, "TEN_SEC       %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"plus_100_sec");
+   fprintf(fd, "100_PLUS_SEC  %s\n", string);
+   string = xmlGetProp(hist, (const xmlChar *)"hist_total");
+   fprintf(fd, "HIST_TOTAL    %s\n", string);
+   fprintf(fd, "\n");
+   fflush(fd);
+}
+
 
 #ifndef PATH_MAX
 #define PATH_MAX MAX_PATH
@@ -298,6 +532,14 @@ void
 netperf_timestamp(hrtime_t *timestamp)
 {
   *timestamp = gethrtime();
+}
+
+uint64_t
+delta_nano(hrtime_t *begin, hrtime_t *end)
+{
+  int64_t nsecs;
+  nsecs = (*end) - (*begin);
+  return(nsecs);
 }
 
 int
@@ -533,7 +775,6 @@ test_state_to_string(int value, char *string)
 void
 report_test_status(test_t *test)
 {
-
   char        current[8];
   char        requested[8];
   char        reported[8];
