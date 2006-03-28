@@ -137,7 +137,6 @@ extern FILE * where;
 extern test_hash_t test_hash[TEST_HASH_BUCKETS];
 extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 
-#include "hist.h"
 
 HIST
 HIST_new(void){
@@ -258,7 +257,7 @@ HIST_add(register HIST h, int time_delta)
 
 
 static xmlAttrPtr
-set_hist_attribute(xmlNodePtr hist, char *name, int *row)
+set_hist_attribute(xmlNodePtr hist, char *name, uint64_t *row)
 {
   int         i,j;
   xmlAttrPtr  ap   = NULL;
