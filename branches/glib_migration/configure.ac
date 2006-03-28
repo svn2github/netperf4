@@ -46,7 +46,7 @@ AC_HAVE_LIBRARY(dl)
 # where we decide if we are using glib or not
 AC_HEADER_STDC
 AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([arpa/inet.h arpa/nameser.h arpa/nameser_compat.h dlfcn.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pwd.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h ])
+AC_CHECK_HEADERS([arpa/inet.h arpa/nameser.h arpa/nameser_compat.h dlfcn.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pwd.h pthread.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h ])
 
 # Some platforms require these.  There may be a better way.
 AC_HAVE_LIBRARY(socket)
