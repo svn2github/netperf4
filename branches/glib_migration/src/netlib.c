@@ -1378,16 +1378,20 @@ get_test_function(test_t *test, const xmlChar *func)
   int      fnlen = 0;
   int      rc = NPE_FUNC_NAME_TOO_LONG;
   char     func_name[NETPERF_MAX_TEST_FUNCTION_NAME];
+  xmlChar *la_file;
+  char     lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
 
 
   if (debug) {
-    fprintf(where,"get_test_func enter test %p func %s\n",test, func);
+    g_fprintf(where,
+	      "%s enter test %p func %s\n",
+	      __func__,
+	      test,
+	      func);
     fflush(where);
   }
 
   if (lib_handle == NULL) {
-    xmlChar *la_file;
-    char lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
     /* load the library for the test */
     la_file   = xmlGetProp(test->node,(const xmlChar *)"library");
     map_la_to_lib(la_file,lib_file);
@@ -2304,6 +2308,10 @@ write_to_control_connection(GIOChannel *source,
 		fprintf(where,"failed\n");
 	      }
             }
+	    g_free(chars_to_send);
+	    /* this may not be the 100% correct place for this */
+	    xmlFreeDoc(doc);
+	    free(control_message);
           } else {
             rc = NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED;
           }
@@ -2427,7 +2435,10 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 		  message_state->bytes_remaining);
       }
       g_free(message_state->buffer);
-      message_state->buffer = g_malloc(message_state->bytes_remaining);
+      /* allocate an extra byte to make sure we can null-terminate the
+	 buffer on the off chance we do something like try to print it
+	 as a string... raj 2006-03-29 */
+      message_state->buffer = g_malloc(message_state->bytes_remaining+1);
     }
   }
 
@@ -2464,6 +2475,9 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 
     if (0 == message_state->bytes_remaining) {
       /* we have an entire message, time to process it */
+      /* make sure we are NULL terminated just in case someone tries
+	 to print it as a string or something. */
+      message_state->buffer[message_state->bytes_received] = '\0';
       ret = xml_parse_control_message(message_state->buffer,
 				      message_state->bytes_received,
 				      data,

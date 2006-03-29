@@ -106,6 +106,8 @@ typedef unsigned long long uint64_t;
 #error Netperf4 requires either glib or pthreads
 #endif
 
+#define NETPERF_RING_BUFFER_STRING "netperf4 ring data"
+
 #include "netperf_hist.h"
 
 #ifdef WIN32

@@ -420,6 +420,9 @@ get_dependency_data(test_t *test, int type, int protocol)
                         BSDE_GETADDRINFO_ERROR,
                         gai_strerror(error));
   }
+  if (string) free(string);
+  if (remotehost) free(remotehost);
+  if (remoteport) free(remoteport);
 }
 
 
@@ -550,7 +553,7 @@ allocate_buffer_ring(width, buffer_size, alignment, offset, fill_source)
     if (i == 1) {
       first_link = temp_link;
     }
-    temp_link->buffer_base = (char *)malloc(malloc_size);
+    temp_link->buffer_base = (char *)g_malloc(malloc_size);
     temp_link->buffer_ptr = (char *)(( (long)(temp_link->buffer_base) +
                           (long)alignment - 1) &
                          ~((long)alignment - 1));
@@ -568,6 +571,12 @@ allocate_buffer_ring(width, buffer_size, alignment, offset, fill_source)
         }
         bytes_left -= bytes_read;
       }
+    }
+    else {
+      /* put our own special "stamp" upon the buffer */
+      strncpy(temp_link->buffer_ptr,
+	      NETPERF_RING_BUFFER_STRING,
+	      buffer_size);
     }
     temp_link->next = prev_link;
     prev_link = temp_link;
@@ -1089,8 +1098,11 @@ bsd_test_get_stats(test_t *test)
     }
   }
   if (test->debug) {
-    fprintf(test->where,"bsd_test_get_stats: exiting for %s test %s\n",
-            test->id, test->test_name);
+    fprintf(test->where,
+	    "%s: exiting for %s test %s\n",
+	    __func__,
+            test->id,
+	    test->test_name);
     fflush(test->where);
   }
   return(stats);

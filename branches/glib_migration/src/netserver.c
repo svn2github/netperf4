@@ -658,7 +658,8 @@ check_test_state_callback(gpointer data)
               fflush(where);
             }
           }
-        }
+	  xmlFreeNode(msg);
+	}
       }
       test = test->next;
       if (new == TEST_DEAD) {

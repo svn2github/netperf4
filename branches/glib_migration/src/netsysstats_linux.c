@@ -121,7 +121,11 @@ sys_cpu_util_init(test_t *test)
 
   if (!proc_stat_buf) {
     proc_stat_buflen = N_CPU_LINES (tsd->num_cpus) * CPU_LINE_LENGTH;
-    proc_stat_buf = (char *)malloc (proc_stat_buflen);
+    /* we allocate an extra byte to allow it to be null terminated in
+       the event we do something silly like an fprintf of the
+       proc_stat_buf as a string... :) raj 2006-03-29 */
+    proc_stat_buf = (char *)malloc (proc_stat_buflen+1);
+    proc_stat_buf[proc_stat_buflen] = '\0';
     if (!proc_stat_buf) {
       fprintf (stderr, "Cannot allocate buffer memory!\n");
       close(proc_stat_fd);

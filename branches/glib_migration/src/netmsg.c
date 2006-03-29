@@ -212,6 +212,7 @@ process_message(server_t *server, xmlDocPtr doc)
     }
   }
   xmlFreeDoc(doc);
+  if (fromnid) free(fromnid);
 
   NETPERF_DEBUG_EXIT(debug,where);
 
@@ -289,7 +290,10 @@ send_version_message(server_t *server, const xmlChar *fromnid)
       }
       rc = NPE_SEND_VERSION_XMLSETPROP_FAILED;
     }
-  } else {
+    /* now that we are done with it, best to free the message node */
+    xmlFreeNode(message);
+  }
+  else {
     if (debug) {
       fprintf(where,
               "send_version_message: xmlNewNode failed\n");

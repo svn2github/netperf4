@@ -296,6 +296,11 @@ set_counter_attribute(test_t *test, xmlNodePtr stats,char *name, uint64_t value)
   return(ap);
 }
 
+/* NOTE - we need to figure-out where/when to free the attributes
+   returned by set_*_attribute otherwise we have a memory leak. what I
+   don't know is if the attribute pointers can/should be freed here or
+   if they become part of the xmlNode... */
+
 static xmlAttrPtr
 add_per_cpu_attributes(test_t *test,
 		       xmlNodePtr stats,
@@ -502,9 +507,18 @@ sys_stats(test_t *test)
 	       good. raj 2005-10-27
 	       for good measure, make sure we are doing a memset for
 	       the proper size of each of these blessed things! raj
-	       2006-01-23 */ 
+	       2006-01-23
+	       and do it for all the counters just to make sure that
+	       stuff like valgrind remains happy. raj 2006-02-29 */
+
 	    memset(tsd->total_sys_counters,0,sizeof(cpu_time_counters_t));
 	    memset(tsd->total_cpu_counters,0,
+		   (num_cpus * sizeof(cpu_time_counters_t)));
+	    memset(tsd->starting_cpu_counters,0,
+		   (num_cpus * sizeof(cpu_time_counters_t)));
+	    memset(tsd->ending_cpu_counters,0,
+		   (num_cpus * sizeof(cpu_time_counters_t)));
+	    memset(tsd->delta_cpu_counters,0,
 		   (num_cpus * sizeof(cpu_time_counters_t)));
 	    SET_TEST_STATE(TEST_INIT);
 	  } else {
