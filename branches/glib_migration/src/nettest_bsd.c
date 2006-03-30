@@ -2447,6 +2447,7 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
     rd->utilization    = &(rd->trans_results[max_count]);
     rd->servdemand     = &(rd->utilization[max_count]);
     rd->run_time       = &(rd->servdemand[max_count]);
+    /* we should initialize result_confidence here? */
     rd->result_minimum = DBL_MAX;
     rd->result_maximum = DBL_MIN;
     rd->outfd          = outfd;

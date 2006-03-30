@@ -1194,6 +1194,8 @@ initialize_test(void *data)
 
   NETPERF_DEBUG_EXIT(debug,where);
 
+  if (msg) xmlFreeNode(msg);
+
   return(test);
 }
 

@@ -1290,6 +1290,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
   if (debug) {
     fprintf(where,"map_la_to_lib returning '%s' from '%s'\n",lib,(char *)la);
   }
+  if (ld_library_path) free(ld_library_path);
 }
 
 GenReport
@@ -1321,7 +1322,7 @@ get_report_function(xmlNodePtr cmd)
             (char *)la_file);
     fflush(where);
   }
- 
+  free(la_file);
   /* now we do the dlopen/gmodule magic */
 
 #ifdef WITH_GLIB
@@ -1402,6 +1403,7 @@ get_test_function(test_t *test, const xmlChar *func)
               (char *)la_file);
       fflush(where);
     }
+    free(la_file);
 #ifdef WITH_GLIB
     lib_handle = g_module_open((const gchar *)lib_file,0);
 #else
@@ -2685,6 +2687,7 @@ recv_control_message(int control_sock, xmlDocPtr *message)
               *message);
       fflush(where);
     }
+    free(message_base);
     return(message_len);
   } else {
     if (debug) {
