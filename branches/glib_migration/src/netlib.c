@@ -1269,6 +1269,94 @@ map_la_to_lib(xmlChar *la, char *lib) {
   if (ld_library_path) free(ld_library_path);
 }
 
+/* attempt to open a library file by prepending path components to
+   it */
+GModule *
+open_library_path(const gchar *library_name, const gchar *pathvar) {
+
+  const gchar *path;
+  gchar **path_elts;
+  int   index;
+  gchar *filename;
+  GModule *handle = NULL;
+
+  path = g_getenv(pathvar);
+
+  if (path) {
+    path_elts = g_strsplit(path,G_SEARCHPATH_SEPARATOR_S,0);
+    for (index = 0; ((path_elts[index] != NULL) 
+		     && (NULL == handle)); index++) {
+      if (debug) {
+	g_fprintf(where,
+		  "%s is trying path element %s with %s\n",
+		  __func__,
+		  path_elts[index],
+		  library_name);
+      }
+      filename = g_build_filename(path_elts[index], library_name,NULL);
+      handle = g_module_open(filename,0);
+    }
+  }
+
+  if (debug) {
+    g_fprintf(where,
+	      "%s is returning handle %p\n",
+	      __func__,
+	      handle);
+  }
+  return(handle);
+}
+
+/* attempt to open a library file, first "straight-up" and if that
+   fails, prepending various path components to it. */
+GModule *
+open_library(const gchar *library_name) {
+
+  GModule *handle;
+
+  if (debug) {
+    g_fprintf(where,
+	      "%s was asked to open a library based on the name %s\n",
+	      __func__,
+	      library_name);
+  }
+  handle = g_module_open(library_name,0);
+
+  /* so, if that didn't work, and the library_name was not an absolute
+     path, we will try to prepend some path components */
+
+  if ((NULL == handle) && 
+      !g_path_is_absolute(library_name)) {
+    handle = open_library_path(library_name,"NETPERF_LIBRARY_PATH");
+    if (NULL == handle)
+      handle = open_library_path(library_name,"LD_LIBRARY_PATH");
+    if (NULL == handle)
+      handle = open_library_path(library_name,"SHLIB_PATH");
+    if (NULL == handle)
+      handle = open_library_path(library_name,"Path");
+    if (NULL == handle)
+      handle = open_library_path(library_name,LIBDIR);
+  }
+
+  if (debug) {
+    g_fprintf(where,
+	      "%s's attempted open of library file '%s' returning %p",
+	      __func__,
+	      library_name,
+	      handle);
+    if (handle == NULL) {
+      g_fprintf(where,
+		" in failure g_module_open error '%s'\n",
+		g_module_error());
+    }
+    else {
+      g_fprintf(where,
+		" in success\n");
+    }
+  }
+  return(handle);
+}
+
 GenReport
 get_report_function(xmlNodePtr cmd)
 {
