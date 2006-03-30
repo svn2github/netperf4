@@ -43,13 +43,13 @@ esac
 # Checks for libraries.  the check for pthread has been moved to where
 # we decide if we are using glib or not.
 AC_HAVE_LIBRARY(m)
-AC_HAVE_LIBRARY(dl)
+# AC_HAVE_LIBRARY(dl)
 
-# Checks for header files. the check for pthread.h has been move to
+# Checks for header files.
 # where we decide if we are using glib or not
 AC_HEADER_STDC
-AC_HEADER_SYS_WAIT
-AC_CHECK_HEADERS([arpa/inet.h arpa/nameser.h arpa/nameser_compat.h dlfcn.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pwd.h pthread.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h ])
+# AC_HEADER_SYS_WAIT
+AC_CHECK_HEADERS([arpa/inet.h arpa/nameser.h arpa/nameser_compat.h errno.h fcntl.h float.h inttypes.h limits.h malloc.h math.h memory.h netdb.h netinet/in.h netinet/tcp.h poll.h pwd.h pthread.h resolv.h sched.h signal.h stdint.h stdio.h stdlib.h string.h strings.h sys/dk.h sys/ioctl.h sys/param.h sys/pstat.h sys/resource.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/uio.h unistd.h values.h ])
 
 # Some platforms require these.  There may be a better way.
 AC_HAVE_LIBRARY(socket)
@@ -76,21 +76,22 @@ AC_HEADER_STDBOOL
 
 # Checks for library functions.
 # AC_FUNC_ERROR_AT_LINE
-AC_FUNC_FORK
+# AC_FUNC_FORK
 # AC_FUNC_MALLOC
-AC_FUNC_MMAP
+# AC_FUNC_MMAP
 AC_FUNC_SELECT_ARGTYPES
-AC_FUNC_SETPGRP
-AC_TYPE_SIGNAL
+# AC_FUNC_SETPGRP
+# AC_TYPE_SIGNAL
 # AC_FUNC_STAT
 # remove pstat_getdynamic (at least for now) since we don't do
 # anything conditional with the check anyway...
-AC_CHECK_FUNCS([dlopen gethostbyname gethrtime gettimeofday inet_ntoa memset memcpy socket sqrt strcasecmp strchr strstr strtoul uname])
+AC_CHECK_FUNCS([gethrtime gettimeofday inet_ntoa memset memcpy socket \
+		sqrt strcasecmp strchr strstr strtoul uname])
 
 #AC_CONFIG_SUBDIRS(src/missing)
 
 # does this platform need the replacement getaddrinfo or other
-AC_CHECK_FUNCS([getnameinfo getaddrinfo inet_ntop getopt_long])
+AC_CHECK_FUNCS([getnameinfo getaddrinfo inet_ntop])
 # AC_REPLACE_FUNCS([getaddrinfo])
 
 
@@ -102,47 +103,43 @@ if test "$ac_cv_func_inet_ntop" != yes ; then
    AC_MSG_NOTICE([Requesting replacement inet_ntop])
    AC_LIBOBJ(missing/inet_ntop)
 fi
-if test "$ac_cv_func_getopt_long" != yes ; then
-   AC_MSG_NOTICE([Requesting replacement getopt/getopt_long])
-   AC_LIBOBJ(missing/getopt)
-   AC_LIBOBJ(missing/getopt1)
-fi 
 
-AC_CHECK_FUNCS([get_expiration_time])
-if test "$ac_cv_func_get_expiration_time" != yes ; then
-   AC_MSG_NOTICE([Requesting replacement get_expiration_time])
-   AC_LIBOBJ(missing/get_expiration_time)
-fi 
-   
 AC_CHECK_FUNCS(sendfile)
 
 AC_CHECK_FUNCS(mpctl processor_bind sched_setaffinity bind_to_cpu_id)
 
-AC_CHECK_PROG(have_libxml2, xml2-config, "yes", "no" )
-if test "x$have_libxml2"="xyes"; then
-	libxml2_cflags=`xml2-config --cflags`
-	libxml2_libs=`xml2-config --libs`
-else
-	AC_MSG_ERROR(Cannot find xml2-config.)
-fi
+# since we are going to depend on pkg-config for glib, might as well
+# use it for libxml2 as well
+
+#AC_CHECK_PROG(have_libxml2, xml2-config, "yes", "no" )
+#if test "x$have_libxml2"="xyes"; then
+#	libxml2_cflags=`xml2-config --cflags`
+#	libxml2_libs=`xml2-config --libs`
+#else
+#	AC_MSG_ERROR(Cannot find xml2-config.)
+#fi
 
 AC_ARG_WITH(glib,
-	[AS_HELP_STRING([--with-glib],[attempt to use glib's thread abstractionsrather than direct pthreads])])
+	[AS_HELP_STRING([--with-glib],
+	[in the future will show where/how to include glib])])
 
-glib_cflags=""
-glib_libs=""
+pkg_config_cflags=""
+pkg_config_libs=""
 
     PKG_PROG_PKG_CONFIG()
 
-    glib_cflags=`$PKG_CONFIG --cflags-only-I glib-2.0 gmodule-2.0 gthread-2.0`
-    glib_libs=`$PKG_CONFIG --libs-only-l --libs-only-L glib-2.0 gmodule-2.0  gthread-2.0`
+    pkg_config_cflags=`$PKG_CONFIG --cflags-only-I \
+			libxml-2.0 glib-2.0 gmodule-2.0 gthread-2.0`
+    pkg_config_libs=`$PKG_CONFIG --libs-only-l --libs-only-L \
+			libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0`
 
 # see if we should be enabling histogram support
 
 AC_MSG_CHECKING(whether to include histogram support)
 
 AC_ARG_ENABLE(histogram,
-	[AS_HELP_STRING([--enable-histogram],[include individual op timing, may affect result]) ])
+	[AS_HELP_STRING([--enable-histogram],
+	[include individual op timing, may affect result]) ])
 
 case "$enable_histogram" in
 	yes)
@@ -169,7 +166,8 @@ fi
 
 if $use_histogram
 then
-	AC_DEFINE([WANT_HISTOGRAM],,[Define to one to enable histogram support. May affect results.])
+	AC_DEFINE([WANT_HISTOGRAM],,
+	[Define to one to enable histogram support. May affect results.])
 fi
 
 # see if we should be enabling demo support
@@ -204,7 +202,8 @@ fi
 
 if $use_demo
 then
-	AC_DEFINE([WANT_DEMO],,[Define to one to enable demo support. May affect results.])
+	AC_DEFINE([WANT_DEMO],,
+		  [Define to one to enable demo support. May affect results.])
 fi
 
 # see if we should be including the AF_UNIX tests
@@ -238,7 +237,8 @@ fi
 
 if $use_unixdomain
 then
-	AC_DEFINE([WANT_UNIX],,[Define to one to include Unix Domain socket tests.])
+	AC_DEFINE([WANT_UNIX],,
+		  [Define to one to include Unix Domain socket tests.])
 fi
 
 # see if we should be including the DLPI tests
@@ -420,7 +420,8 @@ fi
 
 if $use_intervals
 then
-	AC_DEFINE([WANT_INTERVALS],,[Define to one to enable paced operation support. May affect results.])
+	AC_DEFINE([WANT_INTERVALS],,
+	[Define to one to enable paced operation support. May affect results.])
 fi
 
 # see if we should be enabling initial request bursts
@@ -454,7 +455,8 @@ fi
 
 if $use_burst
 then
-	AC_DEFINE([WANT_FIRST_BURST],,[Define to one to enable initial _RR burst support. May affect results.])
+	AC_DEFINE([WANT_FIRST_BURST],,
+[Define to one to enable initial _RR burst support. May affect results.])
 fi
 
 # time to see about CPU utilization measurements
@@ -468,34 +470,41 @@ NETSYS_SOURCE="$enable_cpuutil"
 case "$enable_cpuutil" in
 	pstat)
 		use_cpuutil=true
-		AC_DEFINE([USE_PSTAT],,[Use HP-UX's pstat interface to measure CPU util.])
+		AC_DEFINE([USE_PSTAT],,
+			[Use HP-UX's pstat interface to measure CPU util.])
 		;;
 	pstatnew)
 		use_cpuutil=true
-		AC_DEFINE([USE_PSTAT],,[Use HP-UX's pstat interface to measure CPU util.])
+		AC_DEFINE([USE_PSTAT],,
+			[Use HP-UX's pstat interface to measure CPU util.])
 		;;
         perfstat)
                 use_cpuutil=true
-                AC_DEFINE([USE_PERFSTAT],,[Use AIX's perfstat interface to measure CPU util.])
+                AC_DEFINE([USE_PERFSTAT],,
+			[Use AIX's perfstat interface to measure CPU util.])
 		AC_HAVE_LIBRARY(perfstat)
                 ;;
 
 	looper)
 		use_cpuutil=true
-		AC_DEFINE([USE_LOOPER],,[Use looper/soaker processes to measure CPU util.])
+		AC_DEFINE([USE_LOOPER],,
+			[Use looper/soaker processes to measure CPU util.])
 		;;		
 	procstat)
 		use_cpuutil=true
-		AC_DEFINE([USE_PROC_STAT],,[Use Linux's procstat interface to measure CPU util.])
+		AC_DEFINE([USE_PROC_STAT],,
+			[Use Linux's procstat interface to measure CPU util.])
 		;;
 	kstat)
 		use_cpuutil=true
-		AC_DEFINE([USE_KSTAT],,[Use Solaris's kstat interface to measure CPU util.])
+		AC_DEFINE([USE_KSTAT],,
+			[Use Solaris's kstat interface to measure CPU util.])
 		AC_HAVE_LIBRARY(kstat)
 		;;
 	kstat10)
 		use_cpuutil=true
-		AC_DEFINE([USE_KSTAT],,[Use Solaris's kstat interface to measure CPU util.])
+		AC_DEFINE([USE_KSTAT],,
+			[Use Solaris's kstat interface to measure CPU util.])
 		AC_HAVE_LIBRARY(kstat)
 		;;
 	'')
@@ -503,56 +512,63 @@ case "$enable_cpuutil" in
 # i386-pc-solaris2.10
 # guess it automagically in a nice big case statement
 		case $target in
-		     *-*-linux*)
-			use_cpuutil=true
-			AC_DEFINE([USE_PROC_STAT],,[Use Linux's procstat interface to measure CPU util.])
-			enable_cpuutil="procstat - auto"
-			NETSYS_SOURCE="linux"
-			;;
-		     *-*-hpux11.23 | *-*-hpux11.31)
-			use_cpuutil=true
-			AC_DEFINE([USE_PSTAT],,[Use HP-UX's pstat interface to measure CPU util.])
-			enable_cpuutil="pstatnew - auto"
-			NETSYS_SOURCE="hpux"
-			;;
-		     *-*-hpux11* | *-*-hpux10*)
-			use_cpuutil=true
-			AC_DEFINE([USE_PSTAT],,[Use HP-UX's pstat interface to measure CPU util.])
-			enable_cpuutil="pstat - auto"
-			NETSYS_SOURCE="pstat"
-			;;
-		     *-*-aix5.*)
-			use_puutil=true
-			AC_DEFINE([USE_PERFSTAT],,[Use AIX's perfstat interface to measure CPU util.])
-			AC_HAVE_LIBRARY(perfstat)
-			enable_cpuutil="perfstat - auto"
-			NETSYS_SOURCE="perfstat"
-			;;
-		     *-*-solaris2.10)
-			use_cpuutil=true
-			AC_DEFINE([USE_KSTAT],,[Use Solaris's kstat interface to measure CPU util.])
-			AC_HAVE_LIBRARY(kstat)
-			enable_cpuutil="kstat10 - auto"
-			NETSYS_SOURCE="kstat10"
-			;;
-		     *-*-solaris2.*)
-			use_cpuutil=true
-			AC_DEFINE([USE_KSTAT],,[Use Solaris's kstat interface to measure CPU util.])
-			AC_HAVE_LIBRARY(kstat)
-			enable_cpuutil="kstat - auto"
-			NETSYS_SOURCE="kstat"
-			;;
-                     *-*-freebsd4.*)
-			use_cpuutil=true
-			AC_DEFINE([USE_SYSCTL],,[Use FreeBSD's sysctl interface to measure CPU util.])
-			enable_cpuutil="sysctl - auto"
-			NETSYS_SOURCE="sysctl"
-			;;
-		     *)
-			use_cpuutil=false
-			NETSYS_SOURCE="none"
-			enable_cpuutil="none. Consider teaching configure about your platform."
-			;;
+		   *-*-linux*)	
+		     use_cpuutil=true
+		     AC_DEFINE([USE_PROC_STAT],,
+		      [Use Linux's procstat interface to measure CPU util.])
+		      enable_cpuutil="procstat - auto"
+		      NETSYS_SOURCE="linux"
+		      ;;
+		   *-*-hpux11.23 | *-*-hpux11.31)
+		     use_cpuutil=true
+		     AC_DEFINE([USE_PSTAT],,
+		     [Use HP-UX's pstat interface to measure CPU util.])
+		     enable_cpuutil="pstatnew - auto"
+		     NETSYS_SOURCE="hpux"
+		     ;;
+		   *-*-hpux11* | *-*-hpux10*)
+		     use_cpuutil=true
+		     AC_DEFINE([USE_PSTAT],,
+		     [Use HP-UX's pstat interface to measure CPU util.])
+		     enable_cpuutil="pstat - auto"
+		     NETSYS_SOURCE="pstat"
+		     ;;
+		   *-*-aix5.*)
+		     use_cpuutil=true
+		     AC_DEFINE([USE_PERFSTAT],,
+		     [Use AIX's perfstat interface to measure CPU util.])
+		     AC_HAVE_LIBRARY(perfstat)
+		     enable_cpuutil="perfstat - auto"
+		     NETSYS_SOURCE="perfstat"
+		     ;;
+		   *-*-solaris2.10 | *-*-solaris2.11)
+		     use_cpuutil=true
+		     AC_DEFINE([USE_KSTAT],,
+		     [Use Solaris's kstat interface to measure CPU util.])
+		     AC_HAVE_LIBRARY(kstat)
+		     enable_cpuutil="kstat10 - auto"
+		     NETSYS_SOURCE="kstat10"
+		     ;;
+		   *-*-solaris2.*)
+		     use_cpuutil=true
+		     AC_DEFINE([USE_KSTAT],,
+		     [Use Solaris's kstat interface to measure CPU util.])
+		     AC_HAVE_LIBRARY(kstat)
+		     enable_cpuutil="kstat - auto"
+		     NETSYS_SOURCE="kstat"
+		     ;;
+                   *-*-freebsd4.* | *-*-freebsd5.* | *-*-freebsd6.*)
+		     use_cpuutil=true
+		     AC_DEFINE([USE_SYSCTL],,
+		     [Use FreeBSD's sysctl interface to measure CPU util.])
+		     enable_cpuutil="sysctl - auto"
+		     NETSYS_SOURCE="sysctl"
+		     ;;
+		   *)
+		     use_cpuutil=false
+		     NETSYS_SOURCE="none"
+		     enable_cpuutil="none. Consider teaching configure about your platform."
+		     ;;
 		esac
 		;;
 	none)
@@ -580,12 +596,12 @@ esac
 
 case $GCC in
      yes)
-         CFLAGS="$CFLAGS -pthread $libxml2_cflags $glib_cflags"
-	 LIBS="$LIBS -pthread $libxml2_libs $glib_libs"
+         CFLAGS="$CFLAGS -pthread $libxml2_cflags $pkg_config_cflags"
+	 LIBS="$LIBS -pthread $libxml2_libs $pkg_config_libs"
 	 ;;
        *)
-         CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags "
-	 LIBS="$LIBS $libxml2_libs $glib_libs "
+         CFLAGS="$CLFAGS $libxml2_cflags $pkg_config_cflags "
+	 LIBS="$LIBS $libxml2_libs $pkg_config_libs "
 	 ;;
 esac
 

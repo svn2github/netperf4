@@ -15,14 +15,26 @@ BE SURE TO READ THE MANUAL. EVEN THOUGH IT MAY BE OUTDATED.
 
 Pointers:
 
-The netperf4 benchmark depends on libxml2.  You must have libxml2 and
-its development environment and utilities (eg xmlcatalog) installed
-prior to building netperf4.
+The netperf4 benchmark depends on libxml2 (aka libxml-2.0).  You must
+have libxml2 and its development environment and utilities (eg
+xmlcatalog) installed prior to building netperf4.
 
+The netperf4 benchmark also depends on several components of glib-2.0.
+You must have glib-2.0 and its development environment installed prior
+to building netperf4.
+
+Further, netperf4 depends on the pkg-config utility.  You must have
+pkg-config installed prior to building netperf4.
+
+In the future, netperf4 may add gtk+2.0 as a dependency.
+
+If your platform does not have one or more of these dependencies best
+start getting them ported somehow.  If that is not possible, consider
+using netperf2 rather than netperf4.
 
 There is a COPYRIGHT file included.  It is called COPYING because that
-is what autosomethingorother wanted.   Netperf4 is covered by version
-2 of the GNU Public License with an exception granted to link netperf4
+is what autosomethingorother wanted.  Netperf4 is covered by version 2
+of the GNU Public License with an exception granted to link netperf4
 with OpenSSL.  If there are other useful libraries with issues similar
 to OpenSSL (whatever they may be, the HP Legal Eagles said I needed an
 exception for OpenSSL...) it is likely an exception will be added for
@@ -34,7 +46,7 @@ At some point it is hoped there will be a public netperf4 database to
 which people can submit results.
 
 There is an Internet mailing list devoted to netperf. Both netperf4
-and netperf2 (ie the original netperf) are discussed there. It is
+and netperf2 (ie the original netperf) are discussed there.  It is
 called netperf-talk and it is hosted on netperf.org. Subscription
 requests are handled via
 
@@ -47,9 +59,9 @@ minimize spam on the mailing list.
 
 If you run into severe difficulties, or are just feeling chatty,
 please feel free to drop some email to me - Rick Jones
-<rick.jones2@hp.com>. Be sure to include a meaningful subject lines
-and as much context (including cutting and pasting actual error
-messages) as you can.
+<rick.jones2@hp.com>.  Be sure to include a meaningful subject lines
+(including netperf in the subject is helpful) and as much context
+(including cutting and pasting *actual* error messages) as you can.
 
 happy benchmarking, 
 rick jones

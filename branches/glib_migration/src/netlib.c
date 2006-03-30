@@ -99,10 +99,6 @@ delete this exception statement from your version.
 #include <sys/resource.h>
 #endif
 
-#ifdef HAVE_DLFCN_H
-#include <dlfcn.h>
-#endif
-
 # include <glib.h>
 # include <gmodule.h>
 

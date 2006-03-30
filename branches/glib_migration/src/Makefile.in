@@ -116,7 +116,6 @@ build_os = @build_os@
 build_vendor = @build_vendor@
 datadir = @datadir@
 exec_prefix = @exec_prefix@
-have_libxml2 = @have_libxml2@
 host = @host@
 host_alias = @host_alias@
 host_cpu = @host_cpu@
@@ -229,10 +228,7 @@ netserver_DEPENDENCIES = @LIBOBJS@
 DEFAULT_INCLUDES =  -I. -I$(srcdir) -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
-@AMDEP_TRUE@DEP_FILES = $(DEPDIR)/missing/get_expiration_time.Po \
-@AMDEP_TRUE@	$(DEPDIR)/missing/getaddrinfo.Po \
-@AMDEP_TRUE@	$(DEPDIR)/missing/getopt.Po \
-@AMDEP_TRUE@	$(DEPDIR)/missing/getopt1.Po \
+@AMDEP_TRUE@DEP_FILES = $(DEPDIR)/missing/getaddrinfo.Po \
 @AMDEP_TRUE@	$(DEPDIR)/missing/inet_ntop.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netconfidence.Po ./$(DEPDIR)/netlib.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po \
@@ -258,8 +254,7 @@ DATA = $(netperf_DATA)
 HEADERS = $(include_HEADERS)
 
 DIST_COMMON = $(include_HEADERS) $(srcdir)/Makefile.in Makefile.am \
-	missing/get_expiration_time.c missing/getaddrinfo.c \
-	missing/getopt.c missing/getopt1.c missing/inet_ntop.c
+	missing/getaddrinfo.c missing/inet_ntop.c
 SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(nettest_dns_la_SOURCES) $(nettest_vst_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
 
 all: all-am
@@ -349,10 +344,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/get_expiration_time.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getaddrinfo.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getopt.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getopt1.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/inet_ntop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netconfidence.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib.Po@am__quote@
