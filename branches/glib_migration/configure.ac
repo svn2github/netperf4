@@ -37,6 +37,9 @@ case $target in
 	;;
 esac
 
+# need to check if the compiler is gcc and if so add -pthread 
+# to suitable flags
+
 # Checks for libraries.  the check for pthread has been moved to where
 # we decide if we are using glib or not.
 AC_HAVE_LIBRARY(m)
@@ -128,29 +131,11 @@ AC_ARG_WITH(glib,
 
 glib_cflags=""
 glib_libs=""
-gmodule_cflags=""
-gmodule_libs=""
 
-if test "${with_glib+set}" = set && test "$with_glib" != no; then
-   AC_CHECK_PROG(have_pkg_config, pkg-config, "yes","no")
-   if test "x$have_pkg_config"="xyes"; then
-    # while we are using "glib" we are really using gthread it seems so do
-    # the pkg-config thing with that name instead as it seems to be a
-    # proper superset 
-    glib_cflags=`pkg-config --cflags gthread-2.0`
-    glib_libs=`pkg-config --libs gthread-2.0`
-    # of course, then we start allowing the use of gmodule stuff :)
-    gmodule_cflags=`pkg-config --cflags gmodule-2.0`
-    gmodule_libs=`pkg-config --libs gmodule-2.0`
-    AC_DEFINE([WITH_GLIB],1,[Define to one to use glib instead of direct pthreads])
-   else
-	AC_MSG_ERROR(Cannot find pkg-config and so cannot use glib.)
-   fi
-else
-# this is going to be pthreads
-  AC_HAVE_LIBRARY(pthread)
-  AC_CHECK_HEADERS([pthread.h])
-fi
+    PKG_PROG_PKG_CONFIG()
+
+    glib_cflags=`$PKG_CONFIG --cflags-only-I glib-2.0 gmodule-2.0 gthread-2.0`
+    glib_libs=`$PKG_CONFIG --libs-only-l --libs-only-L glib-2.0 gmodule-2.0  gthread-2.0`
 
 # see if we should be enabling histogram support
 
@@ -580,9 +565,29 @@ esac
 
 	AC_MSG_RESULT("$enable_cpuutil")
 
-# not sure that this is really the right way to do this...help?
-CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags $gmodule_cflags"
-LIBS="$LIBS $libxml2_libs $glib_libs $gmodule_libs"
+# if the compiler is gcc, we need/want -pthread - at least I think we
+# do for multi-threaded compiles.  we also do things this way so we can
+# use the "only" options in pkg-config to we don't end-up trying to pass
+# gcc options to other compilers if the dependencies were built with
+# gcc and we are not being built with gcc - thusfar the only option that
+# has appeared that way is the "-pthread" option.  i'm sure that as we
+# find more of them we'll start doing more "interesting" things in the
+# name of not forcing a specific compiler on people, because:
+#
+# PORTABLE CODE DOES NOT DEPEND ON A SPECIFIC COMPILER
+#
+
+
+case $GCC in
+     yes)
+         CFLAGS="$CFLAGS -pthread $libxml2_cflags $glib_cflags"
+	 LIBS="$LIBS -pthread $libxml2_libs $glib_libs"
+	 ;;
+       *)
+         CFLAGS="$CLFAGS $libxml2_cflags $glib_cflags "
+	 LIBS="$LIBS $libxml2_libs $glib_libs "
+	 ;;
+esac
 
 AC_SUBST(CFLAGS)
 AC_SUBST(LIBS)
