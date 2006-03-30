@@ -1272,7 +1272,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
 /* attempt to open a library file by prepending path components to
    it */
 GModule *
-open_library_path(const gchar *library_name, const gchar *pathvar) {
+open_library_path(const gchar *library_name, const gchar *pathvar, gboolean pathvarispath) {
 
   const gchar *path;
   gchar **path_elts;
@@ -1280,7 +1280,31 @@ open_library_path(const gchar *library_name, const gchar *pathvar) {
   gchar *filename;
   GModule *handle = NULL;
 
-  path = g_getenv(pathvar);
+  if (debug) {
+    g_fprintf(where,
+	      "%s is going to use %s as the envvar\n",
+	      __func__,
+	      pathvar);
+    fflush(where);
+  }
+  if (pathvarispath) {
+    /* the pathvar variable is already a path and not an environment
+       variable */
+    path = pathvar;
+  }
+  else {
+    path = g_getenv(pathvar);
+  }
+
+  if (debug) {
+    g_fprintf(where,
+	      "%s was given %s for envvar %s and pathvarispath %d\n",
+	      __func__,
+	      path,
+	      pathvar,
+	      pathvarispath);
+    fflush(where);
+  }
 
   if (path) {
     path_elts = g_strsplit(path,G_SEARCHPATH_SEPARATOR_S,0);
@@ -1292,19 +1316,21 @@ open_library_path(const gchar *library_name, const gchar *pathvar) {
 		  __func__,
 		  path_elts[index],
 		  library_name);
+	fflush(where);
       }
       filename = g_build_filename(path_elts[index], library_name,NULL);
       handle = g_module_open(filename,0);
     }
+  g_strfreev(path_elts);
   }
 
-  g_strfreev(path_elts);
 
   if (debug) {
     g_fprintf(where,
 	      "%s is returning handle %p\n",
 	      __func__,
 	      handle);
+    fflush(where);
   }
   return(handle);
 }
@@ -1321,6 +1347,7 @@ open_library(const gchar *library_name) {
 	      "%s was asked to open a library based on the name %s\n",
 	      __func__,
 	      library_name);
+    fflush(where);
   }
   handle = g_module_open(library_name,0);
 
@@ -1329,15 +1356,15 @@ open_library(const gchar *library_name) {
 
   if ((NULL == handle) && 
       !g_path_is_absolute(library_name)) {
-    handle = open_library_path(library_name,"NETPERF_LIBRARY_PATH");
+    handle = open_library_path(library_name,"NETPERF_LIBRARY_PATH", FALSE);
     if (NULL == handle)
-      handle = open_library_path(library_name,"LD_LIBRARY_PATH");
+      handle = open_library_path(library_name,"LD_LIBRARY_PATH", FALSE);
     if (NULL == handle)
-      handle = open_library_path(library_name,"SHLIB_PATH");
+      handle = open_library_path(library_name,"SHLIB_PATH", FALSE);
     if (NULL == handle)
-      handle = open_library_path(library_name,"Path");
+      handle = open_library_path(library_name,"Path", FALSE);
     if (NULL == handle)
-      handle = open_library_path(library_name,LIBDIR);
+      handle = open_library_path(library_name,LIBDIR, TRUE);
   }
 
   if (debug) {
@@ -1375,27 +1402,20 @@ get_report_function(xmlNodePtr cmd)
   la_file   = xmlGetProp(cmd, (const xmlChar *)"library");
   fname = xmlGetProp(cmd, (const xmlChar *)"function");
 
-  map_la_to_lib(la_file,lib_file);
-
-  if (debug) {
-    fprintf(where,
-            "trying to open library file '%s' via '%s'\n",
-            lib_file,
-            (char *)la_file);
-    fflush(where);
-  }
-  free(la_file);
   /* now we do the dlopen/gmodule magic */
 
-  lib_handle = g_module_open((const gchar *)lib_file,0);
+  lib_handle = open_library(la_file);
+
   if (debug) {
-    fprintf(where,"open of library file '%s' returned %p\n",
-            (char *)lib_file, lib_handle);
-    if (lib_handle == NULL) {
-      fprintf(where,"g_module_open error '%s'\n",g_module_error());
-    }
-    fflush(where);
+    g_fprintf(where,
+	      "%s's open of library file via '%s' returned %p\n",
+	      __func__,
+	      (char *)la_file,
+	      lib_handle);
   }
+
+  /* we are all done with the la_file variable so free it */
+  free(la_file);
 
   ret  = g_module_symbol(lib_handle,fname,(gpointer *)&func);
   if (debug) {
@@ -1437,24 +1457,16 @@ get_test_function(test_t *test, const xmlChar *func)
   if (lib_handle == NULL) {
     /* load the library for the test */
     la_file   = xmlGetProp(test->node,(const xmlChar *)"library");
-    map_la_to_lib(la_file,lib_file);
     if (debug) {
-      fprintf(where,
-              "trying to open library file '%s' via '%s'\n",
-              lib_file,
-              (char *)la_file);
+      g_fprintf(where,
+		"%s looking to open library %p\n",
+		__func__,
+		la_file);
       fflush(where);
     }
+
+    lib_handle = open_library(la_file);
     free(la_file);
-    lib_handle = g_module_open((const gchar *)lib_file,0);
-    if (debug) {
-      fprintf(where,"open of library file '%s' returned handle %p\n",
-              (char *)lib_file, lib_handle);
-      if (lib_handle == NULL) {
-	fprintf(where,"g_module_open error '%s'\n",g_module_error());
-      }
-      fflush(where);
-    }
     test->library_handle = lib_handle;
   }
 
