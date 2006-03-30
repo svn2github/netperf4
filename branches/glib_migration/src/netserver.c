@@ -1118,7 +1118,6 @@ main(int argc, char **argv)
 		error->message);
       g_clear_error(&error);
     }
-    g_fprintf(where,"status after set flags %d control_channel %p\n",status,control_channel);
     
     status = g_io_channel_set_encoding(control_channel,NULL,&error);
     if (error) {
@@ -1129,8 +1128,6 @@ main(int argc, char **argv)
       g_clear_error(&error);
     }
     
-    g_fprintf(where,"status after set_encoding %d\n",status);
-    
     g_io_channel_set_buffered(control_channel,FALSE);
     
     /* loop is passed just to have something passed */
@@ -1138,11 +1135,8 @@ main(int argc, char **argv)
 			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
 			      accept_connection,
 			      global_state_ptr);
-    g_fprintf(where,"added watch id %d\n",watch_id);
 
-    g_fprintf(where,"Starting loop to accept stuff...\n");
     g_main_loop_run(loop);
-    g_fprintf(where,"Came out of the main loop\n");
 
   }
   else {
@@ -1163,7 +1157,6 @@ main(int argc, char **argv)
 		error->message);
       g_clear_error(&error);
     }
-    g_fprintf(where,"status after set flags %d control_channel %p\n",status,control_channel);
     
     status = g_io_channel_set_encoding(control_channel,NULL,&error);
     if (error) {
@@ -1174,8 +1167,6 @@ main(int argc, char **argv)
       g_clear_error(&error);
     }
     
-    g_fprintf(where,"status after set_encoding %d\n",status);
-    
     g_io_channel_set_buffered(control_channel,FALSE);
     
     /* loop is passed just to have something passed */
@@ -1183,14 +1174,11 @@ main(int argc, char **argv)
 			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
 			      read_from_control_connection,
 			      global_state_ptr);
-    g_fprintf(where,"added watch id %d\n",watch_id);
 
-    g_fprintf(where,"Starting loop to process stuff...\n");
     g_timeout_add(1000,
 		  (GSourceFunc)check_test_state_callback,
 		  global_state_ptr);
     g_main_loop_run(loop);
-    g_fprintf(where,"Came out of the main loop\n");
   }
   return(0);
 }

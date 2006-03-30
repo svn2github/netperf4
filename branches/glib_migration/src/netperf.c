@@ -771,10 +771,6 @@ instantiate_netservers()
 			error->message);
 	      g_clear_error(&error);
 	    }
-	    g_fprintf(where,
-		      "status after set flags %d new_server->source %p\n",
-		      status,
-		      new_server->source);
     
 	    status = g_io_channel_set_encoding(new_server->source,NULL,&error);
 	    if (error) {
@@ -2061,8 +2057,6 @@ process_commands_and_events()
      end of default command file commands */
 
   /* parse command file */
-  fprintf(where,"parsing command file %s\n",iname);
-  fflush(where);
   commands = parse_xml_file(iname, (const xmlChar *)"commands", &doc);
 
   /* execute commands and events in a loop */
