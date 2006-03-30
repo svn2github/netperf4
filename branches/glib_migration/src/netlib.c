@@ -1298,6 +1298,8 @@ open_library_path(const gchar *library_name, const gchar *pathvar) {
     }
   }
 
+  g_strfreev(path_elts);
+
   if (debug) {
     g_fprintf(where,
 	      "%s is returning handle %p\n",
