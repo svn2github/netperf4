@@ -43,15 +43,9 @@ delete this exception statement from your version.
 #include <stdio.h>
 #endif
 
-#ifdef WITH_GLIB
 # ifdef HAVE_GLIB_H
 #  include <glib.h>
 # endif 
-#else
-# ifdef HAVE_PTHREAD_H
-#  include <pthread.h>
-# endif
-#endif
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
@@ -377,7 +371,6 @@ netperf_init()
 
   for (i = 0; i < SERVER_HASH_BUCKETS; i++) {
     server_hash[i].server = NULL;
-#ifdef WITH_GLIB
     server_hash[i].hash_lock = g_mutex_new();
     if (NULL == server_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -392,43 +385,10 @@ netperf_init()
       fflush(where);
       exit(-2);
     }
-#else
-    server_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == server_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(server_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "%s: pthread_mutex_init error %d\n",__func__,rc);
-      fflush(where);
-      exit(-2);
-    }
-    server_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == server_hash[i].condition) {
-      fprintf(where, "%s: unable to malloc a pthread_cond_t \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init((server_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-#endif
   }
 
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     test_hash[i].test = NULL;
-#ifdef WITH_GLIB
     test_hash[i].hash_lock = g_mutex_new();
     if (NULL == test_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -443,39 +403,6 @@ netperf_init()
       fflush(where);
       exit(-2);
     }
-#else
-    test_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == test_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(test_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-
-    test_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == test_hash[i].condition) {
-      fprintf(where, "netperf_init: unable to malloc a pthread_cond_t \n");
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init((test_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-#endif
   }
 
   /* you know, it might not be a bad idea to also properly initialize
@@ -483,7 +410,6 @@ netperf_init()
 
   for (i = 0; i < TEST_SET_HASH_BUCKETS; i ++) {
     test_set_hash[i].test_set = NULL;
-#ifdef WITH_GLIB
     test_set_hash[i].hash_lock = g_mutex_new();
     if (NULL == test_set_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -498,39 +424,6 @@ netperf_init()
       fflush(where);
       exit(-2);
     }
-#else
-    test_set_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == test_set_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(test_set_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-
-    test_set_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == test_set_hash[i].condition) {
-      fprintf(where, "netperf_init: unable to malloc a pthread_cond_t \n");
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init((test_set_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-#endif
   }
 
   netlib_init();
@@ -847,17 +740,7 @@ instantiate_netservers()
       new_server->id        = netserverid;
       if (add_server_to_hash(new_server) == NPE_SUCCESS) {
         new_server->node      = this_netserver;
-#ifdef WITH_GLIB
 	g_static_rw_lock_init(&new_server->rwlock);
-#else
-        rc = pthread_rwlock_init(&new_server->rwlock, NULL);
-        if (rc) {
-          fprintf(where, "instaniate_netservers: ");
-          fprintf(where, "pthread_rwlock_init error %d\n", rc);
-          fflush(where);
-          rc = NPE_PTHREAD_RWLOCK_INIT_FAILED;
-        }
-#endif
         if (rc == NPE_SUCCESS) {
           rc = instantiate_tests(this_netserver, new_server);
         }
@@ -1070,21 +953,9 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
 
         NETPERF_MUTEX_LOCK(h->hash_lock);
 
-#ifdef WITH_GLIB
 	g_get_current_time(&abstime);
 	g_time_val_add(&abstime,1000);
 	g_cond_timed_wait(h->condition, h->hash_lock, &abstime);
-#else
-        get_expiration_time(&delta_time,&abstime);
-
-
-        rc = pthread_cond_timedwait(h->condition, h->hash_lock, &abstime);
-        if (debug) {
-            fprintf(where,
-                    "resolve_dependency: pthread_cond_wait exited %d\n",rc);
-            fflush(where);
-        }
-#endif
       }  /* end wait */
       
       /* test has reached at least the TEST_INIT state */
@@ -1408,20 +1279,9 @@ wait_for_tests_to_initialize()
           break;
         }
         /* test is not yet initialized wait for it */
-#ifdef WITH_GLIB
 	g_get_current_time(&abstime);
 	g_time_val_add(&abstime,1000);
 	g_cond_timed_wait(h->condition, h->hash_lock, &abstime);
-#else
-        get_expiration_time(&delta_time,&abstime);
-
-        prc = pthread_cond_timedwait(h->condition, h->hash_lock, &abstime);
-        if (debug && (prc != 0)) {
-          fprintf(where,
-            "wait_for_tests_to_initialize: thread conditional wait returned %d\n",prc);
-          fflush(where);
-        }
-#endif
         /* since the mutex was unlocked during the conditional wait
            should the hash chain be restarted in case a new test was
            inserted ? */
@@ -2253,9 +2113,7 @@ main(int argc, char **argv)
 
   program_name = argv[0];
 
-#ifdef WITH_GLIB
   g_thread_init(NULL);
-#endif
 
   where = stderr;
 

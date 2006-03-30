@@ -35,11 +35,7 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
-#ifdef WITH_GLIB
 # include <glib.h>
-#else
-# error sorry, this netserver requires glib
-#endif
 
 #ifdef HAVE_STDIO_H
 #include <stdio.h>
@@ -899,7 +895,6 @@ netserver_init()
 
   for (i = 0; i < NETPERF_HASH_BUCKETS; i++) {
     netperf_hash[i].server = NULL;
-#ifdef WITH_GLIB
     netperf_hash[i].hash_lock = g_mutex_new();
     if (NULL == netperf_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -914,44 +909,10 @@ netserver_init()
       fflush(where);
       exit(-2);
     }
-#else
-    netperf_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == netperf_hash[i].hash_lock) {
-      g_fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(netperf_hash[i].hash_lock, NULL);
-    if (rc) {
-      g_fprintf(where, "%s: server pthread_mutex_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-
-    netperf_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == netperf_hash[i].condition) {
-      g_fprintf(where, "%s: unable to malloc a pthread_cond_t \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-      
-    rc = pthread_cond_init(netperf_hash[i].condition, NULL);
-    if (rc) {
-      g_fprintf(where, "%s: server pthread_cond_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-#endif
   }
  
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     test_hash[i].test = NULL;
-#ifdef WITH_GLIB
     test_hash[i].hash_lock = g_mutex_new();
     if (NULL == test_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -966,38 +927,6 @@ netserver_init()
       fflush(where);
       exit(-2);
     }
-#else
-    test_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == test_hash[i].hash_lock) {
-      g_fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(test_hash[i].hash_lock, NULL);
-    if (rc) {
-      g_fprintf(where, "%s: test pthread_mutex_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-    test_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == test_hash[i].condition) {
-      g_fprintf(where, "%s: unable to malloc a pthread_cond_t \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init(test_hash[i].condition, NULL);
-    if (rc) {
-      g_fprintf(where, "%s: test pthread_cond_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-#endif
   }
 
   netlib_init();
@@ -1059,9 +988,7 @@ main(int argc, char **argv)
   
   program_name = argv[0];
 
-#ifdef WITH_GLIB
   g_thread_init(NULL);
-#endif
 
   /* save-off the initial command-line stuff in case we need it for
      daemonizing or spawning after an accept */

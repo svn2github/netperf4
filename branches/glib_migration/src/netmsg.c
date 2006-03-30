@@ -595,15 +595,7 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     test->state = TEST_IDLE;
     /* I'd have liked to have abstracted this with the NETPERF_mumble
        macros, but the return values differ. raj 2006-03-02 */
-#ifdef WITH_GLIB
     g_cond_broadcast(test_hash[hash_value].condition);
-#else
-    rc = pthread_cond_broadcast(test_hash[hash_value].condition);
-    if (debug) {
-      fprintf(where," new_state = %d\n",test->state);
-      fflush(where);
-    }
-#endif
   }
   if (debug) {
     fprintf(where,"np_idle_message: unlocking mutex\n");
@@ -760,15 +752,9 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 
     /* since the different cond broadcast calls return different
        things, we cannot use the nice NETPERF_mumble abstractions. */
-#ifdef WITH_GLIB
 
     g_cond_broadcast(test_hash[hash_value].condition);
 
-#else
-
-    rc = NETPERF_COND_BROADCAST(test_hash[hash_value].condition);
-
-#endif      
 
     if (debug) {
       fprintf(where," new_state = %d rc = %d\n",test->state,rc);

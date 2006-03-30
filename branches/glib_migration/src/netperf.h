@@ -68,7 +68,6 @@ typedef unsigned long long uint64_t;
 #include <ws2tcpip.h>
 #endif
 
-#ifdef WITH_GLIB
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <glib/gprintf.h>
@@ -86,25 +85,6 @@ typedef unsigned long long uint64_t;
 #define NETPERF_RWLOCK_WRITER_UNLOCK g_static_rw_lock_writer_unlock
 #define NETPERF_STAT g_stat
 #define NETPERF_SNPRINTF g_snprintf
-#elif defined(HAVE_PTHREAD_H)
-#include <pthread.h>
-#define NETPERF_MUTEX_T pthread_mutex_t
-#define NETPERF_RWLOCK_T pthread_rwlock_t
-#define NETPERF_THREAD_T pthread_t
-#define NETPERF_COND_T pthread_cond_t
-#define NETPERF_ABS_TIMESPEC struct timespec
-#define NETPERF_ABS_TIMESET(base,a,b) base.tv_sec = a;base.tv_nsec=b;
-#define NETPERF_MUTEX_LOCK pthread_mutex_lock
-#define NETPERF_MUTEX_UNLOCK pthread_mutex_unlock
-#define NETPERF_COND_TIMEDWAIT pthread_cond_timedwait
-#define NETPERF_COND_BROADCAST pthread_cond_broadcast
-#define NETPERF_RWLOCK_WRLOCK pthread_rwlock_wrlock
-#define NETPERF_RWLOCK_WRITER_UNLOCK pthread_rwlock_unlock
-#define NETPERF_STAT stat
-#define NETPERF_SNPRINTF snprintf
-#else
-#error Netperf4 requires either glib or pthreads
-#endif
 
 #define NETPERF_RING_BUFFER_STRING "netperf4 ring data"
 

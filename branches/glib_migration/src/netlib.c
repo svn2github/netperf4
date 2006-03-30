@@ -103,14 +103,8 @@ delete this exception statement from your version.
 #include <dlfcn.h>
 #endif
 
-#ifdef WITH_GLIB
 # include <glib.h>
 # include <gmodule.h>
-#else
-# ifdef HAVE_PTHREAD_H
-#  include <pthread.h>
-# endif
-#endif
 
 #ifdef HAVE_WINSOCK2_H
 #include <winsock2.h>
@@ -1183,13 +1177,10 @@ map_la_to_lib(xmlChar *la, char *lib) {
   }
 
   if (NULL != ld_library_path) {
-#ifdef WITH_GLIB
     gchar **tokens;
     int tok;
-#endif
     /* OK, start trapsing down the path until we find a match */
     strcpy(ld_library_path,temp);
-#ifdef WITH_GLIB
     tokens = g_strsplit(ld_library_path,":",15);
     for (tok = 0; tokens[tok] != NULL; tok++) {
       g_snprintf(full_path,PATH_MAX,"%s%s%s",tokens[tok],NETPERF_PATH_SEP,la);
@@ -1203,21 +1194,6 @@ map_la_to_lib(xmlChar *la, char *lib) {
       }
     }
     g_strfreev(tokens);
-#else
-    s = ld_library_path;
-    while ((temp = strtok_r(s,":",&last)) != NULL) {
-      s = NULL;
-      snprintf(full_path,PATH_MAX,"%s%s%s",temp,NETPERF_PATH_SEP,la);
-      if (stat(full_path,&buf) == 0) {
-	/* we have a winner, time to go */
-	break;
-      }
-      else {
-	/* put-back the original la file */
-	strncpy(full_path,(char *)la,PATH_MAX);
-      }
-    }
-#endif
   }
 
   /* so, after all that, is it really a ".la" file or is it some other
@@ -1301,12 +1277,8 @@ get_report_function(xmlNodePtr cmd)
   xmlChar  *fname;
   GenReport func;
 
-#ifdef WITH_GLIB
   gboolean ret;
   GModule  *lib_handle;
-#else
-  void     *lib_handle;
-#endif
 
 
   /* first we do the xml stuff */
@@ -1325,38 +1297,22 @@ get_report_function(xmlNodePtr cmd)
   free(la_file);
   /* now we do the dlopen/gmodule magic */
 
-#ifdef WITH_GLIB
   lib_handle = g_module_open((const gchar *)lib_file,0);
-#else
-  lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
-#endif
   if (debug) {
     fprintf(where,"open of library file '%s' returned %p\n",
             (char *)lib_file, lib_handle);
     if (lib_handle == NULL) {
-#ifdef WITH_GLIB
       fprintf(where,"g_module_open error '%s'\n",g_module_error());
-#else
-      fprintf (where,"dlopen error '%s'\n",dlerror());
-#endif 
     }
     fflush(where);
   }
 
-#ifdef WITH_GLIB
   ret  = g_module_symbol(lib_handle,fname,(gpointer *)&func);
-#else
-  func = (GenReport)dlsym(lib_handle,(char *)fname);
-#endif
   if (debug) {
     fprintf(where,"symbol lookup of function '%s' returned %p\n",
             fname, func);
     if (func == NULL) {
-#ifdef WITH_GLIB
       fprintf(where,"g_module_symbol error '%s'\n",g_module_error());
-#else
-      fprintf (where,"dlsym error '%s'\n",dlerror());
-#endif
     }
     fflush(where);
   }
@@ -1368,12 +1324,8 @@ int
 get_test_function(test_t *test, const xmlChar *func)
 {
   int tmp = debug;
-#ifdef WITH_GLIB
   GModule *lib_handle = test->library_handle;
   gboolean ret;
-#else
-  void    *lib_handle = test->library_handle;
-#endif
   xmlChar *fname;
   void    *fptr = NULL;
   int      fnlen = 0;
@@ -1404,20 +1356,12 @@ get_test_function(test_t *test, const xmlChar *func)
       fflush(where);
     }
     free(la_file);
-#ifdef WITH_GLIB
     lib_handle = g_module_open((const gchar *)lib_file,0);
-#else
-    lib_handle = dlopen((char *)lib_file, RTLD_NOW || RTLD_GLOBAL);
-#endif
     if (debug) {
       fprintf(where,"open of library file '%s' returned handle %p\n",
               (char *)lib_file, lib_handle);
       if (lib_handle == NULL) {
-#ifdef WITH_GLIB
 	fprintf(where,"g_module_open error '%s'\n",g_module_error());
-#else
-        fprintf(where,"dlopen error '%s'\n",dlerror());
-#endif
       }
       fflush(where);
     }
@@ -1488,20 +1432,12 @@ get_test_function(test_t *test, const xmlChar *func)
       fflush(where);
     }
     if (rc == NPE_SUCCESS) {
-#ifdef WITH_GLIB
       ret = g_module_symbol(lib_handle,func_name,&fptr);
-#else
-      fptr = dlsym(lib_handle,func_name);
-#endif
       if (debug) {
         fprintf(where,"symbol lookup of func_name '%s' returned %p\n",
                 func_name, fptr);
         if (fptr == NULL) {
-#ifdef WITH_GLIB
 	  fprintf(where,"g_module_symbol error '%s'\n",g_module_error());
-#else
-          fprintf (where,"dlsym error '%s'\n",dlerror());
-#endif
         }
         fflush(where);
       }
@@ -1551,16 +1487,11 @@ get_test_function(test_t *test, const xmlChar *func)
    make netlib.h dependent on netperf.h and I'm not sure I want to do
    that. raj 2006-03-02 */
 int
-#ifdef WITH_GLIB
 launch_thread(GThread **tid, void *(*start_routine)(void *), void *data)
-#else
-launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
-#endif
 
 {
   int rc;
 
-#ifdef WITH_GLIB
   NETPERF_THREAD_T temp_tid;
 
   temp_tid = g_thread_create(start_routine,data,FALSE,NULL);
@@ -1572,39 +1503,6 @@ launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data)
   else {
     rc = -1;
   }
-#else
-
-  NETPERF_THREAD_T temp_tid;
-  rc = pthread_create(&temp_tid, (pthread_attr_t *)NULL, start_routine, data);
-  if (rc != 0) {
-    if (debug) {
-      fprintf(where,"launch_thread: pthread_create failed with %d\n",rc);
-      fflush(where);
-    }
-    rc = NPE_PTHREAD_CREATE_FAILED;
-  } else {
-    /* pthread_create succeeded detach thread so we don't need to join */
-    *tid = temp_tid;
-    if (debug) {
-      fprintf(where,"launch_thread: pthread_create succeeded id = %d\n",*tid);
-      fflush(where);
-    }
-    rc = pthread_detach(temp_tid);
-    if (rc != 0) {
-      if (debug) {
-        fprintf(where,"launch_thread: pthread_detach failed %d\n",rc);
-        fflush(where);
-      }
-      rc = NPE_PTHREAD_DETACH_FAILED;
-    } else {
-      if (debug) {
-        fprintf(where,"launch_thread: pthread_detach succeed %d\n",rc);
-        fflush(where);
-      }
-      rc = NPE_SUCCESS;
-    }
-  }
-#endif
   return(rc);
 }
 
@@ -1681,11 +1579,7 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
         fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
         fflush(where);
       }
-#ifdef WITH_GLIB
       g_usleep(1000);
-#else
-      sleep(1);
-#endif
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
 
@@ -1828,11 +1722,7 @@ establish_control(xmlChar *hostname,
         fprintf(where,"Sleeping on getaddrinfo EAI_AGAIN\n");
         fflush(where);
       }
-#ifdef WITH_GLIB
       g_usleep(1000);
-#else
-      sleep(1);
-#endif
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
 
@@ -1873,11 +1763,7 @@ establish_control(xmlChar *hostname,
                 count);
         fflush(where);
       }
-#ifdef WITH_GLIB
       g_usleep(1000);
-#else
-      sleep(1);
-#endif
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
 
@@ -2030,11 +1916,7 @@ allocate_netperf(GIOChannel *source, xmlDocPtr message, gpointer data) {
       netperf->source    = source;
       netperf->state     = NSRV_PREINIT;
       netperf->state_req = NSRV_WORK;
-#ifdef WITH_GLIB
       netperf->thread_id       = NULL;
-#else
-      netperf->thread_id       = -1;
-#endif
       netperf->next      = NULL;
       
       add_server_to_specified_hash(global_state->server_hash, netperf, FALSE);
