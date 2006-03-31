@@ -600,7 +600,7 @@ esac
 case $GCC in
      yes)
          CFLAGS="$CFLAGS -pthread $pkg_config_cflags"
-	 LIBS="$LIBS -pthread $pkg_config_libs_L $pkg_config_libs_l"
+	 LIBS="$LIBS -Wl,--export-dynamic -pthread $pkg_config_libs_L $pkg_config_libs_l"
 	 ;;
        *)
          CFLAGS="$CLFAGS $pkg_config_cflags "
