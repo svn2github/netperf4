@@ -53,7 +53,7 @@ delete this exception statement from your version.
 #include <sys/socket.h>
 #endif
 
-#ifndef WIN32
+#ifndef G_OS_WIN32
 #define SOCKET int
 #endif
 
@@ -139,6 +139,11 @@ typedef struct global_state {
   gboolean        is_netserver;   /* not sure if this is really necessary */
   gboolean        first_message;  /* do we await the first message? */
 } global_state_t;
+
+typedef struct thread_launch_state {
+  void *data_arg;                 /* the actual data to be passed */
+  void *(*start_routine)(void *); /* the actual routine to execute */
+} thread_launch_state_t;
 
 extern void netlib_init();
 

@@ -319,6 +319,11 @@ typedef struct test_instance {
 				   opaque thread id should be we will
 				   have to do some interesting
 				   backflips to deal with them */
+  void      *native_thread_id; /* a pointer to the "native" thread id
+				  of the test thread, used for things
+				  like processor affinity since
+				  GThread doesn't do that sort of
+				  thing :( */
 
   xmlChar   *test_name;        /* the ASCII name of the test being
                                   performed by this test instance. */

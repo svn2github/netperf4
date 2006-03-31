@@ -874,7 +874,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   xmlChar   *testid;
   xmlChar   *loc_type;
   xmlChar   *loc_value;
-
+  thread_launch_state_t *launch_state;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -930,23 +930,26 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
                 new_test->test_func);
         fflush(where);
       }
-      rc = launch_thread(&new_test->thread_id,new_test->test_func,new_test);
-      if (debug) {
-        fprintf(where,
-                "test_message: launched thread %d for test\n",
-                new_test->thread_id);
-        fflush(where);
+      launch_state =
+	(thread_launch_state_t *)malloc(sizeof(thread_launch_state_t));
+      if (launch_state) {
+	launch_state->data_arg = new_test;
+	launch_state->start_routine = new_test->test_func;
+	rc = launch_thread(&new_test->thread_id,new_test->test_func,new_test);
+	if (debug) {
+	  fprintf(where,
+		  "test_message: launched thread %d for test\n",
+		  new_test->thread_id);
+	  fflush(where);
+	}
+      }
+      else {
+	rc = NPE_MALLOC_FAILED2;
       }
     }
-    /* Set test thread locality */
-    if (rc == NPE_SUCCESS) {
-      loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
-      loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
-      if ((loc_type != NULL) && (loc_value != NULL)) {
-        rc = set_thread_locality(new_test, (char *)loc_type, (char *)loc_value);
-      }
-    }
-    /* wait for test to initialize */
+
+    /* wait for test to initialize, then we will know that it's native
+       thread id has been set in the test_t */
     if (rc == NPE_SUCCESS) {
       while (new_test->new_state == TEST_PREINIT) {
         if (debug) {
@@ -964,6 +967,16 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
         fflush(where);
       }
     }
+
+    /* now we can set test thread locality */
+    if (rc == NPE_SUCCESS) {
+      loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
+      loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
+      if ((loc_type != NULL) && (loc_value != NULL)) {
+        rc = set_thread_locality(new_test, (char *)loc_type, (char *)loc_value);
+      }
+    }
+
     if (rc != NPE_SUCCESS) {
       new_test->state  = TEST_ERROR;
       new_test->err_rc = rc;

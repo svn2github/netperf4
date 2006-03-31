@@ -1580,6 +1580,37 @@ get_test_function(test_t *test, const xmlChar *func)
   return(rc);
 }
 
+/* this routine exists because there is no architected way to get a
+   "native" thread id out of a GThread.  we need a native thread ID to
+   allow the main netserver thread to bind a test thread to a
+   specified CPU/processor set/locality domain. so, we use the
+   launch_pad routine to allow the newly created thread to store a
+   "pthread_self" into the test structure. the netserver thread, when
+   it see's the test thread is in the idle state can then assign the
+   affinity to the thread. raj 2006-03-30 */
+
+void *
+launch_pad(void *data) {
+  thread_launch_state_t *launch_state;
+  test_t *test;
+
+  launch_state = data;
+  test = launch_state->data_arg;
+
+#ifdef G_THREADS_IMPL_POSIX
+  /* hmm, I wonder if I have to worry about alignment */
+  test->native_thread_id = malloc(sizeof(pthread_t));
+  if (test->native_thread_id) {
+    *(pthread_t *)(test->native_thread_id) = pthread_self();
+  }
+#else
+  test->native_thread_id = NULL;
+#endif
+  /* and now, call the routine we really want to run. at some point we
+     should bring those values onto the stack so we can free the
+     thread_launch_state_t I suppose. */
+  return (launch_state->start_routine)(launch_state->data_arg);
+}
 
 /* I would have used the NETPERF_THREAD_T abstraction, but that would
    make netlib.h dependent on netperf.h and I'm not sure I want to do
@@ -1589,6 +1620,7 @@ launch_thread(GThread **tid, void *(*start_routine)(void *), void *data)
 
 {
   int rc;
+  thread_launch_state_t *launch_state;
 
   NETPERF_THREAD_T temp_tid;
 
