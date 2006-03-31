@@ -78,8 +78,13 @@ extern  GenReport get_report_function(xmlNodePtr cmd);
 extern  const char * netperf_error_name(int rc);
 extern  char * npe_to_str(int npe_error);
 extern  int set_test_locality(test_t  *test,
-                              xmlChar *loc_type,
-                              xmlChar *loc_value);
+                              char *loc_type,
+                              char *loc_value);
+extern int set_thread_locality(void *thread_id,
+			       char *loc_type,
+			       char *loc_value,
+			       int debug,
+			       FILE *where);
 
 #ifdef HAVE_GETHRTIME
 extern void netperf_timestamp(hrtime_t *timestamp);
@@ -105,7 +110,6 @@ extern int write_to_control_connection(GIOChannel *channel,
 extern int32_t recv_control_message(int control_sock, xmlDocPtr *message);
 extern void report_server_error(server_t *server);
 extern int launch_thread(GThread **tid, void *(*start_routine)(void *), void *data);
-extern int set_thread_locality(test_t *test, char *loc_type, char *loc_value);
 extern void break_args_explicit(char *s, char *arg1, char *arg2);
 extern int parse_address_family(char family_string[]);
 extern int establish_listen(char *hostname, char *service, 
@@ -113,6 +117,7 @@ extern int establish_listen(char *hostname, char *service,
 
 extern int netperf_complete_filename(char *name, char *full, int fulllen);
 extern gboolean read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data);
+extern void *launch_pad(void *data);
 
 /* state machine data structure for process message */
 

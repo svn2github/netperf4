@@ -262,7 +262,7 @@ typedef enum {
 } test_state_t;
 
 
-typedef int       *(*TestFunc)(void *test_data);
+typedef void      *(*TestFunc)(void *test_data);
 typedef xmlNodePtr (*TestDecode)(xmlNodePtr statistics);
 typedef int        (*TestClear)(void *test_info);
 typedef xmlNodePtr (*TestStats)(void *test_data);
@@ -319,7 +319,7 @@ typedef struct test_instance {
 				   opaque thread id should be we will
 				   have to do some interesting
 				   backflips to deal with them */
-  void      *native_thread_id; /* a pointer to the "native" thread id
+  void   *native_thread_id_ptr; /* a pointer to the "native" thread id
 				  of the test thread, used for things
 				  like processor affinity since
 				  GThread doesn't do that sort of

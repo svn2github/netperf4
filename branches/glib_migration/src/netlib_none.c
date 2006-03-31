@@ -39,7 +39,18 @@ delete this exception statement from your version.
 #include "netperf.h"
 
 int
-set_thread_locality(test_t *test, char *loc_type, char *loc_value)
+set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug, FILE *where) {
+  NETPERF_DEBUG_ENTRY(debug,where);
+  if (debug) {
+    fprintf(where,
+	    "No call to set CPU affinity available, request ignored.\n");
+    fflush(where);
+  }
+  NETPERF_DEBUG_EXIT(debug,where);
+  return(NPE_SUCCESS);
+
+int
+set_test_locality(test_t *test, char *loc_type, char *loc_value)
 {
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);

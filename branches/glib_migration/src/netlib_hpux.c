@@ -49,9 +49,8 @@ delete this exception statement from your version.
 #include "netperf.h"
 #include "netlib.h"
 
-
 int
-set_thread_locality(test_t *test, char *loc_type, char *loc_value)
+set_thread_locality(void *threadid, char *loc_type, char *loc_value, int debug, FILE *where)
 {
   int   err = -1;
   int   value;
@@ -59,8 +58,11 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
   psetid_t       pset;
   pthread_ldom_t ldom;
   pthread_spu_t  spu;
+  pthread_t thread_id;
 
-  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  thread_id = *(pthread_t *)(threadid);
 
   value  = atoi(loc_value);
   if (strcmp(loc_type,"PROC") == 0) {
@@ -68,19 +70,19 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
              PTHREAD_BIND_FORCED_NP,
              &spu,
              value,
-             test->thread_id);
+             thread_id);
   }
   else if (strcmp(loc_type,"LDOM") == 0) {
     err  = pthread_ldom_bind_np(
              &ldom,
              value,
-             test->thread_id);
+             thread_id);
   }
   else if (strcmp(loc_type,"PSET") == 0) {
     err  = pthread_pset_bind_np(
              &pset,
              value,
-             test->thread_id);
+             thread_id);
   }
   if (err) {
     if (err == EINVAL) {
@@ -95,16 +97,34 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
     if (err == -1) {
       err_str = "Invalid locality type";
     }
-    fprintf(test->where,
+    fprintf(where,
             "%s: failed to set locality %s\n",
             __func__,
             err_str);
-    fflush(test->where);
+    fflush(where);
     err = NPE_SET_THREAD_LOCALITY_FAILED;
   }
   else {
     err = NPE_SUCCESS;
   }
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return(err);
+}
+
+int
+set_test_locality(test_t *test, char *loc_type, char *loc_value)
+{
+  int   err = -1;
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
+  err = set_thread_locality(test->native_thread_id_ptr,
+			    loc_type,
+			    loc_value,
+			    test->debug,
+			    test->where);
 
   NETPERF_DEBUG_EXIT(test->debug,test->where);
 

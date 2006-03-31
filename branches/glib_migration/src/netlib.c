@@ -1594,17 +1594,19 @@ launch_pad(void *data) {
   thread_launch_state_t *launch_state;
   test_t *test;
 
+  NETPERF_DEBUG_ENTRY(debug,where);
+
   launch_state = data;
   test = launch_state->data_arg;
 
 #ifdef G_THREADS_IMPL_POSIX
   /* hmm, I wonder if I have to worry about alignment */
-  test->native_thread_id = malloc(sizeof(pthread_t));
-  if (test->native_thread_id) {
-    *(pthread_t *)(test->native_thread_id) = pthread_self();
+  test->native_thread_id_ptr = malloc(sizeof(pthread_t));
+  if (test->native_thread_id_ptr) {
+    *(pthread_t *)(test->native_thread_id_ptr) = pthread_self();
   }
 #else
-  test->native_thread_id = NULL;
+  test->native_thread_id_ptr = NULL;
 #endif
   /* and now, call the routine we really want to run. at some point we
      should bring those values onto the stack so we can free the

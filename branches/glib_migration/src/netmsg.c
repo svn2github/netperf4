@@ -935,7 +935,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       if (launch_state) {
 	launch_state->data_arg = new_test;
 	launch_state->start_routine = new_test->test_func;
-	rc = launch_thread(&new_test->thread_id,new_test->test_func,new_test);
+	rc = launch_thread(&new_test->thread_id,launch_pad,launch_state);
 	if (debug) {
 	  fprintf(where,
 		  "test_message: launched thread %d for test\n",
@@ -973,7 +973,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
       loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
       if ((loc_type != NULL) && (loc_value != NULL)) {
-        rc = set_thread_locality(new_test, (char *)loc_type, (char *)loc_value);
+        rc = set_test_locality(new_test, (char *)loc_type, (char *)loc_value);
       }
     }
 
