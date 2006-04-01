@@ -48,6 +48,7 @@ set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug,
   }
   NETPERF_DEBUG_EXIT(debug,where);
   return(NPE_SUCCESS);
+}
 
 int
 set_test_locality(test_t *test, char *loc_type, char *loc_value)
