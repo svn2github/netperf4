@@ -92,7 +92,7 @@ char    nettest_dns_id[]="\
 #endif
 
 #ifdef HAVE_ARPA_NAMESER_COMPAT_H
-#include <arpa/nameser_compat.h>
+#include <arpa/onameser_compat.h>
 #endif
 
 #ifdef HAVE_RESOLV_H
@@ -123,6 +123,10 @@ char    nettest_dns_id[]="\
 #include "netlib.h"
 
 #include "nettest_dns.h"
+
+#ifndef C_NONE
+#define C_NONE ns_c_none
+#endif
 
 #ifdef WIN32
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
@@ -662,8 +666,12 @@ strtotype(char type_string[]){
   else if (!strcasecmp(type_string,"T_RT")) return(T_RT);
   else if (!strcasecmp(type_string,"T_NSAP")) return(T_NSAP);
   else if (!strcasecmp(type_string,"T_NSAP_PTR")) return(T_NSAP_PTR);
+#ifdef T_ATMA
   else if (!strcasecmp(type_string,"T_ATMA")) return(T_ATMA);
+#endif
+#ifdef T_NAPTR
   else if (!strcasecmp(type_string,"T_NAPTR")) return(T_NAPTR);
+#endif
 #ifdef T_A6
   else if (!strcasecmp(type_string,"T_A6")) return(T_A6);
 #endif
