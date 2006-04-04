@@ -71,6 +71,7 @@ typedef unsigned long long uint64_t;
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <glib/gprintf.h>
+
 #define NETPERF_MUTEX_T GMutex
 #define NETPERF_RWLOCK_T GStaticRWLock
 #define NETPERF_THREAD_T GThread *
@@ -90,10 +91,10 @@ typedef unsigned long long uint64_t;
 
 #include "netperf_hist.h"
 
-#ifdef WIN32
-#define NETPERF_DEBUG_LOG_DIR "c:\\temp\\"
-#define NETPERF_DEBUG_LOG_PREFIX  "netperf"
-#define NETPERF_DEBUG_LOG_SUFFIX  ".log"
+#define NETPERF_DEBUG_LOG_PREFIX "netperf_"
+#define NETPERF_DEBUG_LOG_SUFFIX "_log.txt"
+
+#ifdef G_OS_WIN32
 #define netperf_socklen_t socklen_t
 #define CLOSE_SOCKET(x) closesocket(x)
 #define strcasecmp(a,b) _stricmp(a,b)
@@ -101,9 +102,6 @@ typedef unsigned long long uint64_t;
 #define __func__ __FUNCTION__
 #define PATH_MAX MAXPATHLEN
 #else
-#define NETPERF_DEBUG_LOG_DIR "/tmp/"
-#define NETPERF_DEBUG_LOG_PREFIX  "netperf"
-#define NETPERF_DEBUG_LOG_SUFFIX  ".log"
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
 #define SOCKET int
@@ -148,14 +146,13 @@ typedef unsigned long long uint64_t;
 #define SET_TEST_DATA(test,ptr)           test->test_specific_data = ptr
 
 
-#ifdef WIN32
+#ifdef G_OS_WIN32
 #define CHECK_FOR_NOT_SOCKET (WSAGetLastError() == WSAENOTSOCK)
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
 #define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
 #define CHECK_FOR_SEND_ERROR(len) (len >= 0) || \
         (len == SOCKET_ERROR && WSAGetLastError() == WSAEINTR)
 #define GET_ERRNO WSAGetLastError()
-#define NETPERF_PATH_SEP "\\"
 #ifndef SHUT_WR
 #define SHUT_WR SD_SEND
 #endif
@@ -165,7 +162,6 @@ typedef unsigned long long uint64_t;
 #define CHECK_FOR_RECV_ERROR(len) (len < 0)
 #define CHECK_FOR_SEND_ERROR(len) (len >=0) || (errno == EINTR)
 #define GET_ERRNO errno
-#define NETPERF_PATH_SEP "/"
 #endif
 
 

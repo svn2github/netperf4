@@ -852,8 +852,9 @@ setup_listen_endpoint(char service[]) {
 	  /* switch-over to our own pid-specific logfile */
 	  snprintf(filename,
 		   PATH_MAX,
-		   "%s%s%d%s",
-		   NETPERF_DEBUG_LOG_DIR,
+		   "%s%c%s%d%s",
+		   g_get_tmp_dir(),
+		   G_DIR_SEPARATOR,
 		   NETPERF_DEBUG_LOG_PREFIX,
 		   getpid(),
 		   NETPERF_DEBUG_LOG_SUFFIX);
@@ -1054,8 +1055,9 @@ main(int argc, char **argv)
 	 stderr. this needs to be made a bit more clean one of these days */
       char debugfile[PATH_MAX];
       sprintf(debugfile,
-	      "%s%s_%d%s",
-	      NETPERF_DEBUG_LOG_DIR,
+	      "%s%c%s%d%s",
+	      g_get_tmp_dir(),
+	      G_DIR_SEPARATOR,
 	      NETPERF_DEBUG_LOG_PREFIX,
 	      getpid(),
 	      NETPERF_DEBUG_LOG_SUFFIX);

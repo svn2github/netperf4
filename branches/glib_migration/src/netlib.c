@@ -502,7 +502,7 @@ netperf_complete_filename(char *name, char *full, int fulllen) {
        work, we presume that the name given wasn't a full one, so we
        just slap the NETPERFDIR and path separator in front of the
        name and try again. */
-    NETPERF_SNPRINTF(path,PATH_MAX,"%s%s%s",NETPERFDIR,NETPERF_PATH_SEP,name);
+    NETPERF_SNPRINTF(path,PATH_MAX,"%s%s%s",NETPERFDIR,G_DIR_SEPARATOR_S,name);
     path[PATH_MAX] = '\0';
     if (0 == NETPERF_STAT(path,&buf)) {
       strncpy(full,path,fulllen);
@@ -1179,7 +1179,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
     strcpy(ld_library_path,temp);
     tokens = g_strsplit(ld_library_path,":",15);
     for (tok = 0; tokens[tok] != NULL; tok++) {
-      g_snprintf(full_path,PATH_MAX,"%s%s%s",tokens[tok],NETPERF_PATH_SEP,la);
+      g_snprintf(full_path,PATH_MAX,"%s%s%s",tokens[tok],G_DIR_SEPARATOR_S,la);
       if (g_stat(full_path,&buf) == 0) {
 	/* we have a winner, time to go */
 	break;
@@ -1252,7 +1252,7 @@ map_la_to_lib(xmlChar *la, char *lib) {
 	strcpy(lib,"dlnamefound");
       }
       strcpy(lib,libdir);
-      strcat(lib,NETPERF_PATH_SEP);
+      strcat(lib,G_DIR_SEPARATOR_S);
       strcat(lib,dlname);
     }
     else {
@@ -1360,7 +1360,9 @@ open_library(const gchar *library_name) {
     if (NULL == handle)
       handle = open_library_path(library_name,"Path", FALSE);
     if (NULL == handle)
-      handle = open_library_path(library_name,LIBDIR, TRUE);
+      handle = open_library_path(library_name,
+				 "." G_SEARCHPATH_SEPARATOR_S LIBDIR,
+				 TRUE);
   }
 
   if (debug) {

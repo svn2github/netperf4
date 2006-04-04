@@ -27,6 +27,11 @@ AC_C_CONST
 
 # likely as good a place as any to see about adding stuff to flags I
 # wonder if this needs to get any more sophisticated than this?
+# normally, these would come from the pkg-config stuff on our
+# dependencies, but since we won't always have our dependencies
+# compiled with the same compiler as we are using, taking the straight
+# --cflags from pkg-config can cause us trouble - in particular, gcc's
+# ever so helpful -pthread option.  sigh
 
 case $target in 
      *-*-linux*)
@@ -35,6 +40,8 @@ case $target in
      *-*-hpux*)
         CPPFLAGS="$CPPFLAGS -D_REENTRANT"
 	;;
+     *-*-aix*)
+        CPPFLAGS="$CPPFLAGS -D_THREAD_SAFE"
 esac
 
 # need to check if the compiler is gcc and if so add -pthread 
@@ -106,7 +113,7 @@ fi
 
 AC_CHECK_FUNCS(sendfile)
 
-AC_CHECK_FUNCS(mpctl processor_bind sched_setaffinity bind_to_cpu_id)
+AC_CHECK_FUNCS(bindprocessor bind_to_cpu_id mpctl processor_bind sched_setaffinity)
 
 # since we are going to depend on pkg-config for glib, might as well
 # use it for libxml2 as well
@@ -126,15 +133,26 @@ AC_ARG_WITH(glib,
 pkg_config_cflags=""
 pkg_config_libs_l=""
 pkg_config_libs_L=""
+pkg_config_other_cflags=""
+pkg_config_other_libs=""
 
     PKG_PROG_PKG_CONFIG()
 
     pkg_config_cflags=`$PKG_CONFIG --cflags-only-I \
 			libxml-2.0 glib-2.0 gmodule-2.0 gthread-2.0`
+    pkg_config_other_cflags=`$PKG_CONFIG --cflags-only-other \
+			libxml-2.0 glib-2.0 gmodule-2.0 gthread-2.0`
     pkg_config_libs_L=`$PKG_CONFIG  --libs-only-L \
 			libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0`
     pkg_config_libs_l=`$PKG_CONFIG  --libs-only-l \
 			libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0`
+    pkg_config_other_libs=`$PKG_CONFIG  --libs-only-other \
+			libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0`
+
+echo
+echo "OTHER CFLAGS" $pkg_config_other_cflags
+echo "OTHER LIBS" $pkg_config_other_libs
+echo
 
 # see if we should be enabling histogram support
 

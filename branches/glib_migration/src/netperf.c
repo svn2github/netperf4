@@ -289,9 +289,9 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
       if (0 == g_stat("default_config.xml",&buf)) {
 	fname = "default_config.xml";
       }
-      else if (0 == g_stat(NETPERFDIR NETPERF_PATH_SEP "default_config.xml",
+      else if (0 == g_stat(NETPERFDIR G_DIR_SEPARATOR_S "default_config.xml",
 			 &buf)) {
-	fname = NETPERFDIR NETPERF_PATH_SEP "default_config.xml";
+	fname = NETPERFDIR G_DIR_SEPARATOR_S "default_config.xml";
       }
       else {
 	fname = "missing config file";
@@ -301,9 +301,9 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
       if (0 == g_stat("default_commands.xml",&buf)) {
 	fname = "default_commands.xml";
       }
-      else if (0 == g_stat(NETPERFDIR NETPERF_PATH_SEP "default_commands.xml",
+      else if (0 == g_stat(NETPERFDIR G_DIR_SEPARATOR_S "default_commands.xml",
 			 &buf)) {
-	fname = NETPERFDIR NETPERF_PATH_SEP "default_commands.xml";
+	fname = NETPERFDIR G_DIR_SEPARATOR_S "default_commands.xml";
       }
       else {
 	fname = "missing commands file";

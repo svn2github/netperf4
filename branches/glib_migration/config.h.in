@@ -9,6 +9,9 @@
 /* Define to 1 if you have the <arpa/nameser.h> header file. */
 #undef HAVE_ARPA_NAMESER_H
 
+/* Define to 1 if you have the `bindprocessor' function. */
+#undef HAVE_BINDPROCESSOR
+
 /* Define to 1 if you have the `bind_to_cpu_id' function. */
 #undef HAVE_BIND_TO_CPU_ID
 
