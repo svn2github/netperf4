@@ -91,7 +91,9 @@ char    nettest_dns_id[]="\
 #include <arpa/nameser.h>
 #endif
 
-#ifdef HAVE_ARPA_NAMESER_COMPAT_H
+/* for some reason, AIX (5.3 at least) does not like having
+   nameser_compat.h included along with nameser.h raj 2006-04-04 */
+#if defined(HAVE_ARPA_NAMESER_COMPAT_H) && !defined(_AIX)
 #include <arpa/nameser_compat.h>
 #endif
 
