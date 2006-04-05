@@ -255,12 +255,12 @@ gboolean set_config_source(gchar *option_name, gchar *option_value, gpointer dat
 
 static GOptionEntry netperf_entries[] = 
   {
-    {"output",'o', 0, G_OPTION_ARG_CALLBACK, set_output_destination, "Specify where misc output should go", NULL},
-    {"input",'i',0, G_OPTION_ARG_CALLBACK, set_input_source, "Specify the command file", NULL},
-    {"config", 'c', 0, G_OPTION_ARG_CALLBACK, set_config_source, "Specify the configuration file", NULL},
-    {"debug", 'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, set_debug, "Set the level of debugging output", NULL},
-    {"version", 'V', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, show_version, "Display the netserver version and exit", NULL},
-    {"verbose", 'v', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, set_verbose, "Set verbosity level for output", NULL},
+    {"output",'o', 0, G_OPTION_ARG_CALLBACK, (void *)set_output_destination, "Specify where misc output should go", NULL},
+    {"input",'i',0, G_OPTION_ARG_CALLBACK, (void *)set_input_source, "Specify the command file", NULL},
+    {"config", 'c', 0, G_OPTION_ARG_CALLBACK, (void *)set_config_source, "Specify the configuration file", NULL},
+    {"debug", 'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, (void *)set_debug, "Set the level of debugging output", NULL},
+    {"version", 'V', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, (void *)show_version, "Display the netserver version and exit", NULL},
+    {"verbose", 'v', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, (void *)set_verbose, "Set verbosity level for output", NULL},
     {"brief", 'b', 0, G_OPTION_ARG_NONE, &want_brief, "Request brief output", NULL},
     {"quiet", 'q', 0, G_OPTION_ARG_NONE, &want_quiet, "Display no test banners", NULL},
     { NULL }
