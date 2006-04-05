@@ -130,6 +130,8 @@ char    nettest_id[]="\
 
 #include "nettest_bsd.h"
 
+#include "netconfidence.h"
+
 #ifdef WIN32
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
 #define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)

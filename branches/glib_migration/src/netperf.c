@@ -2104,12 +2104,24 @@ main(int argc, char **argv)
   GOptionContext *option_context;
   gboolean ret;
   GError *error=NULL;
+#ifdef G_OS_WIN32
+  WSADATA	wsa_data ;
+
+#endif
 
   program_name = argv[0];
 
   g_thread_init(NULL);
 
   where = stderr;
+
+#ifdef G_OS_WIN32
+  /* Initialize the winsock lib ( version 2.2 ) */
+  if ( WSAStartup(MAKEWORD(2,2), &wsa_data) == SOCKET_ERROR ){
+    g_fprintf(where,"WSAStartup() failed : %d\n", GetLastError()) ;
+    return 1 ;
+  }
+#endif
 
   option_context = g_option_context_new(" - netperf4 netperf options");
   g_option_context_add_main_entries(option_context,netperf_entries, NULL);

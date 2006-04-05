@@ -101,7 +101,8 @@ typedef unsigned long long uint64_t;
 #define getpid() ((int)GetCurrentProcessId())
 #define __func__ __FUNCTION__
 #define PATH_MAX MAXPATHLEN
-#define gettimeofday(a,b) g_get_current_time(a)
+#define gettimeofday(a,b) g_get_current_time((GTimeVal *)a)
+#define strdup(buffer) _strdup(buffer)
 #else
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
