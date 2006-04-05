@@ -1,6 +1,6 @@
-TARGETNAME=netperf
+TARGETNAME=netsysstats
 TARGETPATH=OBJ
-TARGETTYPE=PROGRAM
+TARGETTYPE=DYNLINK
 
 LINKLIBS= \
 	$(SDK_LIB_PATH)\kernel32.lib \
@@ -24,9 +24,6 @@ MSC_WARNING_LEVEL=/W3 /WX
 C_DEFINES=$(C_DEFINES) -D_CONSOLE_ -DNETPERFDIR="\"foo\"" -DLIBDIR="\"bar\"" -DHAVE_CONFIG_H -DSTDC_HEADERS
 
 SOURCES= \
-	..\netperf.c \
-	..\netlib.c \
-	..\netconfidence.c \
-	..\netlib_none.c \
-	..\netmsg.c
+	..\netsysstats_common.c \
+	..\netsysstats_none.c
 
