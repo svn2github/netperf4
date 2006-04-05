@@ -243,7 +243,7 @@ set_test_state(test_t *test, uint32_t new_state)
   }
 }
 
-void
+static void
 wait_to_die(test_t *test)
 {
   while (GET_TEST_STATE != TEST_DEAD) {
@@ -255,53 +255,6 @@ wait_to_die(test_t *test)
   }
 }
 
-#ifdef OFF
-/* the following lines are a template for any test
-   just copy the 37 lines for generic_test change
-   the procedure name and write you own TEST_SPECIFC_XXX
-   functions.  Have Fun   sgb 2005-10-26 */
-
-void
-generic_test(test_t *test)
-{
-  uint32_t state, new_state;
-  TEST_SPECIFIC_INITIALIZE(test);
-  state = GET_TEST_STATE;
-  while ((state != TEST_ERROR) &&
-         (state != TEST_DEAD )) {
-    switch(state) {
-    case TEST_PREINIT:
-      TEST_SPECIFIC_PREINIT(test);
-      new_state = TEST_INIT;
-      break;
-    case TEST_INIT:
-      new_state = CHECK_REQ_STATE;
-      if (new_state == TEST_IDLE) {
-        new_state = TEST_SPECIFIC_INIT(test);
-      }
-      break;
-    case TEST_IDLE:
-      new_state = CHECK_REQ_STATE;
-      if (new_state == TEST_IDLE) {
-        g_usleep(1000000);
-      }
-      break;
-    case TEST_MEASURE:
-      new_state = TEST_SPECIFIC_MEASURE(test);
-      break;
-    case TEST_LOADED:
-      new_state = TEST_SPECIFIC_LOAD(test);
-      break;
-    default:
-      break;
-    } /* end of switch */
-    set_test_state(test, new_state);
-    state = GET_TEST_STATE;
-  } /* end of while */
-  wait_to_die(test);
-}
- 
-#endif /* OFF end of generic_test example code  sgb  2005-10-26 */
 
 
 static void
@@ -479,7 +432,7 @@ set_dependent_data(test)
 }
 
 
-unsigned int
+static unsigned int
 convert(string,units)
      unsigned char *string;
      unsigned char *units;
