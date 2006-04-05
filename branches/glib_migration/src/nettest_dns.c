@@ -92,7 +92,7 @@ char    nettest_dns_id[]="\
 #endif
 
 #ifdef HAVE_ARPA_NAMESER_COMPAT_H
-#include <arpa/onameser_compat.h>
+#include <arpa/nameser_compat.h>
 #endif
 
 #ifdef HAVE_RESOLV_H

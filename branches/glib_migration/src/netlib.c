@@ -260,7 +260,7 @@ set_hist_attribute(xmlNodePtr hist, char *name, uint64_t *row)
   
   values[0] = 0;
   for (i = 0, j = 0; i < 10; i++) {
-    j += snprintf(&(values[j]), 256-j, ":%5lld", row[i]);
+    j += g_snprintf(&(values[j]), 256-j, ":%5lld", row[i]);
   }
   ap = xmlSetProp(hist, (xmlChar *)name, (xmlChar *)values);
   return(ap);
