@@ -11,6 +11,7 @@ send_tcp_stream_get_stats
 send_tcp_stream_decode_stats
 recv_tcp_stream
 send_tcp_stream
+recv_tcp_rr_clear_stats
 recv_tcp_rr_get_stats
 recv_tcp_rr_decode_stats
 send_tcp_rr_clear_stats
