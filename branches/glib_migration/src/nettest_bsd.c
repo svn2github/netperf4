@@ -150,12 +150,7 @@ char    nettest_id[]="\
 
 
 static void
-report_test_failure(test, function, err_code, err_string)
-  test_t *test;
-  char   *function;
-  int     err_code;
-  char   *err_string;
-{
+report_test_failure(test_t *test, char *function, int err_code, char * err_string) {
   if (test->debug) {
     fprintf(test->where,"%s: called report_test_failure:",function);
     fprintf(test->where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
@@ -2306,7 +2301,7 @@ recv_tcp_rr(test_t *test)
 } /* end of recv_tcp_rr */
 
 
-/* This routine implements the TCP request/responce test */
+/* This routine implements the TCP request/response test */
 /* (a.k.a. rr) for the sockets interface. It receives its */
 /* parameters via the xml node contained in the test structure */
 /* output to the standard output. */
@@ -2825,14 +2820,14 @@ update_results_and_confidence(tset_t *test_set)
   NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
 
     /* calculate confidence and summary result values */
-  confidence                    = get_confidence(rd->run_time,
-                                      &(test_set->confidence),
-                                      &(rd->ave_time),
-                                      &(temp));
-  rd->result_confidence         = get_confidence(rd->results,
-                                      &(test_set->confidence),
-                                      &(rd->result_measured_mean),
-                                      &(rd->result_interval));
+  confidence            = (test_set->get_confidence)(rd->run_time,
+						     &(test_set->confidence),
+						     &(rd->ave_time),
+						     &(temp));
+  rd->result_confidence = (test_set->get_confidence)(rd->results,
+						     &(test_set->confidence),
+						     &(rd->result_measured_mean),
+						     &(rd->result_interval));
   if (test_set->debug) {
     fprintf(test_set->where,
             "\tresults      conf = %.2f%%\tmean = %10f +/- %8f\n",
@@ -2840,7 +2835,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->result_measured_mean, rd->result_interval);
     fflush(test_set->where);
   }
-  rd->cpu_util_confidence       = get_confidence(rd->utilization,
+  rd->cpu_util_confidence       = (test_set->get_confidence)(rd->utilization,
                                       &(test_set->confidence),
                                       &(rd->cpu_util_measured_mean),
                                       &(rd->cpu_util_interval));
@@ -2851,7 +2846,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->cpu_util_measured_mean, rd->cpu_util_interval);
     fflush(test_set->where);
   }
-  rd->service_demand_confidence = get_confidence(rd->servdemand,
+  rd->service_demand_confidence = (test_set->get_confidence)(rd->servdemand,
                                       &(test_set->confidence),
                                       &(rd->service_demand_measured_mean),
                                       &(rd->service_demand_interval));

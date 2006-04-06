@@ -1,6 +1,7 @@
 Netperf4 presently compiles under Windows - that is one can get a
 cleanly compiled netperf and netserver binary.  The DLLs are still a
-work in progress.
+work in progress.  This work is being done in the Windows DDK,
+specifically version 3790.1830.
 
 There are a number of dependencies that have to be satisfied:
 

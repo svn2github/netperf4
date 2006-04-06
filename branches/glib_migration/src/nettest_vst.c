@@ -2755,34 +2755,37 @@ update_results_and_confidence(tset_t *test_set)
   NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
 
   /* calculate confidence and summary result values */
-  confidence                    = get_confidence(rd->xmit_results,
-                                      &(test_set->confidence),
-                                      &(rd->xmit_measured_mean),
-                                      &(rd->xmit_interval));
+  confidence    = (test_set->get_confidence)(rd->xmit_results,
+					     &(test_set->confidence),
+					     &(rd->xmit_measured_mean),
+					     &(rd->xmit_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\txmit_results conf = %.2f%%\tmean = %10f +/- %8f\n",
             100.0 * confidence, rd->xmit_measured_mean, rd->xmit_interval);
     fflush(test_set->where);
   }
-  confidence                    = get_confidence(rd->recv_results,
-                                      &(test_set->confidence),
-                                      &(rd->recv_measured_mean),
-                                      &(rd->recv_interval));
+
+  confidence     = (test_set->get_confidence)(rd->recv_results,
+					      &(test_set->confidence),
+					      &(rd->recv_measured_mean),
+					      &(rd->recv_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\trecv_results conf = %.2f%%\tmean = %10f +/- %8f\n",
             100.0 * confidence, rd->recv_measured_mean, rd->recv_interval);
     fflush(test_set->where);
   }
-  confidence                    = get_confidence(rd->run_time,
-                                      &(test_set->confidence),
-                                      &(rd->ave_time),
-                                      &(temp));
-  rd->result_confidence         = get_confidence(rd->results,
-                                      &(test_set->confidence),
-                                      &(rd->result_measured_mean),
-                                      &(rd->result_interval));
+
+  confidence      = (test_set->get_confidence)(rd->run_time,
+					       &(test_set->confidence),
+					       &(rd->ave_time),
+					       &(temp));
+
+  rd->result_confidence  = (test_set->get_confidence)(rd->results,
+						      &(test_set->confidence),
+						      &(rd->result_measured_mean),
+						      &(rd->result_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\tresults      conf = %.2f%%\tmean = %10f +/- %8f\n",
@@ -2790,7 +2793,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->result_measured_mean, rd->result_interval);
     fflush(test_set->where);
   }
-  rd->cpu_util_confidence       = get_confidence(rd->utilization,
+  rd->cpu_util_confidence       = (test_set->get_confidence)(rd->utilization,
                                       &(test_set->confidence),
                                       &(rd->cpu_util_measured_mean),
                                       &(rd->cpu_util_interval));
@@ -2801,7 +2804,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->cpu_util_measured_mean, rd->cpu_util_interval);
     fflush(test_set->where);
   }
-  rd->service_demand_confidence = get_confidence(rd->servdemand,
+  rd->service_demand_confidence = (test_set->get_confidence)(rd->servdemand,
                                       &(test_set->confidence),
                                       &(rd->service_demand_measured_mean),
                                       &(rd->service_demand_interval));

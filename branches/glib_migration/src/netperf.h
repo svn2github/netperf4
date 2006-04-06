@@ -264,6 +264,10 @@ typedef void      *(*TestFunc)(void *test_data);
 typedef xmlNodePtr (*TestDecode)(xmlNodePtr statistics);
 typedef int        (*TestClear)(void *test_info);
 typedef xmlNodePtr (*TestStats)(void *test_data);
+/* a kludge until we restructure to have the get_confidence routine in
+   a utility dynamic library that netperf, netserver and test libs can
+   link against. */
+typedef double     (*GetConfidence)();
 
 #define NETPERF_MAX_TEST_FUNCTION_NAME 64
 #define NETPERF_MAX_TEST_LIBRARY_NAME  PATH_MAX
@@ -350,7 +354,7 @@ typedef struct test_instance {
                                   is called by netperf to decode, accumulate,
                                   and report statistics nodes returned by tests
                                   from this library. */
-  
+
   xmlNodePtr received_stats;   /* a node to which all test_stats received
                                   by netperf from this test are appended as
                                   children */
@@ -423,6 +427,14 @@ typedef struct test_set_instance {
 
   struct test_set_instance *next;  /* pointer to the next test set instance
                                       in the hash */
+
+  GetConfidence  get_confidence;   /* a temporary kludge to allow the
+				      formatters in the test libraries
+				      to access the get_confidence
+				      routine in the main executable.
+				      At least until we can create a
+				      "utility" library for everyone
+				      to link against. */
 
   confidence_t   confidence;       /* confidence parameters structure */
 

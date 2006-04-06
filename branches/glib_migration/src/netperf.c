@@ -1642,6 +1642,7 @@ create_test_set(xmlNodePtr cmd, uint32_t junk)
     test_set->id           =  setid;
     test_set->tests_in_set = xmlGetProp(cmd,(const xmlChar *)"tests_in_set");
     tests = (char *)(test_set->tests_in_set);
+    test_set->get_confidence = (void *)get_confidence;
   } else {
     /* test set could not be allocated  report error */
     rc = NPE_MALLOC_FAILED5;
