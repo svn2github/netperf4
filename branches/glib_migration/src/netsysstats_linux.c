@@ -145,7 +145,7 @@ sys_cpu_util_init(test_t *test)
 
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
-		      struct timeval *time,
+		      struct timeval *timestamp,
 		      test_t *test)
 {
 
@@ -154,14 +154,18 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   char cpunam[64];
   uint64_t nicetime;
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
+  double elapsed;                   /* well, it isn't really "elapsed" */
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
+  gettimeofday(timestamp,NULL);
+  elapsed = (double)timestamp->tv_sec + 
+    ((double)timestamp->tv_usec / (double)1000000);
   if (test->debug) {
     fprintf(test->where,
 	    "__func__ res %p timeptr %p test %p tsd %p\n",
 	    res,
-	    time,
+	    timestamp,
 	    test,
 	    tsd);
     fflush(test->where);
@@ -185,11 +189,20 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 		     &nicetime,
 		     &(res[i].kernel),
 		     &(res[i].idle));
+    res[i].calibrate = (uint64_t)(elapsed * (double)sysconf(_SC_CLK_TCK));
     res[i].user += nicetime;
-    res[i].other = 0;
     res[i].interrupt = 0;
+    res[i].other     = res[i].calibrate;
+    res[i].other    -= res[i].idle;
+    res[i].other    -= res[i].user;
+    res[i].other    -= res[i].kernel;
+    res[i].other    -= res[i].interrupt;
 
-    if(test->debug) {
+    if (test->debug) {
+      fprintf(test->where,
+	      "\tcalibrate[%d] = 0x%"PRIx64" ",
+	      i,
+	      res[i].calibrate);
       fprintf(test->where,
 	      "\tidle[%d] = 0x%"PRIx64" ",
 	      i,

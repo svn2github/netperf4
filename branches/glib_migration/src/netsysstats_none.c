@@ -51,13 +51,41 @@ sys_cpu_util_init(test_t *test)
   return NPE_SUCCESS;
 }
 
+/* slightly kludgy to get the CPU util to come-out as 100% */
+static uint64_t user,kernel,other,interrupt,idle = 0;
+
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
-		      struct timeval *time,
+		      struct timeval *timestamp,
 		      test_t *test)
 {
+  int i;
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
+
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
+  gettimeofday(timestamp,NULL);
+
+  /* this should result in the CPU util being forever reported as
+     100% */
+
+  user += 10000;
+  kernel += 10000;
+  interrupt += 10000;
+  idle += 1;
+
+  for (i = 0; i < tsd->num_cpus; i++) {
+    res[i].user = user;
+    res[i].kernel = kernel;
+    res[i].interrupt = interrupt;
+    res[i].idle = idle;
+    res[i].calibrate = res[i].user +
+      res[i].kernel +
+      res[i].interrupt +
+      res[i].idle;
+    res[i].other = 0;
+  }
 
   NETPERF_DEBUG_EXIT(test->debug, test->where);
 

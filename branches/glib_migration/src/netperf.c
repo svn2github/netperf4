@@ -939,7 +939,7 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
       /* wait for test to initialize */
       while (test->state == TEST_PREINIT) {
         NETPERF_MUTEX_UNLOCK(h->hash_lock);
-        if (debug) {
+        if (debug > 1) {
           fprintf(where,
                   "resolve_dependency: waiting on test %s thread %d\n",
                   (char *)id,
