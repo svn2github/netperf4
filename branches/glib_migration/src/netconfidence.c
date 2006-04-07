@@ -249,9 +249,9 @@ get_confidence(values, conf_globals, avg, intvl)
 {
   double mean;
   double sigma;
-  double interval;
+  double interval = -0.0;
   int    count = conf_globals->count;
-  double percent;
+  double percent = -0.0;
 
   /* _                          */
   /* X +/- t[a/2] * (s/sqrt(n)) */
