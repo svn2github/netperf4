@@ -6,13 +6,13 @@
 <!-- test to get cpu utilization -->
   <test tid="t0"
     test_name = "sys_stats"
-    library   = "netsysstats.la" >
+    library   = "netsysstats" >
   </test>
 <!-- test to do raw sequential disk io i
      you must place a valid raw disk file in file_name  -->
   <test tid="t1"
     test_name = "raw_seq_disk_io"
-    library   = "disktest.la" >
+    library   = "disktest" >
     <disk_args
       file_name = "/dev/rdsk/junk"  />
   </test>

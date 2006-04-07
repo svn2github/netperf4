@@ -18,7 +18,7 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s0" 
-    library="disktest.la"
+    library="disktest"
     function="report_disk_test_results"
     report_flags="PRINT_ALL"
   />

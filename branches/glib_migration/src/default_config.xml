@@ -5,11 +5,11 @@
 <netserver nid="n1" >
   <test tid="t0"
     test_name = "sys_stats"
-    library   = "netsysstats.la" >
+    library   = "netsysstats" >
   </test>
   <test tid="t1"
     test_name = "send_tcp_stream"
-    library   = "nettest_bsd.la" >
+    library   = "nettest_bsd" >
     <dependson testid="t2" netserverid="n1" />
     <socket_args
       send_buffer_size = "128"
@@ -18,20 +18,20 @@
   </test>
   <test tid="t2"
     test_name = "recv_tcp_stream"
-    library = "nettest_bsd.la" >
+    library = "nettest_bsd" >
     <socket_args
       send_buffer_size = "128"
       recv_buffer_size = "128" />
   </test>
   <test tid="t3"
     test_name = "send_tcp_rr"
-    library   = "nettest_bsd.la" >
+    library   = "nettest_bsd" >
     <dependson testid="t4" netserverid="n1" />
     <socket_args />
   </test>
   <test tid="t4"
     test_name = "recv_tcp_rr"
-    library = "nettest_bsd.la" >
+    library = "nettest_bsd" >
     <socket_args />
   </test>
 </netserver>
