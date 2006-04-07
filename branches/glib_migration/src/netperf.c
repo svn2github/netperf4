@@ -986,7 +986,7 @@ static void *
 initialize_test(void *data)
 {
   test_t     *test            = data;
-  xmlChar    *id;
+  xmlChar    *id              = NULL;
   xmlNodePtr  dep_data        = NULL;
   int         rc              = NPE_SUCCESS;
   xmlNodePtr  cur             = NULL;
@@ -1015,9 +1015,14 @@ initialize_test(void *data)
 
   if (rc == NPE_SUCCESS) {
     if (debug) {
+      /* there may not have been an actual dependency, which means
+	 that 'id' (which used to be uninitialized, tsk, tsk, tsk) may
+	 be NULL */
       fprintf(where,
-              "%s: %s dependencey on %s successfully resolved\n",
-              __func__, test->id, id);
+              "%s: %s's dependency on %s successfully resolved\n",
+              __func__,
+	      test->id,
+	      (id == NULL ? "none" : (char *)id));
       fflush(where);
     }
     /* any dependency has been successfully resolved
