@@ -23956,7 +23956,7 @@ fi
 ac_cv_lib_perfstat=ac_cv_lib_perfstat_main
 
 		     enable_cpuutil="perfstat - auto"
-		     NETSYS_SOURCE="perfstat"
+		     NETSYS_SOURCE="aix"
 		     ;;
 		   *-*-solaris2.10 | *-*-solaris2.11)
 		     use_cpuutil=true

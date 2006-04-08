@@ -560,7 +560,7 @@ case "$enable_cpuutil" in
 		     [Use AIX's perfstat interface to measure CPU util.])
 		     AC_HAVE_LIBRARY(perfstat)
 		     enable_cpuutil="perfstat - auto"
-		     NETSYS_SOURCE="perfstat"
+		     NETSYS_SOURCE="aix"
 		     ;;
 		   *-*-solaris2.10 | *-*-solaris2.11)
 		     use_cpuutil=true
