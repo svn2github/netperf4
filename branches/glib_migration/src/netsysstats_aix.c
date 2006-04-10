@@ -97,6 +97,11 @@ sys_cpu_util_init(test_t *test)
   return(err);
 }
 
+/* this file is the one we use if we aren't on AIX 5.3, which means we
+   need to limit ourselves to using the idle, sys and user fields and
+   cannot use the added-in-5.3 pidle, psys and puser fields.  those
+   are used in the netsysstats_aix53.c file */
+
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
                       struct timeval *timestamp,
@@ -127,13 +132,13 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 
     for (i = 0; i < num_cpus; i++) {
       /* our "calibration" value will be our "elapsed" time multiplied
-	 by the processorHZ. */
+	 by the value of _SC_CLK_TCK. */
       res[i].calibrate = (uint64_t)(elapsed * 
-				    (double) psp->processorHZ);
-      res[i].idle      = per_cpu_data[i].pidle;
+				    (double) sysconf(_SC_CLK_TCK));
+      res[i].idle      = per_cpu_data[i].idle;
 #ifndef EXTRA_COUNTERS_MISSING
-      res[i].user      = per_cpu_data[i].puser;
-      res[i].kernel    = per_cpu_data[i].psys;
+      res[i].user      = per_cpu_data[i].user;
+      res[i].kernel    = per_cpu_data[i].sys;
       res[i].interrupt = 0;
 
       res[i].other     = res[i].calibrate;
@@ -144,6 +149,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 #endif
       
       if(test->debug) {
+	fprintf(test->where, "\tcalibrate[%d] = %"PRIx64, i, res[i].calibrate);
 	fprintf(test->where, "\tidle[%d] = %"PRIx64, i, res[i].idle);
 #ifndef EXTRA_COUNTERS_MISSING
 	fprintf(test->where, "\tuser[%d] = %"PRIx64, i, res[i].user);

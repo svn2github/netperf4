@@ -171,6 +171,29 @@ update_sys_stats(test_t *test)
 
     delta[i].other = delta[i].calibrate - subtotal;
 
+    if(test->debug) {
+      fprintf(test->where, 
+	      "%s delta calibrate[%d] = %"PRIx64,
+	      __func__, i, delta[i].calibrate);
+      fprintf(test->where, 
+	      "\n\tdelta idle[%d] = %"PRIx64,
+	      i, delta[i].idle);
+      fprintf(test->where,
+	      "\n\tdelta user[%d] = %"PRIx64,
+	      i, delta[i].user);
+      fprintf(test->where,
+	      "\n\tdelta kern[%d] = %"PRIx64,
+	      i, delta[i].kernel);
+      fprintf(test->where,
+	      "\n\tdelta intr[%d] = %"PRIx64,
+	      i, delta[i].interrupt);
+      fprintf(test->where,
+	      "\n\tdelta othr[%d] = %"PRIx64,
+	      i, delta[i].other);
+      fprintf(test->where, "\n");
+      fflush(test->where);
+    }
+
     if (subtotal > delta[i].calibrate) {
       /* hmm, what is the right thing to do here? for now simply
 	 zero-out other. in the future consider emitting a
@@ -195,6 +218,7 @@ update_sys_stats(test_t *test)
     sys_total->interrupt += delta[i].interrupt;
     sys_total->other     += delta[i].other;
   }
+  NETPERF_DEBUG_EXIT(test->debug,test->where);
 }
   
 static void
@@ -582,12 +606,14 @@ sys_stats(test_t *test)
 	
 	if (CHECK_REQ_STATE == TEST_MEASURE) {
 	  g_usleep(1000000);
-	} else if (CHECK_REQ_STATE == TEST_LOADED) {
+	} 
+	else if (CHECK_REQ_STATE == TEST_LOADED) {
 	  /* get_cpu_time_counters sets current timestamp */
 	  get_cpu_time_counters(tsd->ending_cpu_counters,&(tsd->curr_time),test);
 	  update_sys_stats(test);
 	  SET_TEST_STATE(TEST_LOADED);
-	} else {
+	} 
+	else {
 	  report_test_failure(test,
 			      "sys_stats",
 			      SYS_STATS_REQUESTED_STATE_INVALID,
