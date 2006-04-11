@@ -36,6 +36,14 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#ifdef HAVE_PTHREAD_H
+#include <pthread.h>
+#endif
+
+#ifdef _AIX
+#include <sys/thread.h>
+#endif
+
 #ifdef HAVE_STDIO_H
 #include <stdio.h>
 #endif
@@ -1603,10 +1611,27 @@ launch_pad(void *data) {
 
 #ifdef G_THREADS_IMPL_POSIX
   /* hmm, I wonder if I have to worry about alignment */
+#ifdef _AIX
+  /* bless its heart, AIX wants its CPU binding routine to be given a
+     kernel thread ID and not a pthread id.  isn't that special. */
+  test->native_thread_id_ptr = malloc(sizeof(tid_t));
+  if (test->native_thread_id_ptr) {
+    *(tid_t *)(test->native_thread_id_ptr) = thread_self();
+  }
+  if (debug) {
+    fprintf(where,"%s my thread id is %d\n",__func__,thread_self());
+    fflush(where);
+  }
+#else
   test->native_thread_id_ptr = malloc(sizeof(pthread_t));
   if (test->native_thread_id_ptr) {
     *(pthread_t *)(test->native_thread_id_ptr) = pthread_self();
   }
+  if (debug) {
+    fprintf(where,"%s my thread id is %d\n",__func__,pthread_self());
+    fflush(where);
+  }
+#endif
 #else
   test->native_thread_id_ptr = NULL;
 #endif
@@ -1628,7 +1653,13 @@ launch_thread(GThread **tid, void *(*start_routine)(void *), void *data)
 
   NETPERF_THREAD_T temp_tid;
 
-  temp_tid = g_thread_create(start_routine,data,FALSE,NULL);
+  temp_tid = g_thread_create_full(start_routine,   /* what to run */	
+                                  data, /* what it should use */
+                                  0,    /* default stack size */
+                                  FALSE, /* not joinable */
+                                  TRUE,  /* bound - make it system scope */
+                                  G_THREAD_PRIORITY_NORMAL,
+                                  NULL);
 
   if (NULL != temp_tid) {
     rc = 0;
