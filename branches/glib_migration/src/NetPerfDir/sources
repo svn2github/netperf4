@@ -27,6 +27,6 @@ SOURCES= \
 	..\netperf.c \
 	..\netlib.c \
 	..\netconfidence.c \
-	..\netlib_none.c \
+	..\netlib_windows.c \
 	..\netmsg.c
 

@@ -24,7 +24,7 @@ MSC_WARNING_LEVEL=/W3 /WX
 C_DEFINES=$(C_DEFINES) -D_CONSOLE_ -DNETPERFDIR="\"foo\"" -DLIBDIR="\"bar\"" -DHAVE_CONFIG_H  -DHAVE_GETADDRINFO -DHAVE_GETNAMEINFO -DSTDC_HEADERS
 
 SOURCES= \
-        ..\netlib_none.c \
+        ..\netlib_windows.c \
 	..\netlib.c \
 	..\netconfidence.c \
 	..\netmsg.c \

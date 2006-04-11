@@ -36,22 +36,21 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
-#include <sys/processor.h>
-#include <sys/thread.h>
+#include <windows.h>
 
 #include "netperf.h"
 
 int
 set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug, FILE *where) {
   int err, value;
-  Handle thread_id;
+  HANDLE thread_id;
   ULONG_PTR AffinityMask;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
   err = NPE_SUCCESS;
   if (threadid) {
-    thread_id = *(Handle *)(threadid);
+    thread_id = *(HANDLE *)(threadid);
     value = atoi(loc_value);
     
     AffinityMask = (ULONG_PTR)1 << value;
@@ -107,9 +106,9 @@ set_test_locality(test_t *test, char *loc_type, char *loc_value)
 int 
 set_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
 
-  Handle my_id;
+  HANDLE my_id;
 
-  /* we can use GetCurrentThread() here because the Handle is going to
+  /* we can use GetCurrentThread() here because the HANDLE is going to
      be references only in the context of the current thread */
   my_id = GetCurrentThread();
 
