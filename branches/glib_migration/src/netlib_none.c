@@ -67,3 +67,13 @@ set_test_locality(test_t *test, char *loc_type, char *loc_value)
   return(NPE_SUCCESS);
 }
 
+int 
+set_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
+  int my_id = 0;
+
+  return(set_thread_locality((void *)&my_id,
+			     loc_type,
+			     loc_value,
+			     debug,
+			     where));
+}

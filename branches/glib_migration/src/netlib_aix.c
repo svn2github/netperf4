@@ -86,3 +86,24 @@ set_test_locality(test_t *test, char *loc_type, char *loc_value)
   return(err);
 }
 
+int 
+set_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
+  tid_t my_id;
+
+  my_id = thread_self();
+
+  return(set_thread_locality((void *)&my_id,
+			     loc_type,
+			     loc_value,
+			     debug,
+			     where));
+}
+
+int
+clear_own_locality(char *loc_type, int debug, FILE *where){
+  int err;
+
+  err = bindprocessor(BINDTHREAD, thread_self(), PROCESSOR_CLASS_ANY);
+
+  return(NPE_SUCCESS);
+}

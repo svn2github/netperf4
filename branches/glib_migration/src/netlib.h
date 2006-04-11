@@ -85,6 +85,13 @@ extern int set_thread_locality(void *thread_id,
 			       char *loc_value,
 			       int debug,
 			       FILE *where);
+extern  int set_own_locality(char *loc_type,
+			     char *loc_value,
+			     int debug,
+			     FILE *where);
+extern int clear_own_locality(char *loc_type,
+			      int debug,
+			      FILE *where);
 
 #ifdef HAVE_GETHRTIME
 extern void netperf_timestamp(hrtime_t *timestamp);

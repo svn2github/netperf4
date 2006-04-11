@@ -869,11 +869,12 @@ int
 test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 {
   int        rc = NPE_SUCCESS;
+  int        rc2;
   test_t    *new_test;
   xmlNodePtr test_node;
   xmlChar   *testid;
-  xmlChar   *loc_type;
-  xmlChar   *loc_value;
+  xmlChar   *loc_type = NULL;
+  xmlChar   *loc_value = NULL;
   thread_launch_state_t *launch_state;
 
   NETPERF_DEBUG_ENTRY(debug,where);
@@ -935,6 +936,24 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       if (launch_state) {
 	launch_state->data_arg = new_test;
 	launch_state->start_routine = new_test->test_func;
+
+	/* before we launch the thread, we should bind ourselves to
+	   the cpu to which the thread will be bound (if at all) to
+	   make sure that stuff like stack allocation happens on the
+	   desired CPU. raj 2006-04-11 */
+
+	loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
+	loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
+	if ((loc_type != NULL) && (loc_value != NULL)) {
+	  /* we use rc2 because we aren't going to fail the run if the
+	     affinity didn't work, but eventually we should emit some
+	     sort of warning */
+	  rc2 = set_own_locality((char *)loc_type,
+				 (char *)loc_value,
+				 debug,
+				 where);
+	}
+
 	rc = launch_thread(&new_test->thread_id,launch_pad,launch_state);
 	if (debug) {
 	  fprintf(where,
@@ -942,6 +961,8 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 		  new_test->thread_id);
 	  fflush(where);
 	}
+	/* having launched the test thread, we really aught to unbind
+	   ourselves from that CPU. at the moment, we do not do that */
       }
       else {
 	rc = NPE_MALLOC_FAILED2;
@@ -970,10 +991,28 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 
     /* now we can set test thread locality */
     if (rc == NPE_SUCCESS) {
-      loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
-      loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
+      /* we will have already extracted loc_type and loc_value if they
+	 exist and there is no possibility of them having spontaneously
+	 appeared in the last N lines of code, so we don't need the
+	 xmlGetProp calls here :)  raj 2006-04-11 */
       if ((loc_type != NULL) && (loc_value != NULL)) {
-        rc = set_test_locality(new_test, (char *)loc_type, (char *)loc_value);
+	/* we use rc2 because we aren't going to fail the run if the
+	   affinity didn't work, but eventually we should emit some
+	   sort of warning */
+        rc2 = set_test_locality(new_test, (char *)loc_type, (char *)loc_value);
+	rc2 = clear_own_locality((char *)loc_type,debug,where);
+      }
+      /* however, at this point we need to be sure to free loc_type
+	 and/or loc_value. nulling may be a bit over the top, but
+	 might as well, this isn't supposed to be that performance
+	 critical */
+      if (NULL != loc_type)  {
+	free(loc_type);
+	loc_type = NULL;
+      }
+      if (NULL != loc_value) {
+	free(loc_value);
+	loc_value = NULL;
       }
     }
 

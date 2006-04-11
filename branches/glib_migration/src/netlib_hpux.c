@@ -131,3 +131,51 @@ set_test_locality(test_t *test, char *loc_type, char *loc_value)
   return(err);
 }
 
+int 
+set_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
+  pthread_t my_id;
+
+  my_id = pthread_self();
+
+  return(set_thread_locality((void *)&my_id,
+			     loc_type,
+			     loc_value,
+			     debug,
+			     where));
+}
+
+int
+clear_own_locality(char *loc_type, int debug, FILE *where){
+
+  int err = -1;
+  psetid_t       pset;
+  pthread_ldom_t ldom;
+  pthread_spu_t  spu;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  if (strcmp(loc_type,"PROC") == 0) {
+    err  = pthread_processor_bind_np(
+             PTHREAD_BIND_FORCED_NP,
+             &spu,
+             PTHREAD_SPUFLOAT_NP,
+             pthread_self());
+  }
+  else if (strcmp(loc_type,"LDOM") == 0) {
+    err  = pthread_ldom_bind_np(
+             &ldom,
+             PTHREAD_LDOMFLOAT_NP,
+             pthread_self());
+  }
+  else if (strcmp(loc_type,"PSET") == 0) {
+    /* well, it seems as there is no "FLOAT" pset identifier, which
+       means we could only go back to where we were before, assuming
+       of course, we actually knew where that happened to be. at the
+       moment, we have no clue, so we will do nothing. raj
+       2006-04-11 */
+
+  }
+
+  return(NPE_SUCCESS);
+
+}

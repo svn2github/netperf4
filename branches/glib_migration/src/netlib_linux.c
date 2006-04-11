@@ -128,6 +128,64 @@ set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug,
   NETPERF_DEBUG_EXIT(debug,where);
   return(err);
 }
+int 
+clear_own_locality(char *loc_type, int debug, FILE *where) {
+  cpu_set_t      mask;
+  int i;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  for(i = 0; i < CPU_SETSIZE; i++) {
+    CPU_SET(i,&mask);
+  }
+
+  i = sched_setaffinity(pthread_self,
+			sizeof(mask),
+			&mask);
+  /* yes, we really should do some error checking here */
+  return(NPE_SUCCESS);
+
+}
+#else
+int
+set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug, FILE *where) {
+  NETPERF_DEBUG_ENTRY(debug,where);
+  if (debug) {
+    fprintf(where,
+	    "No call to set CPU affinity available, request ignored.\n");
+    fflush(where);
+  }
+  NETPERF_DEBUG_EXIT(debug,where);
+  return(NPE_SUCCESS);
+}
+int 
+clear_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
+  pthread_t my_id;
+  NETPERF_DEBUG_ENTRY(debug,where);
+  if (debug) {
+    fprintf(where,
+	    "No call to set CPU affinity available, request ignored.\n");
+    fflush(where);
+  }
+  return(NPE_SUCCESS);
+}
+
+#endif
+
+int 
+set_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
+  pthread_t my_id;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  my_id = pthread_self();
+
+  return(set_thread_locality((void *)&my_id,
+			     loc_type,
+			     loc_value,
+			     debug,
+			     where));
+}
 
 int
 set_test_locality(test_t *test, char *loc_type, char *loc_value)
@@ -145,29 +203,5 @@ set_test_locality(test_t *test, char *loc_type, char *loc_value)
   NETPERF_DEBUG_EXIT(test->debug,test->where);
   return(ret);
 }
-#else
-int
-set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug, FILE *where) {
-  NETPERF_DEBUG_ENTRY(debug,where);
-  if (debug) {
-    fprintf(where,
-	    "No call to set CPU affinity available, request ignored.\n");
-    fflush(where);
-  }
-  NETPERF_DEBUG_EXIT(debug,where);
-  return(NPE_SUCCESS);
-}
 
-int
-set_test_locality(test_t *test, char *loc_type, char *loc_value)
-{
-  NETPERF_DEBUG_ENTRY(test->debug,test->where);
-  if (test->debug) {
-    fprintf(test->where,
-	    "No call to set CPU affinity available, request ignored.\n");
-    fflush(test->where);
-  }
-  NETPERF_DEBUG_EXIT(test->debug,test->where);
-  return(NPE_SUCCESS);
-}
-#endif
+
