@@ -143,6 +143,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   int i;
   DWORD status;
   DWORD returnLength;
+  double elapsed;
 
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
   win_perf_stat_t *psd = tsd->psd;
@@ -150,7 +151,8 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   gettimeofday(timestamp,NULL);
-
+  elapsed = (double)timestamp->tv_sec + ((double)timestamp->tv_usec /
+                                         (double)1000000);
   /* this should result in the CPU util being forever reported as
      100% */
 
@@ -204,12 +206,23 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     psd->counters[i].KernelTime.QuadPart -= 
       psd->counters[i].InterruptTime.QuadPart;
 
-    // Windows - or rather the DDK compiler - will not let us cast a
-    // LONG_INTEGER into a double, so we have to do this the "long
-    // way
+#ifdef integermath
     res[i].calibrate = (uint64_t)timestamp->tv_sec * 
                                   (uint64_t)psd->TickHz.QuadPart;
+    if (test->debug) {
+      fprintf(test->where,
+              "first calibrate[%i] is 0x%"PRIx64"\n",
+              i, res[i].calibrate);
+    }
     res[i].calibrate += ((uint64_t)timestamp->tv_usec * (uint64_t)psd->TickHz.QuadPart) / 1000000;
+    if (test->debug) {
+      fprintf(test->where,
+              "second calibrate[%i] is 0x%"PRIx64"\n",
+              i, res[i].calibrate);
+    }
+#else
+    res[i].calibrate = (uint64_t)(elapsed * (double)psd->TickHz.QuadPart);
+#endif
     res[i].user      = psd->counters[i].UserTime.QuadPart;
     res[i].kernel    = psd->counters[i].KernelTime.QuadPart;
     res[i].interrupt = psd->counters[i].InterruptTime.QuadPart;
@@ -222,7 +235,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 
     if (test->debug) {
       fprintf(test->where,
-	      "\tTickHz 0x%x ",
+	      "\tTickHz 0x%"PRIx64" ",
               psd->TickHz.QuadPart);
       fprintf(test->where,
 	      "\tcalibrate[%d] = 0x%"PRIx64" ",
