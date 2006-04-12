@@ -220,6 +220,32 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 				       res[i].user +
 				       res[i].idle);
 
+    if (test->debug) {
+      fprintf(test->where,
+	      "\tTickHz 0x%x ",
+              psd->TickHz.QuadPart);
+      fprintf(test->where,
+	      "\tcalibrate[%d] = 0x%"PRIx64" ",
+	      i,
+	      res[i].calibrate);
+      fprintf(test->where,
+	      "\tidle[%d] = 0x%"PRIx64" ",
+	      i,
+	      res[i].idle);
+      fprintf(test->where,
+	      "user[%d] = 0x%"PRIx64" ",
+	      i,
+	      res[i].user);
+      fprintf(test->where,
+	      "kern[%d] = 0x%"PRIx64" ",
+	      i,
+	      res[i].kernel);
+      fflush(test->where);
+      fprintf(test->where,
+	      "intr[%d] = 0x%"PRIx64"\n",
+	      i,
+	      res[i].interrupt);
+    }
   }
 
   NETPERF_DEBUG_EXIT(test->debug, test->where);
