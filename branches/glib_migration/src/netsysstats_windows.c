@@ -154,7 +154,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   /* this should result in the CPU util being forever reported as
      100% */
 
-  status = NtQuerySystemInformation(SystemProcessorPerformanceInformation,
+  status = (psd->NtQuerySystemInformation)(SystemProcessorPerformanceInformation,
 				    (PCHAR)psd->counters,
 				    sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) *
 				    tsd->num_cpus,
