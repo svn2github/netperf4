@@ -2398,6 +2398,7 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
     rd->servdemand     = &(rd->utilization[max_count]);
     rd->run_time       = &(rd->servdemand[max_count]);
     /* we should initialize result_confidence here? */
+    rd->result_confidence = 0.0;
     rd->result_minimum = DBL_MAX;
     rd->result_maximum = DBL_MIN;
     rd->outfd          = outfd;
@@ -2487,7 +2488,9 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = strtod(value_str,NULL);
       if (test_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+	/* MUST use the PRIx64 macro to get the proper format under
+           Windows or we get garbage.  raj 2006-04-12 */
+        sscanf(value_str,"%"PRIx64,&x);
         test_cntr[i] = (double)x;
       }
     } else {
@@ -2614,7 +2617,8 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = strtod(value_str,NULL);
       if (sys_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+	/* MUST use PRIx64 to get proper results under Windows */
+        sscanf(value_str,"%"PRIx64,&x);
         sys_cntr[i] = (double)x;
       }
     } else {
@@ -2693,7 +2697,6 @@ process_stats_for_run(tset_t *test_set)
   bsd_results_t *rd;
   test_t        *test;
   tset_elt_t    *set_elt;
-  char          *proc_name;
   xmlNodePtr     stats;
   xmlNodePtr     prev_stats;
   int            count; 
@@ -2702,7 +2705,6 @@ process_stats_for_run(tset_t *test_set)
   double         num_of_cpus;
  
   rd        = test_set->report_data;
-  proc_name = "process_stats_for_run";
   set_elt   = test_set->tests;
   count     = test_set->confidence.count;
   index     = count - 1;
@@ -2715,7 +2717,7 @@ process_stats_for_run(tset_t *test_set)
   }
 
   if (test_set->debug) {
-    fprintf(test_set->where, "%s count = %d\n", proc_name, count);
+    fprintf(test_set->where, "%s count = %d\n", __func__, count);
     fflush(test_set->where);
   }
 
@@ -2777,7 +2779,7 @@ process_stats_for_run(tset_t *test_set)
               stats_for_test);
       fprintf(test_set->where,
               "%s was not designed to deal with this.\n",
-              proc_name);
+              __func__);
       fprintf(test_set->where,
               "exiting netperf now!!\n");
       fflush(test_set->where);
