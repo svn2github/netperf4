@@ -1576,7 +1576,7 @@ send_dns_rr_load(test_t *test)
 {
   uint32_t          new_state;
   int               ret;
-  int               len;
+  int               len = -1;
   int               bytes_left;
   uint16_t         *rsp_ptr;
   dns_data_t       *my_data;

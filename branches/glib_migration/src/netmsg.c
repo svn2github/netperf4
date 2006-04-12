@@ -1039,7 +1039,7 @@ sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
   test_t      *test;
-  xmlNodePtr  stats;
+  xmlNodePtr  stats = NULL;
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
@@ -1080,7 +1080,7 @@ test_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
   test_t      *test;
-  xmlNodePtr  stats;
+  xmlNodePtr  stats = NULL;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");

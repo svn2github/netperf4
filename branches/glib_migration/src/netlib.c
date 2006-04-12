@@ -278,7 +278,7 @@ set_hist_attribute(xmlNodePtr hist, char *name, uint64_t *row)
 xmlNodePtr
 HIST_stats_node(HIST h, char *name)
 {
-  int         i,j;
+
   xmlNodePtr  hist;
   xmlAttrPtr  ap;
   char        value_str[32];
@@ -1396,7 +1396,6 @@ GenReport
 get_report_function(xmlNodePtr cmd)
 {
   xmlChar  *la_file;
-  char      lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
   xmlChar  *fname;
   GenReport func;
 
@@ -1448,8 +1447,6 @@ get_test_function(test_t *test, const xmlChar *func)
   int      rc = NPE_FUNC_NAME_TOO_LONG;
   char     func_name[NETPERF_MAX_TEST_FUNCTION_NAME];
   xmlChar *la_file;
-  char     lib_file[NETPERF_MAX_TEST_LIBRARY_NAME];
-
 
   if (debug) {
     g_fprintf(where,
@@ -1649,7 +1646,6 @@ launch_thread(GThread **tid, void *(*start_routine)(void *), void *data)
 
 {
   int rc;
-  thread_launch_state_t *launch_state;
 
   NETPERF_THREAD_T temp_tid;
 

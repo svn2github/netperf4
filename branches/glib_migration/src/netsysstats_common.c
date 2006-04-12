@@ -112,9 +112,9 @@ update_sys_stats(test_t *test)
 
   if (test->debug) {
     fprintf(test->where,"\tdelta_sec  = %d\t%d\t%d\n",
-            dtime->tv_sec,curr->tv_sec,prev->tv_sec);
+            (int)dtime->tv_sec,(int)curr->tv_sec,(int)prev->tv_sec);
     fprintf(test->where,"\tdelta_usec = %d\t%d\t%d\n",
-            dtime->tv_usec,curr->tv_usec,prev->tv_usec);
+            (int)dtime->tv_usec,(int)curr->tv_usec,(int)prev->tv_usec);
     fflush(test->where);
   }
 
@@ -130,14 +130,14 @@ update_sys_stats(test_t *test)
 
   if (test->debug) {
     fprintf(test->where,"\tdelta_sec  = %d\t%d\t%d\n",
-            dtime->tv_sec,curr->tv_sec,prev->tv_sec);
+            (int)dtime->tv_sec,(int)curr->tv_sec,(int)prev->tv_sec);
     fprintf(test->where,"\tdelta_usec = %d\t%d\t%d\n",
-            dtime->tv_usec,curr->tv_usec,prev->tv_usec);
+            (int)dtime->tv_usec,(int)curr->tv_usec,(int)prev->tv_usec);
     fflush(test->where);
   }
 
   if (test->debug) {
-    fprintf(test->where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
+    fprintf(test->where,"\tttime = %d.%d\n",(int)ttime->tv_sec,(int)ttime->tv_usec);
     fflush(test->where);
   }
 
@@ -150,7 +150,7 @@ update_sys_stats(test_t *test)
   }
 
   if (test->debug) {
-    fprintf(test->where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
+    fprintf(test->where,"\tttime = %d.%d\n",(int)ttime->tv_sec,(int)ttime->tv_usec);
     fflush(test->where);
   }
 

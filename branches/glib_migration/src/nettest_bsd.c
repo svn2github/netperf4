@@ -1817,7 +1817,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
 static uint32_t
 recv_tcp_rr_meas(test_t *test)
 {
-  int               len;
+  int               len = -1;
   int               bytes_left;
   char             *req_ptr;
   uint32_t          new_state;
@@ -1892,7 +1892,7 @@ recv_tcp_rr_meas(test_t *test)
 static uint32_t
 recv_tcp_rr_load(test_t *test)
 {
-  int               len;
+  int               len=-1;
   int               bytes_left;
   char             *req_ptr;
   uint32_t          new_state;

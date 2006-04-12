@@ -582,7 +582,7 @@ check_test_state_callback(gpointer data)
   test_hash_t  *h;
   xmlNodePtr    msg = NULL;
   xmlNodePtr    new_node;
-  xmlChar      *id;
+  xmlChar      *id = NULL;
   server_t     *netperf;
   char          code[8];
 

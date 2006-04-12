@@ -100,16 +100,16 @@ set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug,
 			     &mask);
   }
   if (err) {
-    if (err == EINVAL) {
+    if (errno == EINVAL) {
       err_str = "Invalid locality value";
     }
-    if (err == EPERM) {
+    if (errno == EPERM) {
       err_str = "Netserver Permission Failure";
     }
-    if (err == ESRCH) {
+    if (errno == ESRCH) {
       err_str = "Invalid thread id";
     }
-    if (err == EFAULT) {
+    if (errno == EFAULT) {
       err_str = "Invalid memory address";
     }
     if (err == -1) {
@@ -139,7 +139,7 @@ clear_own_locality(char *loc_type, int debug, FILE *where) {
     CPU_SET(i,&mask);
   }
 
-  i = sched_setaffinity(pthread_self,
+  i = sched_setaffinity(pthread_self(),
 			sizeof(mask),
 			&mask);
   /* yes, we really should do some error checking here */
