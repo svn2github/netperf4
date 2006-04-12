@@ -96,36 +96,36 @@ sys_cpu_util_init(test_t *test)
 
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
-  win_perf_stat_t   *psp;
+  win_perf_stat_t   *psd;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
-  psp = (win_perf_stat_t *)GlobalAlloc(GPTR, sizeeof(win_perf_stat_t));
+  psd = (win_perf_stat_t *)GlobalAlloc(GPTR, sizeof(win_perf_stat_t));
 
-  if (NULL == psp) return(NPE_MALLOC_FAILED1);
+  if (NULL == psd) return(NPE_MALLOC_FAILED1);
 
-  ZeroMemory((PCHAR)psp, sizeof(psp));
+  ZeroMemory((PCHAR)psd, sizeof(psd));
 
   GetSystemInfo(&SystemInfo);
   tsd->num_cpus = SystemInfo.dwNumberOfProcessors;
 
-  psp->counters = (SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *)
+  psd->counters = (SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION *)
     GlobalAlloc(GPTR, sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION));
 
-  if (NULL == psp->counters) return(NPE_MALLOC_FAILED2);
+  if (NULL == psd->counters) return(NPE_MALLOC_FAILED2);
 
-  ZeroMemory((PCHAR)psp->counters,
+  ZeroMemory((PCHAR)psd->counters,
 	     sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION));
 
-  tsd->psp = psp;
+  tsd->psd = psd;
 
-  psp->NtQuerySystemInformation = (NT_QUERY_SYSTEM_INFORMATION)
+  psd->NtQuerySystemInformation = (NT_QUERY_SYSTEM_INFORMATION)
     GetProcAddress( GetModuleHandle("ntdll.dll"),
 		    "NtQuerySystemInformation" );
 
-  if (!(psp->NtQuerySystemInformation)) return(NPE_FUNC_NOT_FOUND);
+  if (!(psd->NtQuerySystemInformation)) return(NPE_FUNC_NOT_FOUND);
 
-  if (QueryPerformanceFrequency(&(psp->TickHz)) == FALSE) 
+  if (QueryPerformanceFrequency(&(psd->TickHz)) == FALSE) 
     return(NPE_FUNC_NOT_FOUND);
 
   NETPERF_DEBUG_EXIT(test->debug, test->where);
@@ -145,30 +145,28 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   DWORD returnLength;
 
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
-  win_perf_stat_t *psp = tsd->psp;
+  win_perf_stat_t *psd = tsd->psd;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
   gettimeofday(timestamp,NULL);
-  elapsed = (double)timestamp->tv_sec + 
-    ((double)timestamp->tv_usec / (double)1000000);
 
   /* this should result in the CPU util being forever reported as
      100% */
 
   status = NtQuerySystemInformation(SystemProcessorPerformanceInformation,
-				    (PCHAR)psp->counters,
+				    (PCHAR)psd->counters,
 				    sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) *
 				    tsd->num_cpus,
 				    &returnLength);
 
   if (status != 0) {
      // zero the counters as some indication that something was wrong
-     ZeroMemory((PCHAR)psp->counters,
+     ZeroMemory((PCHAR)psd->counters,
 		sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) *
 		tsd->num_cpus);
      if (test->debug) {
-       fprintf(where, 
+       fprintf(test->where, 
 	       "%s NtQuery failed, status: %X\n",
 	       __func__,
 	       status);
@@ -180,14 +178,14 @@ get_cpu_time_counters(cpu_time_counters_t *res,
        sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION)) != 0) {
 
     // zero the counters as some indication that something was wrong
-    ZeroMemory((PCHAR)psp->counters,
+    ZeroMemory((PCHAR)psd->counters,
 	       sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) *
 	       tsd->num_cpus);
     if (test->debug) {
-      fprintf(where,
+      fprintf(test->where,
 	      "%s NtQuery didn't return expected amount of data\n",
 	      __func__);
-      fprintf(where,
+      fprintf(test->where,
 	      "Expected a multiple of %i, returned %i\n",
 	      sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION),
 	      returnLength);
@@ -201,16 +199,21 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 
   for (i = 0; i < tsd->num_cpus; i++) {
 
-    psp->counters[i].KernelTime.QuadPart -= 
-      psp->counters[i].IdleTime.QuadPart;
-    psp->counters[i].KernelTime.QuadPart -= 
-      psp->counters[i].InterruptTime.QuadPart;
+    psd->counters[i].KernelTime.QuadPart -= 
+      psd->counters[i].IdleTime.QuadPart;
+    psd->counters[i].KernelTime.QuadPart -= 
+      psd->counters[i].InterruptTime.QuadPart;
 
-    res[i].calibrate = (uint64_t)(elapsed * (double)psp->TickHz);
-    res[i].user      = psp->counters[i].UserTime.QuadPart;
-    res[i].kernel    = psp->counters[i].KernelTime.QuadPart;
-    res[i].interrupt = psp->counters[i].InterruptTime.QuadPart;
-    res[i].idle      = psp->counters[i].IdleTime.QuadPart;
+    // Windows - or rather the DDK compiler - will not let us cast a
+    // LONG_INTEGER into a double, so we have to do this the "long
+    // way
+    res[i].calibrate = (uint64_t)timestamp->tv_sec * 
+                                  (uint64_t)psd->TickHz.QuadPart;
+    res[i].calibrate += ((uint64_t)timestamp->tv_usec * (uint64_t)psd->TickHz.QuadPart) / 1000000;
+    res[i].user      = psd->counters[i].UserTime.QuadPart;
+    res[i].kernel    = psd->counters[i].KernelTime.QuadPart;
+    res[i].interrupt = psd->counters[i].InterruptTime.QuadPart;
+    res[i].idle      = psd->counters[i].IdleTime.QuadPart;
 
     res[i].other = res[i].calibrate - (res[i].kernel +
 				       res[i].interrupt +

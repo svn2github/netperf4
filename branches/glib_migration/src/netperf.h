@@ -103,6 +103,10 @@ typedef unsigned long long uint64_t;
 #define PATH_MAX MAXPATHLEN
 #define gettimeofday(a,b) g_get_current_time((GTimeVal *)a)
 #define strdup(buffer) _strdup(buffer)
+#ifndef PRIu64
+# define PRIx64 "I64x"
+# define PRIu64 "I64u"
+#endif
 #else
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
