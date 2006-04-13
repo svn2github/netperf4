@@ -221,7 +221,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
               i, res[i].calibrate);
     }
 #else
-    res[i].calibrate = (uint64_t)(elapsed * (double)psd->TickHz.QuadPart);
+    res[i].calibrate = (uint64_t)(elapsed * 10000000.0);
 #endif
     res[i].user      = psd->counters[i].UserTime.QuadPart;
     res[i].kernel    = psd->counters[i].KernelTime.QuadPart;

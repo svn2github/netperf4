@@ -311,10 +311,10 @@ set_counter_attribute(test_t *test, xmlNodePtr stats,char *name, uint64_t value)
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
-  sprintf(value_str,"%#llx",value);
+  sprintf(value_str,"%#"PRIx64,value);
   ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value_str);
   if (test->debug) {
-    fprintf(test->where,"%s=%s\n",name,value_str);
+    fprintf(test->where,"%s=%s from %"PRIx64"\n",name,value_str,value);
     fflush(test->where);
   }
   return(ap);
