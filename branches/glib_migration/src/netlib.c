@@ -1703,7 +1703,7 @@ test thread can connect or communicate with it.
 
 */
 
-int
+SOCKET
 establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrlenp)
 {
   SOCKET sockfd;
@@ -1832,7 +1832,7 @@ the "names" can also be IP addresses in ASCII string form.
 
 raj 2003-02-27 */
 
-int
+SOCKET
 establish_control(xmlChar *hostname,
                   xmlChar *port,
                   int      remfam,
@@ -1841,7 +1841,7 @@ establish_control(xmlChar *hostname,
                   int      locfam)
 {
   int not_connected;
-  int control_sock;
+  SOCKET control_sock;
   int count;
   int error;
 
@@ -1960,7 +1960,7 @@ establish_control(xmlChar *hostname,
     control_sock = socket(local_res_temp->ai_family,
                           SOCK_STREAM,
                           0);
-    if (control_sock < 0) {
+    if (control_sock == INVALID_SOCKET) {
       /* at some point we'll need a more generic "display error"
          message for when/if we use GUIs and the like. unlike a bind
          or connect failure, failure to allocate a socket is
@@ -2546,7 +2546,7 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
 
 
 int32_t
-recv_control_message(int control_sock, xmlDocPtr *message)
+recv_control_message(SOCKET control_sock, xmlDocPtr *message)
 {
   int loc_debug = 0;
   int32_t bytes_recvd = 0,

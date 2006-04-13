@@ -615,7 +615,7 @@ find_test_set_in_hash(const xmlChar *id)
 }
 
 
-static int
+static SOCKET
 connect_netserver(xmlDocPtr doc, xmlNodePtr netserver, server_t *new_server)
 {
   xmlChar   *remotehost;
@@ -625,7 +625,7 @@ connect_netserver(xmlDocPtr doc, xmlNodePtr netserver, server_t *new_server)
 
   int      localfamily;
   int      remotefamily;
-  int      sock;
+  SOCKET      sock;
 
   /* validation means that we know that the host informaion is in attributes
      of the netserver element. The xml parser checked them and initialized

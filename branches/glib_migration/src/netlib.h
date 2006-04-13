@@ -106,7 +106,7 @@ extern int  delta_milli(struct timeval *begin,struct timeval *end);
 extern int strtofam(xmlChar *familystr);
 extern void dump_addrinfo(FILE *dumploc, struct addrinfo *info,
 			  xmlChar *host, xmlChar *port, int family);
-extern int establish_control(xmlChar *hostname,  xmlChar *port, int remfam,
+extern SOCKET establish_control(xmlChar *hostname,  xmlChar *port, int remfam,
 			     xmlChar *localhost, xmlChar *localport, int locfam);
 extern int get_test_function(test_t *test, const xmlChar *func);
 extern int add_test_to_hash(test_t *new_test);
@@ -114,12 +114,12 @@ extern int write_to_control_connection(GIOChannel *channel,
 				       xmlNodePtr body,
 				       xmlChar *nid,
 				       const xmlChar *fromnid);
-extern int32_t recv_control_message(int control_sock, xmlDocPtr *message);
+extern int32_t recv_control_message(SOCKET control_sock, xmlDocPtr *message);
 extern void report_server_error(server_t *server);
 extern int launch_thread(GThread **tid, void *(*start_routine)(void *), void *data);
 extern void break_args_explicit(char *s, char *arg1, char *arg2);
 extern int parse_address_family(char family_string[]);
-extern int establish_listen(char *hostname, char *service, 
+extern SOCKET establish_listen(char *hostname, char *service, 
 			    int af, netperf_socklen_t *addrlenp);
 
 extern int netperf_complete_filename(char *name, char *full, int fulllen);
