@@ -147,6 +147,23 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
+  // it has been suggested that we might want to sit and spin until
+  // the next wall-clock tick before we snap the CPU counters. that
+  // would be done via:
+  // Spin until clock interrupt boundary
+  status = GetTickCount();
+  do {
+  } while (status == GetTickCount());
+
+  // however, I'm concerned that sitting and spinning might add too
+  // much to the CPU counters.  the same source that suggested the sit
+  // and spin pointed-out that if our intervals are more than say 10
+  // seconds, it may not really matter. food for thought.
+  // in the end I decided to go that way since the wall clock time
+  // under Windows - retrieved via the gettimeofday() (really
+  // g_get_current_time, which calls GetSystemTimeAsFileTime only
+  // increments in 10 ms increments!?!!!
+
   gettimeofday(timestamp,NULL);
   elapsed = (double)timestamp->tv_sec + ((double)timestamp->tv_usec /
                                          (double)1000000);
