@@ -132,9 +132,6 @@ sys_cpu_util_init(test_t *test)
   return NPE_SUCCESS;
 }
 
-/* slightly kludgy to get the CPU util to come-out as 100% */
-static uint64_t user,kernel,other,interrupt,idle = 0;
-
 void
 get_cpu_time_counters(cpu_time_counters_t *res,
 		      struct timeval *timestamp,
@@ -153,14 +150,25 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   gettimeofday(timestamp,NULL);
   elapsed = (double)timestamp->tv_sec + ((double)timestamp->tv_usec /
                                          (double)1000000);
-  /* this should result in the CPU util being forever reported as
-     100% */
 
-  status = (psd->NtQuerySystemInformation)(SystemProcessorPerformanceInformation,
-				    (PCHAR)psd->counters,
-				    sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) *
-				    tsd->num_cpus,
-				    &returnLength);
+  // it has been suggested that we might want to sit and spin until
+  // the next wall-clock tick before we snap the CPU counters. that
+  // would be done via:
+  //	// Spin until clock interrupt boundary
+  //	dwEnd = GetTickCount();
+  //	do {
+  //	} while (dwEnd == GetTickCount());
+  // however, I'm concerned that sitting and spinning might add too
+  // much to the CPU counters.  the same source that suggested the sit
+  // and spin pointed-out that if our intervals are more than say 10
+  // seconds, it may not really matter. food for thought.
+
+  status = (psd->NtQuerySystemInformation)
+    (SystemProcessorPerformanceInformation,
+     (PCHAR)psd->counters,
+     sizeof(SYSTEM_PROCESSOR_PERFORMANCE_INFORMATION) *
+     tsd->num_cpus,
+     &returnLength);
 
   if (status != 0) {
      // zero the counters as some indication that something was wrong
@@ -199,6 +207,14 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   // InterruptTime. We remove the interrupt time and the idle time but
   // leave the DpcTime.
 
+  // http://msdn.microsoft.com/library/default.asp?url=/library/en-us/sysinfo/base/ntquerysysteminformation.asp
+  // asserts that each CPU tick represents 1/100ths of a nanosecond
+  // (well, at least that is the claim as this is being written.
+  // However, others have said, and empirical evidence suggests that
+  // the ticks really represent 100 nanoseconds (eg 10 MHz).  So, for
+  // our calibration value we take the wall-clock time and multiply it
+  // by 10MHz to use as the calibration value.  raj 2006-04-12 
+
   for (i = 0; i < tsd->num_cpus; i++) {
 
     psd->counters[i].KernelTime.QuadPart -= 
@@ -206,23 +222,7 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     psd->counters[i].KernelTime.QuadPart -= 
       psd->counters[i].InterruptTime.QuadPart;
 
-#ifdef integermath
-    res[i].calibrate = (uint64_t)timestamp->tv_sec * 
-                                  (uint64_t)psd->TickHz.QuadPart;
-    if (test->debug) {
-      fprintf(test->where,
-              "first calibrate[%i] is 0x%"PRIx64"\n",
-              i, res[i].calibrate);
-    }
-    res[i].calibrate += ((uint64_t)timestamp->tv_usec * (uint64_t)psd->TickHz.QuadPart) / 1000000;
-    if (test->debug) {
-      fprintf(test->where,
-              "second calibrate[%i] is 0x%"PRIx64"\n",
-              i, res[i].calibrate);
-    }
-#else
     res[i].calibrate = (uint64_t)(elapsed * 10000000.0);
-#endif
     res[i].user      = psd->counters[i].UserTime.QuadPart;
     res[i].kernel    = psd->counters[i].KernelTime.QuadPart;
     res[i].interrupt = psd->counters[i].InterruptTime.QuadPart;
