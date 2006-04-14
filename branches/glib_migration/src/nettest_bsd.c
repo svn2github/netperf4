@@ -504,9 +504,17 @@ allocate_buffer_ring(width, buffer_size, alignment, offset, fill_source)
       first_link = temp_link;
     }
     temp_link->buffer_base = (char *)g_malloc(malloc_size);
+#ifndef G_OS_WIN32
     temp_link->buffer_ptr = (char *)(( (long)(temp_link->buffer_base) +
                           (long)alignment - 1) &
                          ~((long)alignment - 1));
+#else
+    /* 64-bit Windows is P64, not LP64 like the rest of the world, 
+       so we cannot cast as a "long" */
+    temp_link->buffer_ptr = (char *)(( (ULONG_PTR)(temp_link->buffer_base) +
+                          (long)alignment - 1) &
+                         ~((long)alignment - 1));
+#endif
     temp_link->buffer_ptr += offset;
     /* is where the buffer fill code goes. */
     if (do_fill) {
@@ -544,7 +552,7 @@ allocate_buffer_ring(width, buffer_size, alignment, offset, fill_source)
  /* called by either the netperf or netserver programs, all output */
  /* should be directed towards "where." family is generally AF_INET, */
  /* and type will be either SOCK_STREAM or SOCK_DGRAM */
-static int
+static SOCKET
 create_data_socket(test)
   test_t *test;
 {
@@ -557,7 +565,7 @@ create_data_socket(test)
   int loc_sndavoid     = my_data->send_avoid;
   int loc_rcvavoid     = my_data->recv_avoid;
 
-  int temp_socket;
+  SOCKET temp_socket;
   int one;
   netperf_socklen_t sock_opt_len;
 
@@ -1063,7 +1071,7 @@ static void
 recv_tcp_stream_preinit(test_t *test)
 {
   int               rc;         
-  int               s_listen;
+  SOCKET           s_listen;
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   myaddr;
@@ -1120,7 +1128,7 @@ recv_tcp_stream_preinit(test_t *test)
 static uint32_t
 recv_tcp_stream_init(test_t *test)
 {
-  int               s_data;
+  SOCKET            s_data;
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   peeraddr;
@@ -1650,7 +1658,7 @@ static void
 recv_tcp_rr_preinit(test_t *test)
 {
   int               rc;
-  int               s_listen;
+  SOCKET           s_listen;
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   myaddr;
@@ -1712,7 +1720,7 @@ recv_tcp_rr_preinit(test_t *test)
 static uint32_t
 recv_tcp_rr_init(test_t *test)
 {
-  int               s_data;
+  SOCKET             s_data;
   bsd_data_t       *my_data;
   char             *proc_name;
   struct sockaddr   peeraddr;
