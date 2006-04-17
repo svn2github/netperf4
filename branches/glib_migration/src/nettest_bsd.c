@@ -150,14 +150,14 @@ char    nettest_id[]="\
 
 
 static void
-report_test_failure(test_t *test, char *function, int err_code, const char * err_string) {
+report_test_failure(test_t *test, const char *function, int err_code, const char * err_string) {
   if (test->debug) {
     fprintf(test->where,"%s: called report_test_failure:",function);
     fprintf(test->where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
     fflush(test->where);
   }
   test->err_rc    = err_code;
-  test->err_fn    = function;
+  test->err_fn    = (char *)function;
   test->err_str   = (char *)err_string;
   test->new_state = TEST_ERROR;
   test->err_no    = GET_ERRNO;
@@ -229,7 +229,8 @@ set_test_state(test_t *test, uint32_t new_state)
       }
       if (valid) {
         test->new_state = state;
-      } else {
+      }
+      else {
         sprintf(error_msg,"bad state transition from %s state",state_name);
         report_test_failure( test,
                              "set_test_state",
@@ -298,13 +299,16 @@ strtofam(xmlChar *familystr)
 {
   if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET")) {
     return(AF_INET);
-  } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_UNSPEC")) {
+  } 
+  else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_UNSPEC")) {
     return(AF_UNSPEC);
 #ifdef AF_INET6
-  } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET6")) {
+  }
+  else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET6")) {
     return(AF_INET6);
 #endif /* AF_INET6 */
-  } else {
+  }
+  else {
     /* we should never get here if the validator is doing its thing */
     return(-1);
   }
@@ -359,7 +363,8 @@ get_dependency_data(test_t *test, int type, int protocol)
 
   if (!error) {
     my_data->remaddr = remote_ai;
-  } else {
+  }
+  else {
     if (test->debug) {
       fprintf(test->where,"get_dependency_data: getaddrinfo returned %d %s\n",
               error, gai_strerror(error));
@@ -414,13 +419,15 @@ set_dependent_data(test)
         (xmlSetProp(dep_data,(const xmlChar *)"remote_host",
                     (xmlChar *)host) != NULL))  {
     test->dependent_data = dep_data;
-    } else {
+    }
+    else {
       report_test_failure(test,
                           "set_dependent_data",
                           BSDE_XMLSETPROP_ERROR,
                           "error setting properties for dependency data");
     }
-  } else {
+  } 
+  else {
     report_test_failure(test,
                         "set_dependent_data",
                         BSDE_XMLNEWNODE_ERROR,
@@ -838,14 +845,16 @@ bsd_test_init(test_t *test, int type, int protocol)
     string =  xmlGetProp(args,(const xmlChar *)"port_min");
     if (string) {
       new_data->port_min = atoi((char *)string);
-    } else {
+    }
+    else {
       new_data->port_min = -1;
     }
 
     string =  xmlGetProp(args,(const xmlChar *)"port_max");
     if (string) {
       new_data->port_max = atoi((char *)string);
-    } else {
+    }
+    else {
       new_data->port_max = -1;
     }
     
@@ -906,7 +915,8 @@ bsd_test_init(test_t *test, int type, int protocol)
 
     if (!error) {
       new_data->locaddr = local_ai;
-    } else {
+    }
+    else {
       if (test->debug) {
         fprintf(test->where,"bsd_test_init: getaddrinfo returned %d %s\n",
                 error, gai_strerror(error));
@@ -917,7 +927,8 @@ bsd_test_init(test_t *test, int type, int protocol)
                           BSDE_GETADDRINFO_ERROR,
                           gai_strerror(error));
     }
-  } else {
+  }
+  else {
     report_test_failure(test,
                         "bsd_test_init",
                         BSDE_NO_SOCKET_ARGS,
@@ -1018,7 +1029,8 @@ bsd_test_get_stats(test_t *test)
           fflush(test->where);
         }
       }
-    } else {
+    }
+    else {
       if (ap != NULL) {
         sprintf(value,"%ld",my_data->elapsed_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_sec",(xmlChar *)value);
@@ -1073,12 +1085,10 @@ recv_tcp_stream_preinit(test_t *test)
   int               rc;         
   SOCKET           s_listen;
   bsd_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   myaddr;
   netperf_socklen_t mylen;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_stream_preinit";        
   mylen     = sizeof(myaddr);
 
   my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
@@ -1093,32 +1103,35 @@ recv_tcp_stream_preinit(test_t *test)
                   (xmlChar *)NULL, (xmlChar *)NULL, -1);
     fprintf(test->where, 
             "%s:create_data_socket returned %d\n", 
-            proc_name, s_listen);
+            __func__, s_listen);
     fflush(test->where);
   }
   rc = bind(s_listen, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            proc_name, rc, errno);
+            __func__, rc, errno);
     fflush(test->where);
   }
   if (rc == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_BIND_FAILED,
                         "data socket bind failed");
-  } else if (listen(s_listen,5) == -1) {
+  }
+  else if (listen(s_listen,5) == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_LISTEN_FAILED,
                         "data socket listen failed");
-  } else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
+  }
+  else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_GETSOCKNAME_FAILED,
                         "getting the listen socket name failed");
-  } else {
+  }
+  else {
     memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
     my_data->locaddr->ai_addrlen = mylen;
     set_dependent_data(test);
@@ -1130,30 +1143,29 @@ recv_tcp_stream_init(test_t *test)
 {
   SOCKET            s_data;
   bsd_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_stream_preinit";        
   peerlen   = sizeof(peeraddr);
 
   if (test->debug) {
-    fprintf(test->where, "%s:waiting in accept\n", proc_name);
+    fprintf(test->where, "%s:waiting in accept\n", __func__);
     fflush(test->where);
   }
   if ((s_data = accept(my_data->s_listen,
                       &peeraddr,
                       &peerlen)) == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_ACCEPT_FAILED,
                         "listen socket accept failed");
-  } else {
+  }
+  else {
     if (test->debug) {
       fprintf(test->where, 
               "%s:accept returned successfully %d\n", 
-              proc_name, s_data);
+              __func__, s_data);
       fflush(test->where);
     }
     my_data->s_data = s_data;
@@ -1166,13 +1178,11 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
 {
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
   int               len;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_stream_idle_link";        
   peerlen   = sizeof(peeraddr);
   len       = last_len;
 
@@ -1184,7 +1194,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
       }
@@ -1193,7 +1203,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
 
   new_state = CHECK_REQ_STATE;
   if (test->debug) {
-    fprintf(test->where,"**** %s:new_state = %d\n",proc_name,new_state);
+    fprintf(test->where,"**** %s:new_state = %d\n",__func__,new_state);
     fflush(test->where);
   }
   while (new_state == TEST_LOADED) {
@@ -1201,43 +1211,46 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
     new_state = CHECK_REQ_STATE;
   }
   if (test->debug) {
-    fprintf(test->where,"**** %s:new_state = %d\n",proc_name,new_state);
+    fprintf(test->where,"**** %s:new_state = %d\n",__func__,new_state);
     fflush(test->where);
   }
   if (new_state == TEST_IDLE) {
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
-    } else {
+    }
+    else {
       CLOSE_SOCKET(my_data->s_data);
       if (test->debug) {
-        fprintf(test->where,"%s: waiting in accept\n",proc_name);
+        fprintf(test->where,"%s: waiting in accept\n",__func__);
         fflush(test->where);
       }
       if ((my_data->s_data=accept(my_data->s_listen,
                                  &peeraddr,
                                  &peerlen)) == -1) {
         report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_ACCEPT_FAILED,
                           "listen socket accept failed");
-      } else {
+      }
+      else {
         if (test->debug) {
           fprintf(test->where,
                   "%s: accept returned successfully %d\n",
-                  proc_name,
+                  __func__,
                   my_data->s_data);
           fflush(test->where);
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
 
@@ -1250,9 +1263,7 @@ recv_tcp_stream_meas(test_t *test)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_stream_meas";        
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data, my_data->recv_ring);
@@ -1266,18 +1277,20 @@ recv_tcp_stream_meas(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_RECV_ERROR(len)) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_DATA_RECV_ERROR,
                           "data_recv_error");
-    } else {
+    }
+    else {
       my_data->stats.named.bytes_received += len;
       my_data->stats.named.recv_calls++;
       my_data->recv_ring = my_data->recv_ring->next;
     }
-  } else {
+  }
+  else {
     /* how do we deal with a closed connection in the loaded state */
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed during TEST_MEASURE state");
   }
@@ -1300,10 +1313,8 @@ recv_tcp_stream_load(test_t *test)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_stream_load";        
 
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data, my_data->recv_ring);
@@ -1315,10 +1326,11 @@ recv_tcp_stream_load(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_RECV_ERROR(len)) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_DATA_RECV_ERROR,
                           "data_recv_error");
-    } else {
+    }
+    else {
       my_data->recv_ring = my_data->recv_ring->next;
     }
   }
@@ -1330,7 +1342,8 @@ recv_tcp_stream_load(test_t *test)
        a request to transition to the idle state */
     recv_tcp_stream_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  } 
+  else {
     if (new_state == TEST_MEASURE) {
         /* transitioning to measure state from loaded state
            set previous timestamp */
@@ -1356,7 +1369,8 @@ send_tcp_stream_preinit(test_t *test)
                                               my_data->fill_source);
     get_dependency_data(test, SOCK_STREAM, IPPROTO_TCP);
     my_data->s_data = create_data_socket(test);
-  } else {
+  }
+  else {
     fprintf(test->where,"entered send_tcp_stream_preinit more than once\n");
     fflush(test->where);
   }
@@ -1366,25 +1380,24 @@ static uint32_t
 send_tcp_stream_init(test_t *test)
 {
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_init";        
 
   if (test->debug) {
-    fprintf(test->where,"%s: in INIT state making connect call\n",proc_name);
+    fprintf(test->where,"%s: in INIT state making connect call\n",__func__);
     fflush(test->where);
   }
   if (connect(my_data->s_data,
               my_data->remaddr->ai_addr,
               my_data->remaddr->ai_addrlen) < 0) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_CONNECT_FAILED,
                         "data socket connect failed");
-  } else {
+  }
+  else {
     if (test->debug) {
-      fprintf(test->where,"%s: connected and moving to IDLE\n",proc_name);
+      fprintf(test->where,"%s: connected and moving to IDLE\n",__func__);
       fflush(test->where);
     }
   }
@@ -1395,40 +1408,40 @@ static void
 send_tcp_stream_idle_link(test_t *test)
 {
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_idle_link";
 
   if (test->debug) {
-    fprintf(test->where,"%s: transition from LOAD to IDLE\n",proc_name);
+    fprintf(test->where,"%s: transition from LOAD to IDLE\n",__func__);
     fflush(test->where);
   }
   if (shutdown(my_data->s_data,SHUT_WR) == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_SOCKET_SHUTDOWN_FAILED,
                         "failure shuting down data socket");
-  } else {
+  }
+  else {
     recv(my_data->s_data,
          my_data->send_ring->buffer_ptr,
          my_data->send_size, 0);
     CLOSE_SOCKET(my_data->s_data);
     my_data->s_data = create_data_socket(test);
     if (test->debug) {
-      fprintf(test->where,"%s: connecting from LOAD state\n",proc_name);
+      fprintf(test->where,"%s: connecting from LOAD state\n",__func__);
       fflush(test->where);
     }
     if (connect(my_data->s_data,
                 my_data->remaddr->ai_addr,
                 my_data->remaddr->ai_addrlen) < 0) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_CONNECT_FAILED,
                           "data socket connect failed");
-    } else {
+    }
+    else {
       if (test->debug) {
-        fprintf(test->where,"%s: connected moving to IDLE\n", proc_name);
+        fprintf(test->where,"%s: connected moving to IDLE\n", __func__);
         fflush(test->where);
       }
     }
@@ -1441,10 +1454,8 @@ send_tcp_stream_meas(test_t *test)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_meas";
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
@@ -1458,7 +1469,7 @@ send_tcp_stream_meas(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_SEND_ERROR(len)) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_DATA_SEND_ERROR,
                           "data send error");
     }
@@ -1485,10 +1496,8 @@ send_tcp_stream_load(test_t *test)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_load";
 
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
@@ -1503,7 +1512,7 @@ send_tcp_stream_load(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_SEND_ERROR(len)) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_DATA_SEND_ERROR,
                           "data send_error");
     }
@@ -1660,12 +1669,10 @@ recv_tcp_rr_preinit(test_t *test)
   int               rc;
   SOCKET           s_listen;
   bsd_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   myaddr;
   netperf_socklen_t mylen;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_rr_preinit";
   mylen     = sizeof(myaddr);
 
   my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
@@ -1685,32 +1692,35 @@ recv_tcp_rr_preinit(test_t *test)
                   (xmlChar *)NULL, (xmlChar *)NULL, -1);
     fprintf(test->where, 
             "%s:create_data_socket returned %d\n", 
-            proc_name, s_listen);
+            __func__, s_listen);
     fflush(test->where);
   }
   rc = bind(s_listen, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            proc_name, rc, errno);
+            __func__, rc, errno);
     fflush(test->where);
   }
   if (rc == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_BIND_FAILED,
                         "data socket bind failed");
-  } else if (listen(s_listen,5) == -1) {
+  } 
+  else if (listen(s_listen,5) == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_LISTEN_FAILED,
                         "data socket listen failed");
-  } else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
+  }
+  else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_GETSOCKNAME_FAILED,
                         "getting the listen socket name failed");
-  } else {
+  } 
+  else {
     memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
     my_data->locaddr->ai_addrlen = mylen;
     set_dependent_data(test);
@@ -1722,30 +1732,29 @@ recv_tcp_rr_init(test_t *test)
 {
   SOCKET             s_data;
   bsd_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_stream_init";
   peerlen   = sizeof(peeraddr);
 
   if (test->debug) {
-    fprintf(test->where, "%s:waiting in accept\n", proc_name);
+    fprintf(test->where, "%s:waiting in accept\n", __func__);
     fflush(test->where);
   }
   if ((s_data = accept(my_data->s_listen,
                       &peeraddr,
                       &peerlen)) == -1) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_ACCEPT_FAILED,
                         "listen socket accept failed");
-  } else {
+  } 
+  else {
     if (test->debug) {
       fprintf(test->where, 
               "%s:accept returned successfully %d\n", 
-              proc_name, s_data);
+              __func__, s_data);
       fflush(test->where);
     }
     my_data->s_data = s_data;
@@ -1759,12 +1768,10 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_rr_idle_link";
   len       = last_len;
   peerlen   = sizeof(peeraddr);
 
@@ -1776,15 +1783,16 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
 
   if (new_state == TEST_IDLE) {
     if (test->debug) {
-      fprintf(test->where,"%s: transition from LOAD to IDLE\n",proc_name);
+      fprintf(test->where,"%s: transition from LOAD to IDLE\n",__func__);
       fflush(test->where);
     }
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "data_recv_error");
-    } else {
+    } 
+    else {
       while (len > 0) {
         len=recv(my_data->s_data,
                  my_data->recv_ring->buffer_ptr,
@@ -1792,31 +1800,33 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
       }
       CLOSE_SOCKET(my_data->s_data);
       if (test->debug) {
-        fprintf(test->where,"%s: waiting in accept\n",proc_name);
+        fprintf(test->where,"%s: waiting in accept\n",__func__);
         fflush(test->where);
       }
       if ((my_data->s_data=accept(my_data->s_listen,
                                  &peeraddr,
                                  &peerlen)) == -1) {
         report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_ACCEPT_FAILED,
                           "listen socket accept failed");
-      } else {
+      } 
+      else {
         if (test->debug) {
           fprintf(test->where,
                   "%s: accept returned successfully %d\n",
-                  proc_name,
+                  __func__,
                   my_data->s_data);
           fflush(test->where);
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
   }
@@ -1830,11 +1840,9 @@ recv_tcp_rr_meas(test_t *test)
   char             *req_ptr;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   HISTOGRAM_VARS;
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_rr_meas";
 
   /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_one);
@@ -1849,14 +1857,15 @@ recv_tcp_rr_meas(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
         break;
       }
       req_ptr    += len;
       bytes_left -= len;
-    } else {
+    }
+    else {
       /* just got a data connection close break out of while loop */
       break;
     }
@@ -1864,10 +1873,11 @@ recv_tcp_rr_meas(test_t *test)
   if (len == 0) {
     /* how do we deal with a closed connection in the measured state */
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed during TEST_MEASURE state");
-  } else {
+  }
+  else {
     my_data->stats.named.trans_received++;
     if ((len=send(my_data->s_data,
                   my_data->send_ring->buffer_ptr,
@@ -1876,7 +1886,7 @@ recv_tcp_rr_meas(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_DATA_SEND_ERROR,
                             "data_send_error");
       }
@@ -1905,10 +1915,8 @@ recv_tcp_rr_load(test_t *test)
   char             *req_ptr;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "recv_tcp_rr_load";
 
   /* recv the request for the test */
   req_ptr    = my_data->recv_ring->buffer_ptr;
@@ -1921,14 +1929,15 @@ recv_tcp_rr_load(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
         break;
       }
       req_ptr    += len;
       bytes_left -= len;
-    } else {
+    } 
+    else {
       /* just got a data connection close break out of while loop */
       break;
     }
@@ -1941,7 +1950,8 @@ recv_tcp_rr_load(test_t *test)
        a request to transition to the idle state */
     recv_tcp_rr_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  }
+  else {
     if ((len=send(my_data->s_data,
                   my_data->send_ring->buffer_ptr,
                   my_data->rsp_size,
@@ -1949,7 +1959,7 @@ recv_tcp_rr_load(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_DATA_SEND_ERROR,
                             "data_send_error");
       }
@@ -1991,25 +2001,24 @@ static uint32_t
 send_tcp_rr_init(test_t *test)
 {
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_rr_init";
 
   if (test->debug) {
-    fprintf(test->where,"%s: in INIT state making connect call\n",proc_name);
+    fprintf(test->where,"%s: in INIT state making connect call\n",__func__);
     fflush(test->where);
   }
   if (connect(my_data->s_data,
               my_data->remaddr->ai_addr,
               my_data->remaddr->ai_addrlen) < 0) {
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_CONNECT_FAILED,
                         "data socket connect failed");
-  } else {
+  }
+  else {
     if (test->debug) {
-      fprintf(test->where,"%s: connected and moving to IDLE\n",proc_name);
+      fprintf(test->where,"%s: connected and moving to IDLE\n",__func__);
       fflush(test->where);
     }
   }
@@ -2022,10 +2031,8 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_rr_idle_link";
   len       = last_len;
 
   new_state = CHECK_REQ_STATE;
@@ -2035,15 +2042,16 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
   }
   if (new_state == TEST_IDLE) {
     if (test->debug) {
-      fprintf(test->where,"%s: transition from LOAD to IDLE\n",proc_name);
+      fprintf(test->where,"%s: transition from LOAD to IDLE\n",__func__);
       fflush(test->where);
     }
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
-    } else {
+    } 
+    else {
       while (len > 0) {
         len = recv(my_data->s_data,
                    my_data->recv_ring->buffer_ptr,
@@ -2052,28 +2060,30 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
       CLOSE_SOCKET(my_data->s_data);
       my_data->s_data = create_data_socket(test);
       if (test->debug) {
-        fprintf(test->where,"%s: connecting from LOAD state\n",proc_name);
+        fprintf(test->where,"%s: connecting from LOAD state\n",__func__);
         fflush(test->where);
       }
       if (connect(my_data->s_data,
                   my_data->remaddr->ai_addr,
                   my_data->remaddr->ai_addrlen) < 0) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_CONNECT_FAILED,
                             "data socket connect failed");
-      } else {
+      }
+      else {
         if (test->debug) {
-          fprintf(test->where,"%s: connected moving to IDLE\n",proc_name);
+          fprintf(test->where,"%s: connected moving to IDLE\n",__func__);
           fflush(test->where);
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
 
@@ -2088,10 +2098,8 @@ send_tcp_rr_meas(test_t *test)
   int               bytes_left;
   char             *rsp_ptr;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_meas";
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
@@ -2105,7 +2113,7 @@ send_tcp_rr_meas(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_SEND_ERROR(len)) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_DATA_SEND_ERROR,
                           "data send error");
     }
@@ -2121,14 +2129,15 @@ send_tcp_rr_meas(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
         break;
       }
       rsp_ptr    += len;
       bytes_left -= len;
-    } else {
+    }
+    else {
       /* len is 0 the connection was closed exit the while loop */
       break;
     }
@@ -2142,7 +2151,7 @@ send_tcp_rr_meas(test_t *test)
   if (len == 0) {
     /* how do we deal with a closed connection in the measured state */
     report_test_failure(test,
-                        proc_name,
+                        __func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed during TEST_MEASURE state");
   }
@@ -2164,10 +2173,8 @@ send_tcp_rr_load(test_t *test)
   int               bytes_left;
   char             *rsp_ptr;
   bsd_data_t       *my_data;
-  char             *proc_name;
 
   my_data   = test->test_specific_data;
-  proc_name = "send_tcp_stream_load";
 
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
@@ -2179,7 +2186,7 @@ send_tcp_rr_load(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_SEND_ERROR(len)) {
       report_test_failure(test,
-                          proc_name,
+                          __func__,
                           BSDE_DATA_SEND_ERROR,
                           "data send error");
     }
@@ -2195,14 +2202,15 @@ send_tcp_rr_load(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            proc_name,
+                            __func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
         break;
       }
       rsp_ptr    += len;
       bytes_left -= len;
-    } else {
+    }
+    else {
       /* len is 0 the connection was closed exit the while loop */
       break;
     }
@@ -2214,7 +2222,8 @@ send_tcp_rr_load(test_t *test)
       (new_state == TEST_IDLE)) {
     send_tcp_rr_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  } 
+  else {
     if (new_state == TEST_MEASURE) {
       /* transitioning to measure state from loaded state
          set previous timestamp */
@@ -2380,7 +2389,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
       fflush(test_set->where);
     }
     outfd = fopen(output,"a");
-  } else {
+  }
+  else {
     if (test_set->debug) {
       fprintf(test_set->where,
               "report_bsd_test_results: report going to file stdout\n");
@@ -2430,7 +2440,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
       rd->print_per_cpu = 1;
     }
     test_set->report_data = rd;
-  } else {
+  }
+  else {
     /* could not allocate memory can't generate report */
     fprintf(outfd,
             "bsd_test_results_init: malloc failed can't generate report\n");
@@ -2501,7 +2512,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
         sscanf(value_str,"%"PRIx64,&x);
         test_cntr[i] = (double)x;
       }
-    } else {
+    }
+    else {
       test_cntr[i] = 0.0;
     }
     if (test_set->debug) {
@@ -2529,7 +2541,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   if (rd->sd_denominator == 0.0) {
     if (xmit_rate > 0.0 || recv_rate > 0.0) {
       rd->sd_denominator = 1000000.0/(8.0*1024.0);
-    } else {
+    }
+    else {
       rd->sd_denominator = 1.0;
     }
   }
@@ -2539,7 +2552,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   }
   if (rd->sd_denominator != 1.0) {
     result = recv_rate + xmit_rate;
-  } else {
+  } 
+  else {
     result = recv_trans_rate + xmit_trans_rate;
   }
   if (test_set->debug) {
@@ -2563,7 +2577,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       fprintf(outfd,"%7.2f ",result);                 /* 19,8 */
       fprintf(outfd,"%7.2f ",xmit_rate);              /* 27,8 */
       fprintf(outfd,"%7.2f ",recv_rate);              /* 35,8 */
-    } else {
+    }
+    else {
       fprintf(outfd,"%10.2f ",result);                /* 19,11 */
     }
     fprintf(outfd,"\n");
@@ -2629,7 +2644,8 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
         sscanf(value_str,"%"PRIx64,&x);
         sys_cntr[i] = (double)x;
       }
-    } else {
+    }
+    else {
       sys_cntr[i] = 0.0;
     }
     if (test_set->debug) {
@@ -2686,7 +2702,8 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(outfd,"%-6.2f ",elapsed_seconds);         /* 12,7 */
     if (rd->sd_denominator != 1.0) {
       fprintf(outfd,"%24s","");                       /* 19,24*/
-    } else {
+    }
+    else {
       fprintf(outfd,"%11s","");                       /* 19,11*/
     }
     fprintf(outfd,"%7.1e ",calibration);              /* 43,8 */
@@ -2747,7 +2764,8 @@ process_stats_for_run(tset_t *test_set)
         fprintf(test_set->where,
                 "\ttest %s has '%s' statistics\n",
                 test->id,stats->name);
-      } else {
+      } 
+      else {
         fprintf(test_set->where,
                 "\ttest %s has no statistics available!\n",
                 test->id);
@@ -2932,7 +2950,8 @@ print_run_results(tset_t *test_set)
       fprintf(outfd,"%7s ",field4A[i]);                       /* 19,8 */
       fprintf(outfd,"%7s ",field5[i]);                        /* 27,8 */
       fprintf(outfd,"%7s ",field6[i]);                        /* 35,8 */
-    } else {
+    }
+    else {
       fprintf(outfd,"%10s ",field4B[i]);                      /* 19,11 */
     }
     fprintf(outfd,"%7s ",field7[i]);                          /* 43,8 */
@@ -2953,7 +2972,8 @@ print_run_results(tset_t *test_set)
     fprintf(outfd,"%7.2f ",rd->results[index]);               /* 19,8 */
     fprintf(outfd,"%7.2f ",rd->xmit_results[index]);          /* 27,8 */
     fprintf(outfd,"%7.2f ",rd->recv_results[index]);          /* 35,8 */
-  } else {
+  } 
+  else {
     fprintf(outfd,"%10.2f ",rd->results[index]);              /* 19,11*/
   }
   fprintf(outfd,"%7.3f ",rd->servdemand[index]);              /* 43,8 */
@@ -3053,7 +3073,8 @@ print_results_summary(tset_t *test_set)
       field10[i] = field10A[i];
       field11[i] = field11A[i];
     }
-  } else {
+  }
+  else {
     for (i = 0; i < HDR_LINES; i++) {
       field4[i]  = field4B[i];
       field5[i]  = field5B[i];
@@ -3090,7 +3111,8 @@ print_results_summary(tset_t *test_set)
     fprintf(outfd,"%7.3f ",rd->result_confidence);                /* 27,8 */
     fprintf(outfd,"%7.2f ",rd->result_minimum);                   /* 35,8 */
     fprintf(outfd,"%7.2f ",rd->result_maximum);                   /* 43,8 */
-  } else {
+  }
+  else {
     fprintf(outfd,"%7.0f ",rd->result_measured_mean);             /* 19,8 */
     fprintf(outfd,"%7.2f ",rd->result_interval);                  /* 27,8 */
     fprintf(outfd,"%7.0f ",rd->result_minimum);                   /* 35,8 */
