@@ -926,8 +926,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (rc == NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "test_message: about to launch thread %d for test using func %p\n",
-                new_test->thread_id,
+                "test_message: launching test thread using func %p\n",
                 new_test->test_func);
         fflush(where);
       }
@@ -957,8 +956,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 	rc = launch_thread(&new_test->thread_id,launch_pad,launch_state);
 	if (debug) {
 	  fprintf(where,
-		  "test_message: launched thread %d for test\n",
-		  new_test->thread_id);
+		  "test_message: launched test thread\n");
 	  fflush(where);
 	}
 	/* having launched the test thread, we really aught to unbind
@@ -975,16 +973,14 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       while (new_test->new_state == TEST_PREINIT) {
         if (debug) {
           fprintf(where,
-                  "test_message: waiting on thread %d\n",
-                  new_test->thread_id);
+                  "test_message: waiting on thread\n");
           fflush(where);
         }
         g_usleep(1000000);
       }  /* end wait */
       if (debug) {
         fprintf(where,
-                "test_message: test has finished initialization on thread %d\n",
-                new_test->thread_id);
+                "test_message: test initialization finished on thread\n");
         fflush(where);
       }
     }

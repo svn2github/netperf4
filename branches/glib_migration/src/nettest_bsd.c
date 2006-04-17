@@ -150,7 +150,7 @@ char    nettest_id[]="\
 
 
 static void
-report_test_failure(test_t *test, char *function, int err_code, char * err_string) {
+report_test_failure(test_t *test, char *function, int err_code, const char * err_string) {
   if (test->debug) {
     fprintf(test->where,"%s: called report_test_failure:",function);
     fprintf(test->where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
@@ -158,7 +158,7 @@ report_test_failure(test_t *test, char *function, int err_code, char * err_strin
   }
   test->err_rc    = err_code;
   test->err_fn    = function;
-  test->err_str   = err_string;
+  test->err_str   = (char *)err_string;
   test->new_state = TEST_ERROR;
   test->err_no    = GET_ERRNO;
 }

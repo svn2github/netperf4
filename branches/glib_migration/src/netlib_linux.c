@@ -1,4 +1,4 @@
-static char netlib_specific_id[]="\
+char netlib_specific_id[]="\
 @(#)(c) Copyright 2006, Hewlett-Packard Company, $Id$";
 
 /*

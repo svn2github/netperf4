@@ -1625,7 +1625,7 @@ launch_pad(void *data) {
     *(pthread_t *)(test->native_thread_id_ptr) = pthread_self();
   }
   if (debug) {
-    fprintf(where,"%s my thread id is %d\n",__func__,pthread_self());
+    fprintf(where,"%s my thread id is %ld\n",__func__,pthread_self());
     fflush(where);
   }
 #endif

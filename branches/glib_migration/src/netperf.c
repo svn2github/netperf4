@@ -941,9 +941,8 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
         NETPERF_MUTEX_UNLOCK(h->hash_lock);
         if (debug > 1) {
           fprintf(where,
-                  "resolve_dependency: waiting on test %s thread %d\n",
-                  (char *)id,
-                  test->thread_id);
+                  "resolve_dependency: waiting on test %s\n",
+                  (char *)id);
           fflush(where);
         }
 
@@ -1216,8 +1215,9 @@ launch_worker_threads()
         /* netserver worker thread is not yet initialized start it */
         rc = launch_thread(&server->thread_id, netperf_worker, server);
         if (debug) {
-          fprintf(where,"launched thread %d for netserver %s\n",
-                  server->thread_id,server->id);
+          fprintf(where,
+		  "launched thread for netserver %s\n",
+		  server->id);
           fflush(where);
         }
         NETPERF_MUTEX_LOCK(h->hash_lock);

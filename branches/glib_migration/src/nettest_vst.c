@@ -903,7 +903,7 @@ get_next_vst_transaction(test_t *test)
     if (test->debug && loc_debug) {
       fprintf(test->where, "**** end of pattern reached ******\n");
       fprintf(test->where,
-              "%s:  value = %d  key = %d\n",
+              "%s:  value = %d  key = %ld\n",
               (char *)__func__, value, key);
       fflush(test->where);
     }
@@ -911,7 +911,7 @@ get_next_vst_transaction(test_t *test)
       value = value - dist->dist_count[i];
       if (test->debug && loc_debug) {
         fprintf(test->where,
-                "\tdist_count = %d  new_value = %d  pattern = %d\n",
+                "\tdist_count = %d  new_value = %d  pattern = %ld\n",
                 dist->dist_count[i], value, dist->pattern[i]);
         fflush(test->where);
       }
@@ -1210,7 +1210,6 @@ vst_test_init(test_t *test, int type, int protocol)
   int               error;
   struct addrinfo   hints;
   struct addrinfo  *local_ai;
-  struct addrinfo  *local_temp;
 
   NETPERF_DEBUG_ENTRY(test->debug, test->where);
 
@@ -1419,7 +1418,7 @@ vst_test_get_stats(test_t *test)
 {
   xmlNodePtr  stats = NULL;
   xmlAttrPtr  ap    = NULL;
-  int         i,j;
+  int         i;
   char        value[32];
   char        name[32];
   uint64_t    loc_cnt[VST_MAX_COUNTERS];
@@ -2533,7 +2532,6 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   FILE          *outfd;
   vst_results_t *rd;
   double         elapsed_seconds;
-  double         sys_util;
   double         calibration;
   double         local_idle;
   double         local_busy;
