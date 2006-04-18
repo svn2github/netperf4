@@ -571,7 +571,7 @@ report_stuck_test_status(server_t *netperf)
    one day get this set such that state change notification was
    immediate... raj 2006-03-23 */
 
-static void
+static gboolean
 check_test_state_callback(gpointer data)
 {
   int           i;
@@ -670,6 +670,8 @@ check_test_state_callback(gpointer data)
     /* mutex unlocking is not required because only one 
        netserver thread looks at these data structures sgb */
   }
+  NETPERF_DEBUG_EXIT(debug,where);
+  return(TRUE);
 }
 
 
