@@ -1,0 +1,69 @@
+
+BE SURE TO READ THE MANUAL. EVEN THOUGH IT MAY BE OUTDATED.
+
+This is a brief readme file for the netperf4 TCP/UDP/sockets/etc
+performance benchmark. This is here mostly as a boot-strap. The real
+information is in the manual, which can be found in doc/ in the
+directory where you are finding this readme file. The sources should
+be (mostly) in src/
+
+Of course, as of this writing, the manual in doc/ is actually for
+netperf2... :( So, all that "BE SURE TO READ THE MANUAL" business is
+pretty much bunk for now.
+
+BE SURE TO READ THE MANUAL. EVEN THOUGH IT MAY BE OUTDATED.
+
+Pointers:
+
+The netperf4 benchmark depends on libxml2 (aka libxml-2.0).  You must
+have libxml2 and its development environment and utilities (eg
+xmlcatalog) installed prior to building netperf4.
+
+The netperf4 benchmark also depends on several components of glib-2.0.
+You must have glib-2.0 and its development environment installed prior
+to building netperf4.
+
+Further, netperf4 depends on the pkg-config utility.  You must have
+pkg-config installed prior to building netperf4.
+
+In the future, netperf4 may add gtk+2.0 as a dependency.
+
+If your platform does not have one or more of these dependencies best
+start getting them ported somehow.  If that is not possible, consider
+using netperf2 rather than netperf4.
+
+There is a COPYRIGHT file included.  It is called COPYING because that
+is what autosomethingorother wanted.  Netperf4 is covered by version 2
+of the GNU Public License with an exception granted to link netperf4
+with OpenSSL.  If there are other useful libraries with issues similar
+to OpenSSL (whatever they may be, the HP Legal Eagles said I needed an
+exception for OpenSSL...) it is likely an exception will be added for
+them as well.
+
+Feel free to report results in public forums, but please be
+excruciatingly complete in your description of the test environment.
+At some point it is hoped there will be a public netperf4 database to
+which people can submit results.
+
+There is an Internet mailing list devoted to netperf. Both netperf4
+and netperf2 (ie the original netperf) are discussed there.  It is
+called netperf-talk and it is hosted on netperf.org. Subscription
+requests are handled via
+
+http://www.netperf.org/cgi-bin/mailman/listinfo/netperf-talk
+
+Please DO NOT SEND subscription requests to netperf-talk!  Your
+message will be rejected because only subscribers can send email to
+netperf-talk@netperf.org.  It may seem a bit draconian, but is done to
+minimize spam on the mailing list.
+
+If you run into severe difficulties, or are just feeling chatty,
+please feel free to drop some email to me - Rick Jones
+<rick.jones2@hp.com>.  Be sure to include a meaningful subject lines
+(including netperf in the subject is helpful) and as much context
+(including cutting and pasting *actual* error messages) as you can.
+
+happy benchmarking, 
+rick jones
+
+BE SURE TO READ THE MANUAL. EVEN THOUGH IT MAY BE OUTDATED.

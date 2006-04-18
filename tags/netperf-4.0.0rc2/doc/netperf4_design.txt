@@ -1,0 +1,1060 @@
+
+Copyright 2000, 2003 Hewlett-Packard Company.
+
+Basic Design Outline
+Netperf Version 4
+
+ftp://ftp.cup.hp.com/dist/networking/benchmarks/netperf/netperf4_design.txt
+
+Stephen Burger <burger@cup.hp.com>
+Rick Jones <raj@cup.hp.com>
+Hewlett-Packard Company
+Cupertino, CA
+
+Revision 0.9; April 15, 2004
+
+Revision 0.7; March 24, 2003
+Additional specification of config file
+
+Revision 0.6; March 19, 2003
+feedback and embellishments, strawman message formats
+
+Revision 0.5; March 17, 2003
+further embellishments of commands and messages.
+
+Revision 0.4; February 6, 2003
+Nuke the netsink
+
+Revision 0.2; February 8, 2000
+
+
+
+
+Introduction:
+
+This document is intended to evolve into a design specification for
+netperf version 4, hereinafter refered to as "netperf4." The goal of
+netperf4 is to provide the ability to more easily do aggregate
+connection tests, as well as testing of FTP and/or DNS or other types
+of Internet services.
+
+The core component of netperf4 is meant to be a sufficiently flexible,
+simple, multi-system test harness that allows incremental load
+increase, and interactive loading control. Various tests can be
+plugged-into this harness to create different benchmarks.
+
+It is desired that netperf4 be "portable" - which is to say in the
+large it is tied neither to a specific platform, nor to a specific
+compiler.  The extent to which netperf4 can be compiled and run on a
+given platform may depend on the capabilities of that platform.  At a
+minimum, netperf4 is expected to compile and run under at least the
+following:
+
+*) HP-UX 11 or later
+*) Linux (of some suitable vintage/distribution)
+*) Windows (some suitable flavor(s))
+
+Assuming that the work to support them isn't too burdensome and people
+step-up to assist, it is beleived that at some point netperf4 will
+also compile and run under (in no particular order):
+
+*) Solaris 8 or later
+*) *BSD
+*) Tru64
+*) AIX
+*) OpenVMS
+
+To ease the development burden, netperf4 will, wherever possible,
+leveage the work of others.  That may include, but would not be
+limited to:
+
+*) glib/gtk+    - for eventloop handling and display support
+*) libxml2      - for XML support in config files, messages and
+                  reports 
+
+Thus, for a platform to support netperf4, it must also be able to
+support the works in the list above.  If gtk+ is determined to be a
+core dependency then glib and a host of other libraries follow.  If a
+GUI is not determined to be a core dependency, glib will still be
+desired/required for eventloops and thread abstractions.
+
+In addition, it is expected that one or more of the test suites of
+netperf will rely on the following:
+
+*) libcurl - for FTP and HTTP/HTTPS testing
+*) TBD     - for DNS testing
+
+It is desired that, just as netperf2, netperf4 become a "de facto"
+industry standard for benchmarking.  As such it is expected to be
+developed and released under the terms of some suitable "open source"
+software license.  Copyright holder for netperf4 is expected to remain
+the same as netperf2 - that is the Hewlett-Packard Company.
+
+What netperf4 is Not
+
+Netperf4 is _NOT_ expected to be a complete substitute for netperf2.
+It is expected that there will be situations where the overheads
+(either runtime, or system capability, or user interface) for netperf4
+will be in excess of what some platforms can support or users will
+desire. Netperf2 will remain, and may migrate to make use of some
+concepts initially used in netperf4 (in particular the use of XML for
+messaging and reporting is a likely candidate).
+
+The Big Picture:
+
+There will be two process types in the netperf4 architecture. It
+is expected that their "names" will be as follows:
+
+  *) netperf
+  *) netserver
+
+The netperf process is the process with which the user has direct
+interaction.  Netperf will control the initation, reporting, and
+termination of load.  User interaction with netperf will either be
+through interactive commands, or through scripting/configuration
+files. Netperf will likely utilize TUI and may utilize a GUI.  A
+"web-based" interface, while presently a "popular" thing is simply a
+"want."
+
+The netperf process will establish "control connections" to one or
+more netserver processes.  These netserver processes are spread across
+one or more load generating client systems and if using the more classic
+netperf test types the system under test.  Each netserver process will have
+a "control thread" which is used to respond to commands from the netperf
+process.  Those commands would include the creation and termination of
+load generating threads, and commands to transition those threads from
+an idle state to a loading and/or counting (actually tracking the load)
+state.  All messages sent or received on the control connection will
+pass-though the control thread.
+
+On those platforms with support for SIGIO, a test "thread" need not be
+a thread separate from the "control thread." In such situations, there
+can be only one test per netserver process.
+
+For tests such as FTP/HTTP dowload or DNS serving, the load generating
+threads in the netserver processes would talk directly to the
+FTP/DNS/Web server.
+
+For the more classic netperf test types such as TCP_STREAM, TCP_RR and
+the like, netperf would talk to two netserver load generating threads
+via their respective netserver control threads, presumeably but not
+necessarily executing on different systems.  Netperf would configure
+both netserver load generating threads and would tell them to link-up
+their data (test) connection.
+
+Netperf/netserver control communication: 
+
+As an aid to portability all messages between netperf and netserver
+shall be encoded in 7-bit US ASCII, encoding XML messages. While this
+does place a greater burden on the coding, it will bypass any issues
+with endianness and byte ordering for multi-byte data types.  It is
+also hoped that use of XML for the messages will make use of XML for
+the config and report files much easier.
+
+Messages are defined for the following interactions between netperf and a
+netserver.  
+
+  *) version verification
+  *) configuration of the netserver
+  *) status communication
+  *) test initialization, control and termination
+  *) test linkage
+  *) statistics collection
+  *) netserver termination
+
+
+
+The model for tests running under netserver is a 6 state finite state machine.
+The visible states for each load generating thread and how transitions occur
+are:
+
+  *) INIT  - the state while the thread is setting-up to generate load
+  *) IDLE  - the thread is ready to generate load
+  *) LOAD  - the thread is generating load, but not tracking results
+  *) MEAS  - the thread is generating load, and tracking results
+  *) ERROR - the thread has encountered an unexpected error
+  *) DEAD  - the thread is terminating
+
+A test is created and exists in the INIT state when netserver receives
+a request to create a test from the netperf.  Once initialization is
+complete, the netserver transitions the test to the IDLE state and replies
+to the netperf.
+
+While in the IDLE state, the test may be asked to transition to the
+LOAD state, or the DEAD state.  Requests to transition the test to any
+other state will put the test into the ERROR state.
+
+While in the LOAD state, the test may be asked to transition to the
+IDLE state, or the MEASure state. Requests to transition the test to
+any other state will put the test into the ERROR state.
+
+While in the MEASure state, the test may be asked to transition to the
+LOAD state. Requests to transition the test to any other state will
+put the test into the ERROR state.
+
+The ERROR state can be entered upon unexpected error while in the
+INIT, IDLE, LOAD, or MEASure states. While in the ERROR state, the
+test may be asked to transition to the DEAD state.  Any other request
+will result in the test replying with an error message corresponding
+to the reason the test entered the ERROR state, and the test will
+remain in the ERROR state.  A test in the ERROR state will not
+generate load.
+
+The following picture is intended to aid in understanding the FSM. It
+does not contain the associated messages received or sent:
+
+
+                          	+-------+
+			  	|       |
+		   +----error---| INIT  |
+		   |      	|       |
+		   V    	+-------+
+		   |    	 | When
+		   |    	 V Ready
+		   |    	+-------+
+		   |      	|       |
+		   +----error---| IDLE  |--------+
+		   |      	|       |        |
+		   V    	+-------+        |
+		   |     recv    |     ^ recv    |
+		   |     LOAD    V     | IDLE    |
+	+-------+  |    	+-------+        |
+	|       |  |      	|       |        |
+	| ERROR |<-+-error------| LOAD  |        |
+	|       |  |      	|       |        |
+	+-------+  ^    	+-------+        |
+	    |      |     recv    |     ^ recv    | recv
+	    |      |     MEAS    V     | NOCNT   | DIE
+	    |      |    	+-------+        |
+	    |      |      	|       |        |
+     recv   |      +-error------|  MEAS |        |
+     DIE    |   	  	|       |        |
+	    |   		+-------+	 |
+	    |   		        	 |
+	    |   		        	 |
+	    |   		+-------+        |
+	    |   	  	|       |        |
+	    +------------------>| DEAD  |<-------+
+			  	|       |
+				+-------+
+                                    |
+                                  -----
+                                   ---
+                                    -
+
+
+Netperf/netserver control connection messages:
+
+Messages on the control connection shall be encapsulated in XML
+documents passed over the control connection.  Test-specific items
+will be encapsulated as nodes within the document and will be opaque
+to the netserver control thread.
+
+The root node of a message between a netperf/netserver/test instance
+will resemble the following XML snippet:
+
+<message tonid="n2" totid="tnull" fromnid="netperf" fromtid="tnull">
+  ...content...
+</message>
+
+where "tonid" is the destination netserver/netperf ID, "totid" is the
+destination test ID, "fromnid" is the source netserver/netperf ID, and 
+"fromtid" is the source test ID.  The special case of "netperf" as
+either tonid or fromnid will identify the netperf process.  The
+special case of "tnull" as either totid or fromtid will indicate that
+the message is for either the netperf or netserver accordingly.
+
+The astute reader will notice that this "enables" a test instance in
+in the context of one netserver to address a message to a test
+instance in the context of another netserver.  This is deliberate to
+allow future test instances to communicate with one another when they
+need to coordinate their actions.  However, it is not expected to be
+implemented and debugged at the first release of netperf4 :) It is
+also expected that by default netperf will disallow such messages -
+the next paragraph will explain why :)
+
+As for why one might not simply have the test instances create their
+own out-of-band connections?  Well, they could, but the desire to
+better enable netperf to function through firewalls suggests that
+having the messages flow through connections with known addressing is
+a good thing.  Of course, this also represents an opportunity for a
+"covert channel" between test instances and malicious test library
+code might exploit that for nefarious porpoises.  Hence, once the
+functionality is implemented, the default in netperf will be to
+"block" such messages by aborting the entire test (after emitting an
+apropriate error message to the user of course :).  Further, the
+netserver control thread must drop any message it received purporting
+to be from nid=="netperf" as this indicates either a non-trivial error 
+or malicious code in a test suite.
+
+The following commands/messages will be exchanged on the
+netperf/netserver control connection and will (as apropriate) appear
+as XML entities embedded in the <message></message> construct. Only
+one of these entities shall be embedded in any one <message></message>
+construct.
+
+ new control connection    - a new netserver process is created via
+                             platform-specific means (eg fork etc)
+
+ version <version> - send the major, minor and micro version numbers
+                     for netperf. if the netserver believes these
+                     version numbers to be compatible with his version 
+                     numbers, the netserver responds with a version
+                     message with his major, minor and micro version
+                     numbers. otherwise netserver replies with an
+                     error message.
+
+                     when netperf receives a version message, it will
+                     compare the major, minor and micro version
+                     numbers against his own.  if the netperf believes 
+                     these to be compatible with his own, he will do
+                     nothing. otherwise he will close the control
+                     connection and report a version incompatability
+                     to the user interface. 
+
+ test <workinfo>   - create a new test and init based on "workinfo."
+                     this will include dynamically loading the
+                     specified test library and loading apropriate
+                     function pointers, and then setup of
+                     test-specific paramters. 
+                     
+                     if initialization is successful, return an
+		     init message containing the test-specific
+                     post-initialization data, otherwise, transistion
+                     the test to the DEAD state and return an error message
+
+ load <num>        - request that the test <num> transition from
+                     IDLE to LOAD and start generating load, or from
+		     MEAS to LOAD  but not track its results.
+
+                     if the test can successfully transition to the
+                     LOAD state, send a LOAD message back, otherwise
+                     transition the test to the ERROR state and return 
+                     an error message.
+
+ meas <num>        - request that test <num> transition from LOAD to
+                     MEASure state and start tracking the results of
+                     is generation of load. 
+
+                     if the test can successfully transition to the
+                     MEASure state, reply with a meas message,
+                     otherwise transition to the error state and
+                     return an error message.
+
+ idle <num>        - request that test <num> transition from LOAD to
+                     IDLE and stop generating load.
+    
+                     if the transition to IDLE is successful, return
+                     an IDLE message, otherwise transition to the
+                     ERROR state and return an error message.
+
+ die <num>         - request that the test <num> transition from either
+                     IDLE or ERROR to DEAD and simply fade away,
+                     freeing any test-specific resources not already
+                     freed. [Need there be a reply to this command?]
+
+ clear <num>       - request that test <num> clear its
+                     statistics. unless some error is encountered in
+                     clearing the statistics, no message is
+                     returned. otherwise, an error message is returned 
+                     and the test transitions to the ERROR state.
+
+ snap <num>        - take a snapshot of test <num>'s statistics.  if
+                     the statistics can be assembled, a snap message
+                     with the statistics is returned, otherwise return 
+                     an error message and transition the test to the
+                     ERROR state.
+
+ totals <num>      - request "total" statistics (statistics since the
+                     beginning of the measurement interval) from test
+                     <num>.  if the statistics can be assembled, a
+                     totals message with the statistics will be
+                     returned, otheriwse, return an error message and
+                     transistion the test to the ERROR state. 
+
+ warning           - when the netserver control thread or a test instance
+                     detects a non-fatal condtion that allows testing
+                     to continue, it will send a warning message to
+                     netperf. a netperf will never send a warning
+                     message to a netserver or test instance.  it is
+                     expected that this is exceedingly rare.
+
+ error             - when the netserver control thread or a test
+                     detects a fatal error, an error message will be
+                     send to the netperf.  a netperf will never send
+                     an error message to a netserver or test
+                     instance. ASCII text of an error message will be
+                     embeded in the message.
+
+ close of control connection - upon detecting a close of the control
+                     connection a netserver will unceremoniously
+                     terminate, taking all tests with it. [depending
+                     on the nature of the test code, it may be
+                     necessary to give the tests the option of some
+                     clean-up]
+
+                     a netperf detecting close of the control
+                     connection will presume a catastrophic error in
+                     the netserver and act accordingly.
+
+Netperf commands:
+
+The following are described as "operations" because they may or may
+not correspond to "commands" in the sense of someone typing that
+command name at a prompt or what not.  They are provided as a guide to
+the functionality expected to be implemented in the netperf process.
+As such, do not pay too much attention to syntax, consider only
+semantics. Syntax will follow after decisions on the UI(s) are made.
+
+The netperf process will support the following "operations."
+
+ open <machine>    - open a connection to a new netserver process on
+                     <machine> and return a client number.
+
+ close <client>    - terminate <client> (including all threads) with
+                     extreme predjudice. The control thread of the
+                     corresponding netperf simply exit()'s, taking any
+                     and all tests with it.
+
+ test <client> <workinfo> - create a new test instance on  <client>
+                            and initialize with <workinfo>. return a
+                            global thread number.
+
+ list <client>     - list all tests and their current state on
+                     <client>
+
+ load <test>     - request that global test id <test> begin to
+                   generate load. when <test> is specified as "INIT",
+                   the command  causes the request to go to all tests
+                   in the INIT state. a test id of "MEAS" will cause
+                   the request to go to all tests in the MEASure
+                   state.  a test id of "ALL" will cause the request
+                   to be sent to all tests in either the INIT or
+                   MEASure states.
+
+ measure <test>  - request that global test id <test> transition from
+                   the LOAD to the MEASure state.  If <test> is
+                   specified as "LOAD" or "ALL" the request will be
+                   sent to all tests in the LOAD state.
+
+ idle <test>     - request that global test id <test> transition from
+                   the LOAD to the IDLE state.  If <test> is specified
+                   as "LOAD" or "ALL" the request will be sent to all
+                   tests in the LOAD state.
+
+ clear <test>    - request that global test id <test> clear its
+                   accumulated statistics.
+
+ snap <test>     - request that global test id <test> return
+                   statistics for the interval since the last snap
+                   command or entry into the MEASure state whichever
+                   is most recent.  If <test> is specified as "MEAS"
+                   or "ALL" the request will be sent to all tests in
+                   the MEASure state.
+
+
+
+How load generator test state transitions work:
+
+When a message arrives on a control connection, the netserver control
+thread will compare the command in the message against the test state
+recorded in the per-test data structure.  If the message is valid for
+the current state, the netserver control thread will then queue the
+message to the test and set a flag in the per-test data structure to
+"signal" (not in the Unix/gtk sense) the test that a message is
+present.  The test will notice this "signal" and will consume the
+message and act accordingly.  [Question - perhaps it would be better
+to simply have the netserver control thread queue all messages to the
+test and let the test decide how to handle them? ]
+
+The test is generally expected to generate some sort of reply message
+after consuming the message(s) sent to it by the netperf via the
+netserver control thread.  This shall be accomplished with library
+code the test code can call to access the control socket in a manner
+otherwise opaque to the test code.  When the test is a thread separate
+from the netserver control thread (the usual case?) this will involve
+queueing the message to the netserver control thread and "signalling"
+the thread in some manner - the idea is to hand the message off
+"quickly" and let the test get back to what it was doing before.
+
+When the test is not a thread separate from the netserver control
+thread, this will simply write directly to the control thread.  This
+may block the test for some undesireably length of time if the nature
+of control traffic is to have more than one outstanding message at a
+time.  Otherwise, it is expected that the socket buffers will be
+sufficiently large to allow the message to be queued to the control
+socket without blocking.
+
+Since the netserver is expected to be dealing with many, Many, MANY
+test instances simultaneously, messages sent across the control
+connections, while generally expected to trigger replies of some sort,
+shall be asynchronous.  That is, the netperf process will be written
+in an event-driven manner, and the sending of a control message is
+expected to update sufficient state information in the netserver
+process to enable processing the resulting reply.
+
+
+What a load generating thread should do in the LOAD verus MEAS states:
+
+There is a decision to be made wrt how a load generating thread should
+behave while in the LOAD or MEAS states. In particular, how
+transitions from one to the other should affect the results being
+counted.
+
+For very simple (ie short) "transactions" in the load, we could simply
+state that the load generating thread does not start counting load
+until the first transaction it does after entering the MEAS state.
+That would likely be sufficient for something like the netperf
+TCP_STREAM test, or the TCP_RR, where it could simply start counting
+with the next transaction.
+
+At the other end, it is likely that a transaction started while in
+MEAS would complete very closely to the time of the request to return
+simply to the LOAD state.
+
+However, for something like an FTP download of a 16 MB file over a
+simulated 56,000 bit per second link, the next "transaction" (ie
+download) could be 40 minutes away, and it could be 40 minutes before
+it completes.
+
+It seems therefor, that any "long" test transaction has to be coded
+such that it can start and stop counting "in the middle."
+
+
+When netperf will exit:
+
+Netperf will exit whenever it encounters a fatal error.  In general an 
+error will be considered fatal if it precludes the possiblity of
+futher useful work being done by netperf.  When netperf is being run
+interactively this shall include:
+
+<insert something here :) >
+
+When netperf is being run non-interactively, fatal errors will include 
+those of the flavors listed for interactive operation plus:
+
+*) receipt of any "error" messages from any netserver or test instance
+*) failure to establish a control connection
+*) failure of a control connection
+
+More on the control connection:
+
+The netperf config file (or other mechanism, we'll just use "config
+file" here for brevity) MUST include the ability to completely specify
+both endpoints of a control connection.  By that we mean the six-tuple
+of local and remote IPaddress/hostname, local and remote port numbers,
+and local and remote addressing families (corresponding to IPv4, IPv6
+and "don't care").
+
+The defaults for the items in the six-tuple will be as follows:
+
+*) Local IPaddress/hostname - INADDR_ANY/assigned by the system
+*) Local port number        - dynamically assigned by the system
+*) Local address family     - AF_INET
+
+*) Remote IPaddress/hostname - the hostname of the system
+*) Remote port number        - the netperf4 well-known port number (TBD)
+*) Remote address family     - AF_INET
+
+The routine "getaddrinfo()" will be used to confert the local and
+remote three-tuples into sockaddr structures that can be passed to
+bind()/connect() accordingly.  For each remote address info structure
+returned by getaddrinfo(), the control connection establishment code
+will try each of the local address info structures returned by
+getaddrinfo().  The first combination of remote/local address info
+that results in a succesful call to connect() will be used for the
+control connection.
+
+If no combination of local/remote address info results in a successful 
+call to connect() then control connection establishment will fail and
+an error will be displayed to the user.  If netperf is being run
+interactively, it will continue to execute, otherwise, netperf will
+abort.
+
+Thus, the greatest control is exerted by the user when s/he specifies
+local and remote addressing information in the form of IP addresses
+(IPv4 or IPv6), explicit port numbers (numeric rather than names) and
+specific address families (AF_INET or AF_INET6 depending on the IP
+addresses provided.
+
+When hostnames are specified, the control connection can involve any
+of the IP addresses associated with the hostnames.  If it is desired
+that hostnames be used and that only a single IP address associated
+with the hostname be used, then the hostname MUST resolve to a single
+IP address.
+
+
+More about test endpoint addressing:
+
+It is required that config files and test code be able to handle
+specification of full endpoint addressing information as defined by
+the type of test being executed.  For "classic" netperf style tests
+that means that one must be able to specify addressing information for 
+both ends of the "data"  connection. "Classic" netperf style tests
+have two test specifications - one for the "recv" side and one for the 
+"send" side.  Complete addressing info MAY span config specifications
+for both sides.
+
+Whether or not a test utilizes an algorithm similar to that of the
+control connection is left as a decision for the designer of that test 
+suite.
+
+Appendix M - Message formats:
+
+The following are the formats of the messages exchanged between
+netperf and the netserver control thread/test.  Some messages may
+contain test-suite-specific elements which are not described here.
+
+In XML, if an element (entity) is normally described as:
+
+   <name></name>
+
+However, if there is no text content to the element, this can be
+shortened to simply:
+
+	  <name/>
+
+netperf messages, being XML constructs will naturally follow the same
+pattern.  In this document, the shorthand will be used
+
+Version message:
+
+	<version vers="4" updt="0" fix="999" req="1"/>
+
+This is the message type that informs the other side of our version
+information.  The "vers", "updt", and "fix" numbers (aka major, minor,
+micro) are encoded as attributes of the version element rather than as
+contents or sub-elements (this may not be the correct XML
+terminology...).  The "req" attiribute is a placeholder should it be
+necessary to know if this version message is an initial request, or a
+reply to a request.  It is not presently expected to be necessary.
+
+Whether attribute names should be full English or abreviated is open
+to discussion.  The tradeoff is between human readability and bytes on 
+the network.  Human readability is likely to win.
+
+Snap message -
+
+     <snap interval="<seconds>"/>
+
+The interval attribute of a snap will specify the frequency with which
+"interval" messages should be sent back to the netserver after the
+initial, immediate interval message.  A value of "0" (zero) seconds
+states that only one interval message should be sent.  A non-zero
+value for the interval attribute means that interval messages should
+continute to be sent, aproximately N seconds apart until otherwise
+disabled. 
+
+
+Interval message - interval statistics in response to a snap
+
+	 <interval startsec="..." startusec="..." endsec="" endusec="..."
+	 ...test-specific data...
+	 </interval>
+
+	 or
+
+	 <interval start="..." end="..." 
+	 ...test-specific data...
+	 </interval>
+
+
+The interval element will have as its attributes a start time in the
+style of a "Unix" timeval structure as returned in a gettimeofday()
+call - seconds and microseconds since the beginning of the Epoch.  The
+other option is to have the format be in a full ASCII format for
+YYYY-MM-DD-HH:MM:SS.mm.  The decision again centers on how the
+timevalues will be used and whether things in log files should be more 
+easily read by humans, or if conversions for math should be easier for 
+the programmer.  
+
+Error message
+
+      <error errno="..." err="...>error string</error>
+
+Attributes are open for discussion - the error message might contain
+an errno attribute that will hold the errno value (or its platform
+equivalent) and an err attribute that may hold a netperf-specific
+error number.
+
+The primary content is to be the "error string" contents, which will
+be displayed to the user and/or written to a log.
+
+Load message
+
+     <load/>
+
+This will cause the receiving test instance to transition to the LOAD
+state.  The test instance is determined from the <message>
+attributes. Request message and reply message are identical.
+
+Measure message
+
+	<measure/>
+
+This will cause the receiving test  instance to transition to the
+MEASure state.  The test instance was determined from the <message>
+attributes.  Request message and reply message are identical.
+
+Idle message
+
+     <idle/>
+
+This will cause the receiving test instance to transition to the IDLE
+state.  The test instnace was determined from the enclosing <message>
+attributes. Request message and reply message are identical.
+
+Test message
+     
+     <test tid="...">
+     ...test-specific contents...
+     </test>
+
+Cause the netserver control thread to instantiate and initialize a
+test instance with a test ID based on the "tid" attributed.  The
+"totid" attribute in the enclosing <message> would be tnull as a test
+command is addressed to a netserver control thread and not a test
+instance. 
+
+The test-specific contents are expected to be XML formatted so they
+may come, unchanged, from a test element in the config file (should
+one exist)
+
+Test id's (tid attributes) MUST be globally unique within a netperf.
+Typically this means they must be unique within a config file.  Should
+it ever come to pass that config files can "include" another config
+file, tids MUST be unique across config file inclusion.
+
+Initresult message
+
+    <initresult>
+    ...test-specific contents...
+    </initresult>
+
+This is the message sent from a test instance in response to the test
+message sent by netperf.   It does not contain a "tid" attribute
+because that will be present in the "fromtid" attribute of the
+enclosing <message>. 
+
+The test-specific contents are expected to be XML formated so they can
+go directly into an XML-formatted results or log file.
+
+Die message
+
+    <die tid="..."/>
+
+It is presumed that since a "die" message is addressed to a netserver
+control thread that it should have a tid attribute to idendtify the
+test instance to be terminated - the "totid" attribute of the
+enclosing <message> likely being tnull.
+
+Clear message
+
+      <clear/>
+
+Request that the test instance (specified in the totid attribute of
+the enclosing <message>) clear all statistics - both interval and
+total.
+
+
+Format of the config file:
+
+Unless you have a decent understanding of XML, they may look rather
+confusing.  Some aspect (hell, many) of XML still confuse the author
+:) Basically all the configuration data for netperf is contained in
+child-elements/entities of a <netperf></netperf> element.
+
+It is intended the format for the "test" subelement be usable as the
+"test" command on the control connection.
+
+The decisions on what should be attributes 'foo="bar"' and what should
+be child-elements is still somewhat open and subject to fluidity.  One
+possible decision criteria (not necessarily rigorously applied here :)
+is whether or not something handling/passing-on an element needs/wants
+information contained within.  If it may need the information, then
+having that as an attribute may be preferable as it would not have to
+"walk" the child-elements - this probably makes more sense if you are
+familiar with libxml2 or XML in general. (Which the author does not
+necessarily claim to have himself... :)
+
+What follows is a simple config file for netperf.  The config file and
+a results file MAY be the same.  A results file MUST contain all the
+initial config data, the initresults data and of course results. When
+a results file is used as a config file for a later test, any results
+information will be stripped from the in-memory copy when it is read
+by netperf.  If netperf is asked to write results to the same filename
+used for the config file, any previous results in the config file will
+be lost.
+
+The following config file presumes three (logical) systems -
+netperf.test.invalid (where netperf runs) node1.test.invalid (where
+the first netserver "n1" executes) and node2.test.invalid (where
+netserver "n2" executes).
+
+Netserver "n1" is asked to run the "RECV_TCP_STREAM" test.  Netperf
+will use IPv4 (AF_INET) and the "netperf4" well-known port when
+resolving the remote name "node1.test.invalid" to connect to the
+netserver. The address family and port data comes from the defaults
+element that is a peer of the netserver element.  The hostname for the
+remote netserver is taken from the "host" element contained within the
+netserver element for "n1."  Netperf will also use AF_INET and an
+unspecified ("0") port number for its local end of the control
+connection.  This means that when it calls connect(), the TCP/IP stack
+will select the source IP address and TCP port numbers on behalf of
+netperf.
+
+
+Netserver "n2" will execute the "SEND_TCP_STREAM" test and the
+CPU_UTIL test.  In establishing the control connection, netperf will
+use IPv6 (AF_INET6) and the netperf4 well known port number when
+looking-up the hostname node2.test.invalid.  The address family and
+hostname come from the host element in the netserver element for n2
+and the port-number comes from the host element in the defaults
+element that is a peer of the netserver elements.  Netperf will also
+use AF_INET6 and port 12345 for its local endpoint - both coming from
+the source element within the netserver element for n2.  This means
+that the TCP/IP stack will select an IPv6 address on behalf of netperf
+when it calls connect().
+
+The test instance "t1" is of type "SEND_TCP_STREAM". The library to
+use comes from the defaults element that is a peer of the netservers
+as there is no library specification in the defaults element that is a
+peer of the test element itself.
+
+And so on and so forth.
+
+If this looks more involved than netperf2, you are correct. It is.
+This is the price of handling multiple streams and such and having a
+config file rather than just a command line. However, getting a
+command-line interface to scale to say 20,000 concurrent tests...
+
+<?xml version="1.0"?>
+<!DOCTYPE netperf SYSTEM "netperf_config.dtd">        
+<netperf xmlns="http://www.netperf.org/ns/netperf">
+
+<!-- the values within this defaults element will apply to all the
+netserver elements and their children. so, it may contain default
+settings for say the control connections, and/or default settings for
+test elements etc -->
+
+<defaults>
+  <host family="AF_INET" port="netperf4"/>
+  <source family="AF_INET" port="0"/>
+
+  <!-- the settings within this test element will only be used for
+  tests of equivalent type - that is the "SEND_TCP_STREAM" type. -->
+
+  <test type="SEND_TCP_STREAM" library="libnettest_bsd.sl">
+    <config>
+      <tcpnodelay>1</tcpnodelay>
+    </config>
+  </test>
+  <test type="RECV_TCP_STREAM" library="libnettest_bsd.sl">
+    <config>
+    </config>
+  </test>
+</defaults>
+
+<netserver nid="n1">
+
+  <!-- the attributes for address family and port used to pass to
+  connect() are omitted from this host element and will come from
+  either the defaults element that is a sibling of the containing
+  netserver or hard-coded defaults in the code -->
+
+  <host>node1.test.invalid</host>
+
+  <!-- as there is no source element, all aspects of source IP
+  address, family and port information will come from defaults. -->
+
+  <!-- the values within this defaults element will only apply to the
+  test elements within this netserver element. -->
+
+  <defaults>
+    <test type="SEND_TCP_STREAM">
+      <config>
+        <sndbuf units="B">49152</sndbuf>
+      </config>
+    </test>
+  </defaults>
+
+  <!-- the library for this test element will come from defaults. the
+  tid and type are required attributes -->
+  <test tid="t1" type="SEND_TCP_STREAM">
+
+    <!-- since this test depends on another test instance, it will
+    have to wait for the other test instance to complete
+    initialization.  This test will then be able to retrieve
+    addressing information from the initresults element of that test
+    -->
+    <dependson testid="t2" />
+
+    <!-- these are the non-defaulted configuration elements for the
+    test any elements not present here will either come from the
+    initresults element of the dependency or from default elements or
+    from hard-coded defaults in the source code of the test suite. -->
+    <config>
+      <source family="AF_INET" port="1234">foo.bar.baz</source>
+      <rcvbuf units="B">32768</rcvbuf>
+      <sendsize units="KB">4</sendsize>
+      <tcpnodelay>0</tcpnodelay>
+      <sendalign>8</sendalign>
+      <sendoffset>0</sendoffset>
+    </config>
+
+    <!-- what all the setup parameters are after the test instance has
+    completed INIT processing. these may be queried by a dependent
+    test instance and MUST be included in the results report. since
+    this is programatically generated, there is no compelling reason
+    for anything to be defaulted. All attributes and sub-elements must
+    be present. -->
+    <initresult>
+      <!-- most if not all things from a config element will be found
+      here. the difference between a config and an initresult is that
+      an initresult has no optional child elements. this example then,
+      while perhaps a "valid" (XML sense) config file is not a valid
+      results file :) -->
+      <mss units="Bytes">1460</mss>
+    </initresult>
+
+    <!-- an interval is a snapshot of the results over a time
+    interval. it may not be implemented at first but we'll have a
+    placeholder.  there could be quite a few of these for a long
+    test. attributes and values are test-specific and may not be
+    defaulted.  the code generates these, not the user, so there is no
+    compelling reason to default anything. all attributes and
+    sub-elements must be present in a valid results file. -->
+    <interval>
+      <throughput units="Mb" 
+                  start="sometimetoseconds" 
+                  end="sometimetoseconds">123.45</throughput>
+    </interval>
+
+    <!-- the final results of the test from entry to and exit from the
+    MEASure state. attributes and values are test-specific. since this
+    is always programatically generated, there is no compelling reason
+    for any of the attributes or values to be defaulted -->
+
+    <results>
+      <throughput units="Mb" start="whenever" end="later">123.45</throughput>
+    </results>
+
+  </test>
+</netserver>
+
+<netserver nid="n2">
+  <!-- this host element sets the address family and the remote
+  hostname/ip to use, but leaves the selection of port number to
+  defaults. -->
+  <host family="AF_INET6">node2.test.invalid</host>
+
+  <!-- this source element sets the address family and port to use for
+  the local endpoint of the control connection, but does not specify
+  the local IP address, which will either come from a defaults block
+  or from hard-coded settings in netperf sources. -->
+  <source family="AF_INET6" port"12345"/>
+
+  <!-- this test element overrides the default for library and
+  specifies libnettest_bsd2.sl. -->
+  <test tid="t2" type="RECV_TCP_STREAM" library="libnettest_bsd2.sl"
+
+    <config>
+      <source family="AF_INET" port="0">bing.fred.ethel</source>
+      <sndbuf units="KB">32</sndbuf>
+      <rcvbuf units="KB">32</rcvbuf>
+      <recvsize units="KB">4</recvsize>
+      <recvalign>8</recvalign>
+      <recvoffset>0</recvoffset>
+    </config>
+
+    <initresult>
+    </initresult>
+
+    <results>
+      <throughput units="Mb/s" start="whenever" end="later">123.45</throughput>
+    </results>
+  </test>
+
+  <!-- this is a second test instance, this one for measuring CPU
+  utilization and specifying that the entry points for this test can
+  be found in the library libnettest_cpu.sl -->
+  <test tid="t4" type="CPU_UTIL" library="libnettest_cpu.sl"
+
+    <config>
+      <cpus method="UNKN">0</cpus>
+    </config>
+
+    <!-- since initresults is programatically generated, there is no
+    compelling reason for anything to be defaulted. All attributes and
+    sub-elements MUST be present -->
+    <initresult>
+      <cpus method="PSTAT">4</cpus>
+    </initresult>
+
+    <results>
+      <throughput units="P" start="whenever" end="later">95.3</throughput>
+    </results>
+  </test>
+</netserver>
+</netperf>
+
+A word about defaults -
+
+When instantiating a test instance, netperf will provide a complete
+test element to the remote netserver.  However, since a config file
+may need to contain _many_ test instances and the like, with repeated
+values, many parts of a test element can be omitted from the config
+file.
+
+Prior to passing the test element to the netserver, netperf will call
+a test-suite-specific routine from the test library which will fill-in
+the omitted values.  It can take those values from one of three
+places.  The first would be from a "defaults" element that is a peer
+of the test element in the context of the netserver element - that is,
+a "defaults" element that is a child of a netserver element will apply
+to any other elements within the containing netserver element.  The
+second would be a defaults element that is a peer of the netserver
+element.  Settings in that default element will apply to all the
+netservers in the config file.  Finally, the test suite may have
+default values of its own.
+
+Settings MUST be applied in that order - from within the test element
+itself, from the default element that is a peer of the test element,
+from the test element that is the peer of the containing netserver
+element, and finally from within the test suite itself.
+
+This is somewhat analagous to variable scoping in most programming
+languages - when a variable name is encountered, the compiler will try
+to find its definition in the most local scope (the routine or basic
+block itself).  Failing that, it will try the next most specific
+scope, and so on, out to globals.
+
+How dependencies will be addressed:
+
+Any given test instance may depend on _one_ and only one other test
+instance.  A given test instance may be a dependency of more than one
+other test instance.
+
+Circular dependencies are not permitted :)  If a config file specifies 
+a circular dependency, and netperf detects it, netperf will emit an
+error and terminate with extreme predjudice.
+
+It is presumed that all dependent netservers will be instantiated
+before any tests that may be defined within those netservers are
+instantiated.
+
+As the first check while instantiating a test instance, a check will
+be made for the presence of a "dependson" sub-element within the test
+element of the config file.  If such a dependson sub-element is
+present, instantiation of the test will await completion of
+instantiation of the test upon which this test depends.  This will
+continue until finally a test element with no dependson sub-element is 
+found.  The initial message to instantiate that test will be sent, and 
+state setup such that when the init response is received, processing
+of the response will then trigger further processing of the dependent
+test instance(s). 
+
+Initial versions of netperf MAY place an arbitrary limit on the
+maximum depth of dependencies.
+
+

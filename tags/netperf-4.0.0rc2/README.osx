@@ -1,0 +1,5 @@
+Netperf4 has been compiled and even seems to work :) on MacOS X 10.3.9
+using the Xcode 1.5 development bits.  It does not as yet know how to
+take CPU utilization measurements, nor how to bind threads to a
+specific CPU.  Anything you may have to contribute in those areas
+would be most welcome.

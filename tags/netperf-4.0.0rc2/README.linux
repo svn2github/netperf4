@@ -1,0 +1,9 @@
+It is no longer necessary to set CPPFLAGS before ./configure:
+
+CPPFLAGS="-D_GNU_SOURCE" ./configure
+
+As I've added some automagic stuff to the configure script to add
+-D_GNU_SOURCE to the CPPFLAGS when configure runs.  In this way Linux
+(debian at least) build environment can find things like the
+posix_rwlock_t that are seemingly so easily found on other platforms
+(eg HP-UX, MacOS X).
