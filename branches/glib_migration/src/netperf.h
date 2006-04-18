@@ -106,6 +106,7 @@ typedef unsigned long long uint64_t;
 #ifndef PRIu64
 # define PRIx64 "I64x"
 # define PRIu64 "I64u"
+# define PRId64 "I64d"
 #endif
 #else
 #define INVALID_SOCKET -1
