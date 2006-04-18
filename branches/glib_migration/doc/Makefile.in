@@ -14,6 +14,10 @@
 
 @SET_MAKE@
 
+# what is your philosophy - distribute pre-made .pdf et al in a make dist
+# or not?  choose your EXTRA_DIST line accordingly
+# EXTRA_DIST = netperf4.man netserver4.man netperf4.txt netperf4.html netperf4.xml  netperf4.pdf netperf4.ps netperf4.texi examples netperf4_design.txt
+
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
 VPATH = @srcdir@
@@ -137,9 +141,13 @@ target_alias = @target_alias@
 target_cpu = @target_cpu@
 target_os = @target_os@
 target_vendor = @target_vendor@
-EXTRA_DIST = netperf4.man netserver4.man netperf4.txt netperf4.html netperf4.xml  netperf4.pdf netperf4.ps netperf4.texi examples netperf4_design.txt
+
+EXTRA_DIST = netperf4.man netserver4.man netperf4.texi examples netperf4_design.txt
+
 man1_MANS = netperf4.man netserver4.man
+
 info_TEXINFOS = netperf4.texi
+
 CLEANFILES = netperf4.txt netperf4.xml netperf4.html
 subdir = doc
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
