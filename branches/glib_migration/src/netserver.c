@@ -588,6 +588,11 @@ check_test_state_callback(gpointer data)
 
   netperf = netperf_hash[0].server;
 
+  if (debug) {
+    g_fprintf(where,
+              "%s Hickory Dickory Dock, Callback Ran Off The Clock\n",
+              __func__);
+  }
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
     /* mutex locking is not required because only one 

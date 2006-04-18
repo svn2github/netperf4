@@ -1008,7 +1008,7 @@ bsd_test_get_stats(test_t *test)
     for (i = 0; i < BSD_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
       if (test->debug) {
-        fprintf(test->where,"BSD_COUNTER%X = %#llx\n",i,loc_cnt[i]);
+        fprintf(test->where,"BSD_COUNTER%X = %#"PRIx64"\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -1053,7 +1053,7 @@ bsd_test_get_stats(test_t *test)
         break;
       }
       if (loc_cnt[i]) {
-        sprintf(value,"%#llx",my_data->stats.counter[i]);
+        sprintf(value,"%#"PRIx64,my_data->stats.counter[i]);
         sprintf(name,"cntr%1X_value",i);
         ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value);
         if (test->debug) {

@@ -1438,7 +1438,7 @@ vst_test_get_stats(test_t *test)
     for (i = 0; i < VST_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
       if (test->debug) {
-        fprintf(test->where,"VST_COUNTER%X = %#llx\n",i,loc_cnt[i]);
+        fprintf(test->where,"VST_COUNTER%X = %#"PRIx64"\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -1483,7 +1483,7 @@ vst_test_get_stats(test_t *test)
         break;
       }
       if (loc_cnt[i]) {
-        sprintf(value,"%#llx",my_data->stats.counter[i]);
+        sprintf(value,"%#"PRIx64,my_data->stats.counter[i]);
         sprintf(name,"cntr%1X_value",i);
         ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value);
         if (test->debug) {
@@ -2450,7 +2450,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = strtod(value_str,NULL);
       if (test_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+        sscanf(value_str,"%"PRIx64,&x);
         test_cntr[i] = (double)x;
       }
     }
@@ -2574,7 +2574,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = strtod(value_str,NULL);
       if (sys_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+        sscanf(value_str,"%"PRIx64,&x);
         sys_cntr[i] = (double)x;
       }
     }
