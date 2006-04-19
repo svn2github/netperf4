@@ -159,20 +159,16 @@ USE_NETLIB_SOURCE = netlib_@NETSYS_SOURCE@.c
 
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
-EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
+EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netsysstats*.c netlib_*.c
 
-COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netmsg.h netconfidence.c netconfidence.h 
+# some of the other include files are actually up in include/
+COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
 
 netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
 netperfdir = @datadir@/netperf
 netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
-
-# in theory this will cause these header files to be put in the
-# installed headers location, where folks who want to make their own
-# test libraries can find them
-include_HEADERS = netperf.h netconfidence.h netperf_hist.h
 
 # in theory, the stuff below should deal with creating the requisite
 # "core" libs.  optional libs are in suites/
@@ -243,10 +239,8 @@ DIST_SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) \
 	$(netperf_SOURCES) $(netserver_SOURCES)
 DATA = $(netperf_DATA)
 
-HEADERS = $(include_HEADERS)
-
-DIST_COMMON = $(include_HEADERS) $(srcdir)/Makefile.in Makefile.am \
-	missing/getaddrinfo.c missing/inet_ntop.c
+DIST_COMMON = $(srcdir)/Makefile.in Makefile.am missing/getaddrinfo.c \
+	missing/inet_ntop.c
 SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
 
 all: all-am
@@ -404,24 +398,6 @@ uninstall-netperfDATA:
 	  echo " rm -f $(DESTDIR)$(netperfdir)/$$f"; \
 	  rm -f $(DESTDIR)$(netperfdir)/$$f; \
 	done
-includeHEADERS_INSTALL = $(INSTALL_HEADER)
-install-includeHEADERS: $(include_HEADERS)
-	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(includedir)
-	@list='$(include_HEADERS)'; for p in $$list; do \
-	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	  f="`echo $$p | sed -e 's|^.*/||'`"; \
-	  echo " $(includeHEADERS_INSTALL) $$d$$p $(DESTDIR)$(includedir)/$$f"; \
-	  $(includeHEADERS_INSTALL) $$d$$p $(DESTDIR)$(includedir)/$$f; \
-	done
-
-uninstall-includeHEADERS:
-	@$(NORMAL_UNINSTALL)
-	@list='$(include_HEADERS)'; for p in $$list; do \
-	  f="`echo $$p | sed -e 's|^.*/||'`"; \
-	  echo " rm -f $(DESTDIR)$(includedir)/$$f"; \
-	  rm -f $(DESTDIR)$(includedir)/$$f; \
-	done
 
 ETAGS = etags
 ETAGSFLAGS =
@@ -511,12 +487,12 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-am
-all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(DATA) $(HEADERS)
+all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(DATA)
 install-binPROGRAMS: install-libLTLIBRARIES
 
 
 installdirs:
-	$(mkinstalldirs) $(DESTDIR)$(libdir) $(DESTDIR)$(bindir) $(DESTDIR)$(netperfdir) $(DESTDIR)$(includedir)
+	$(mkinstalldirs) $(DESTDIR)$(libdir) $(DESTDIR)$(bindir) $(DESTDIR)$(netperfdir)
 install: install-am
 install-exec: install-exec-am
 install-data: install-data-am
@@ -560,8 +536,7 @@ info: info-am
 
 info-am:
 
-install-data-am: install-data-local install-includeHEADERS \
-	install-netperfDATA
+install-data-am: install-data-local install-netperfDATA
 
 install-exec-am: install-binPROGRAMS install-libLTLIBRARIES
 
@@ -589,25 +564,22 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
-	uninstall-info-am uninstall-libLTLIBRARIES \
-	uninstall-netperfDATA
+uninstall-am: uninstall-binPROGRAMS uninstall-info-am \
+	uninstall-libLTLIBRARIES uninstall-netperfDATA
 
 .PHONY: CTAGS GTAGS all all-am check check-am clean clean-binPROGRAMS \
 	clean-generic clean-libLTLIBRARIES clean-libtool ctags \
 	distclean distclean-compile distclean-generic distclean-libtool \
 	distclean-tags distdir dvi dvi-am info info-am install \
 	install-am install-binPROGRAMS install-data install-data-am \
-	install-data-local install-exec install-exec-am \
-	install-includeHEADERS install-info install-info-am \
-	install-libLTLIBRARIES install-man install-netperfDATA \
-	install-strip installcheck installcheck-am installdirs \
-	maintainer-clean maintainer-clean-generic mostlyclean \
-	mostlyclean-compile mostlyclean-generic mostlyclean-libtool pdf \
-	pdf-am ps ps-am tags uninstall uninstall-am \
-	uninstall-binPROGRAMS uninstall-includeHEADERS \
-	uninstall-info-am uninstall-libLTLIBRARIES \
-	uninstall-netperfDATA
+	install-data-local install-exec install-exec-am install-info \
+	install-info-am install-libLTLIBRARIES install-man \
+	install-netperfDATA install-strip installcheck installcheck-am \
+	installdirs maintainer-clean maintainer-clean-generic \
+	mostlyclean mostlyclean-compile mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am tags uninstall \
+	uninstall-am uninstall-binPROGRAMS uninstall-info-am \
+	uninstall-libLTLIBRARIES uninstall-netperfDATA
 
 
 missing/getaddrinfo.o: $(srcdir)/missing/getaddrinfo.c

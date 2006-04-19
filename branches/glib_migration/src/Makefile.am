@@ -13,20 +13,16 @@ USE_NETLIB_SOURCE=netlib_@NETSYS_SOURCE@.c
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 
-EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
+EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netsysstats*.c netlib_*.c
 
-COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netmsg.h netconfidence.c netconfidence.h 
+# some of the other include files are actually up in include/
+COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
 
 netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
 netperfdir = @datadir@/netperf
 netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
-
-# in theory this will cause these header files to be put in the
-# installed headers location, where folks who want to make their own
-# test libraries can find them
-include_HEADERS = netperf.h netconfidence.h netperf_hist.h
 
 # in theory, the stuff below should deal with creating the requisite
 # "core" libs.  optional libs are in suites/
