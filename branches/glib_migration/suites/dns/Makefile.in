@@ -14,15 +14,13 @@
 
 @SET_MAKE@
 
-#SUBDIRS = suites
-
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 pkgdatadir = $(datadir)/@PACKAGE@
 pkglibdir = $(libdir)/@PACKAGE@
 pkgincludedir = $(includedir)/@PACKAGE@
-top_builddir = ..
+top_builddir = ../..
 
 am__cd = CDPATH="$${ZSH_VERSION+.}$(PATH_SEPARATOR)" && cd
 INSTALL = @INSTALL@
@@ -143,99 +141,28 @@ target_alias = @target_alias@
 target_cpu = @target_cpu@
 target_os = @target_os@
 target_vendor = @target_vendor@
-
-bin_PROGRAMS = netperf netserver
-
-AM_CFLAGS = $(NETPERF_CFLAGS)
-AM_CPPFLAGS = -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$(netperfdir)\""
-
-# for now we will use "NETSYS_SOURCE" for both the netsysstats and
-# netlib platform-specific stuff
-USE_CPU_SOURCE = netsysstats_@NETSYS_SOURCE@.c
-USE_NETLIB_SOURCE = netlib_@NETSYS_SOURCE@.c
-
-
-# anything that might be platform-specific and thus not covered
-# directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
-EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
-
-COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netmsg.h netconfidence.c netconfidence.h 
-
-netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
-netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
-
-netperfdir = @datadir@/netperf
-netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
-
-# in theory this will cause these header files to be put in the
-# installed headers location, where folks who want to make their own
-# test libraries can find them
-include_HEADERS = netperf.h netconfidence.h netperf_hist.h
+AM_CPPFLAGS = -I$(top_srcdir)/include
 
 # in theory, the stuff below should deal with creating the requisite libs
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_vst.la
+lib_LTLIBRARIES = nettest_dns.la
 
-nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
-nettest_bsd_la_LDFLAGS = -module
-
-nettest_vst_la_SOURCES = nettest_vst.c nettest_vst.h
-nettest_vst_la_LDFLAGS = -module
-
-# the USE_CPU_SOURCE will pick the apropriate file based on the platform
-netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)
-netsysstats_la_LDFLAGS = -module
-
-# if there are any "missing" routines, the libobjs should cover it
-netperf_LDADD = @LIBOBJS@
-netserver_LDADD = @LIBOBJS@
-
-# so far, it does not appear we need this in netserver
-netperf_LDFLAGS = -rpath $(libdir) -export-dynamic
-netserver_LDFLAGS = -rpath $(libdir)
-subdir = src
+nettest_dns_la_SOURCES = nettest_dns.c nettest_dns.h
+nettest_dns_la_LDFLAGS = -module
+subdir = suites/dns
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 LTLIBRARIES = $(lib_LTLIBRARIES)
 
-netsysstats_la_LIBADD =
-am__objects_1 = netsysstats_@NETSYS_SOURCE@.lo
-am_netsysstats_la_OBJECTS = netsysstats_common.lo $(am__objects_1)
-netsysstats_la_OBJECTS = $(am_netsysstats_la_OBJECTS)
-nettest_bsd_la_LIBADD =
-am_nettest_bsd_la_OBJECTS = nettest_bsd.lo
-nettest_bsd_la_OBJECTS = $(am_nettest_bsd_la_OBJECTS)
-nettest_vst_la_LIBADD =
-am_nettest_vst_la_OBJECTS = nettest_vst.lo
-nettest_vst_la_OBJECTS = $(am_nettest_vst_la_OBJECTS)
-bin_PROGRAMS = netperf$(EXEEXT) netserver$(EXEEXT)
-PROGRAMS = $(bin_PROGRAMS)
-
-am__objects_2 = netlib.$(OBJEXT) netmsg.$(OBJEXT) \
-	netconfidence.$(OBJEXT)
-am__objects_3 = netlib_@NETSYS_SOURCE@.$(OBJEXT)
-am_netperf_OBJECTS = netperf.$(OBJEXT) $(am__objects_2) $(am__objects_3)
-netperf_OBJECTS = $(am_netperf_OBJECTS)
-netperf_DEPENDENCIES = @LIBOBJS@
-am_netserver_OBJECTS = netserver.$(OBJEXT) $(am__objects_2) \
-	$(am__objects_3)
-netserver_OBJECTS = $(am_netserver_OBJECTS)
-netserver_DEPENDENCIES = @LIBOBJS@
+nettest_dns_la_LIBADD =
+am_nettest_dns_la_OBJECTS = nettest_dns.lo
+nettest_dns_la_OBJECTS = $(am_nettest_dns_la_OBJECTS)
 
 DEFAULT_INCLUDES =  -I. -I$(srcdir) -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
-@AMDEP_TRUE@DEP_FILES = $(DEPDIR)/missing/getaddrinfo.Po \
-@AMDEP_TRUE@	$(DEPDIR)/missing/inet_ntop.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netconfidence.Po ./$(DEPDIR)/netlib.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netmsg.Po ./$(DEPDIR)/netperf.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netserver.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo \
-@AMDEP_TRUE@	./$(DEPDIR)/netsysstats_common.Plo \
-@AMDEP_TRUE@	./$(DEPDIR)/nettest_bsd.Plo \
-@AMDEP_TRUE@	./$(DEPDIR)/nettest_vst.Plo
+@AMDEP_TRUE@DEP_FILES = ./$(DEPDIR)/nettest_dns.Plo
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 LTCOMPILE = $(LIBTOOL) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) \
@@ -243,16 +170,9 @@ LTCOMPILE = $(LIBTOOL) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) \
 CCLD = $(CC)
 LINK = $(LIBTOOL) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
-DIST_SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) \
-	$(nettest_vst_la_SOURCES) $(netperf_SOURCES) \
-	$(netserver_SOURCES)
-DATA = $(netperf_DATA)
-
-HEADERS = $(include_HEADERS)
-
-DIST_COMMON = $(include_HEADERS) $(srcdir)/Makefile.in Makefile.am \
-	missing/getaddrinfo.c missing/inet_ntop.c
-SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(nettest_vst_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
+DIST_SOURCES = $(nettest_dns_la_SOURCES)
+DIST_COMMON = $(srcdir)/Makefile.in Makefile.am
+SOURCES = $(nettest_dns_la_SOURCES)
 
 all: all-am
 
@@ -260,7 +180,7 @@ all: all-am
 .SUFFIXES: .c .lo .o .obj
 $(srcdir)/Makefile.in:  Makefile.am  $(top_srcdir)/configure.ac $(ACLOCAL_M4)
 	cd $(top_srcdir) && \
-	  $(AUTOMAKE) --gnu  src/Makefile
+	  $(AUTOMAKE) --gnu  suites/dns/Makefile
 Makefile:  $(srcdir)/Makefile.in  $(top_builddir)/config.status
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__depfiles_maybe)
 libLTLIBRARIES_INSTALL = $(INSTALL)
@@ -291,47 +211,8 @@ clean-libLTLIBRARIES:
 	  echo "rm -f \"$${dir}/so_locations\""; \
 	  rm -f "$${dir}/so_locations"; \
 	done
-netsysstats.la: $(netsysstats_la_OBJECTS) $(netsysstats_la_DEPENDENCIES) 
-	$(LINK) -rpath $(libdir) $(netsysstats_la_LDFLAGS) $(netsysstats_la_OBJECTS) $(netsysstats_la_LIBADD) $(LIBS)
-nettest_bsd.la: $(nettest_bsd_la_OBJECTS) $(nettest_bsd_la_DEPENDENCIES) 
-	$(LINK) -rpath $(libdir) $(nettest_bsd_la_LDFLAGS) $(nettest_bsd_la_OBJECTS) $(nettest_bsd_la_LIBADD) $(LIBS)
-nettest_vst.la: $(nettest_vst_la_OBJECTS) $(nettest_vst_la_DEPENDENCIES) 
-	$(LINK) -rpath $(libdir) $(nettest_vst_la_LDFLAGS) $(nettest_vst_la_OBJECTS) $(nettest_vst_la_LIBADD) $(LIBS)
-binPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
-install-binPROGRAMS: $(bin_PROGRAMS)
-	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(bindir)
-	@list='$(bin_PROGRAMS)'; for p in $$list; do \
-	  p1=`echo $$p|sed 's/$(EXEEXT)$$//'`; \
-	  if test -f $$p \
-	     || test -f $$p1 \
-	  ; then \
-	    f=`echo "$$p1" | sed 's,^.*/,,;$(transform);s/$$/$(EXEEXT)/'`; \
-	   echo " $(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(binPROGRAMS_INSTALL) $$p $(DESTDIR)$(bindir)/$$f"; \
-	   $(INSTALL_PROGRAM_ENV) $(LIBTOOL) --mode=install $(binPROGRAMS_INSTALL) $$p $(DESTDIR)$(bindir)/$$f || exit 1; \
-	  else :; fi; \
-	done
-
-uninstall-binPROGRAMS:
-	@$(NORMAL_UNINSTALL)
-	@list='$(bin_PROGRAMS)'; for p in $$list; do \
-	  f=`echo "$$p" | sed 's,^.*/,,;s/$(EXEEXT)$$//;$(transform);s/$$/$(EXEEXT)/'`; \
-	  echo " rm -f $(DESTDIR)$(bindir)/$$f"; \
-	  rm -f $(DESTDIR)$(bindir)/$$f; \
-	done
-
-clean-binPROGRAMS:
-	@list='$(bin_PROGRAMS)'; for p in $$list; do \
-	  f=`echo $$p|sed 's/$(EXEEXT)$$//'`; \
-	  echo " rm -f $$p $$f"; \
-	  rm -f $$p $$f ; \
-	done
-netperf$(EXEEXT): $(netperf_OBJECTS) $(netperf_DEPENDENCIES) 
-	@rm -f netperf$(EXEEXT)
-	$(LINK) $(netperf_LDFLAGS) $(netperf_OBJECTS) $(netperf_LDADD) $(LIBS)
-netserver$(EXEEXT): $(netserver_OBJECTS) $(netserver_DEPENDENCIES) 
-	@rm -f netserver$(EXEEXT)
-	$(LINK) $(netserver_LDFLAGS) $(netserver_OBJECTS) $(netserver_LDADD) $(LIBS)
+nettest_dns.la: $(nettest_dns_la_OBJECTS) $(nettest_dns_la_DEPENDENCIES) 
+	$(LINK) -rpath $(libdir) $(nettest_dns_la_LDFLAGS) $(nettest_dns_la_OBJECTS) $(nettest_dns_la_LIBADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT) core *.core
@@ -339,18 +220,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getaddrinfo.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/inet_ntop.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netconfidence.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netmsg.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netserver.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_common.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_bsd.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_vst.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_dns.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	if $(COMPILE) -MT $@ -MD -MP -MF "$(DEPDIR)/$*.Tpo" \
@@ -394,42 +264,6 @@ clean-libtool:
 distclean-libtool:
 	-rm -f libtool
 uninstall-info-am:
-netperfDATA_INSTALL = $(INSTALL_DATA)
-install-netperfDATA: $(netperf_DATA)
-	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(netperfdir)
-	@list='$(netperf_DATA)'; for p in $$list; do \
-	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	  f="`echo $$p | sed -e 's|^.*/||'`"; \
-	  echo " $(netperfDATA_INSTALL) $$d$$p $(DESTDIR)$(netperfdir)/$$f"; \
-	  $(netperfDATA_INSTALL) $$d$$p $(DESTDIR)$(netperfdir)/$$f; \
-	done
-
-uninstall-netperfDATA:
-	@$(NORMAL_UNINSTALL)
-	@list='$(netperf_DATA)'; for p in $$list; do \
-	  f="`echo $$p | sed -e 's|^.*/||'`"; \
-	  echo " rm -f $(DESTDIR)$(netperfdir)/$$f"; \
-	  rm -f $(DESTDIR)$(netperfdir)/$$f; \
-	done
-includeHEADERS_INSTALL = $(INSTALL_HEADER)
-install-includeHEADERS: $(include_HEADERS)
-	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(includedir)
-	@list='$(include_HEADERS)'; for p in $$list; do \
-	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	  f="`echo $$p | sed -e 's|^.*/||'`"; \
-	  echo " $(includeHEADERS_INSTALL) $$d$$p $(DESTDIR)$(includedir)/$$f"; \
-	  $(includeHEADERS_INSTALL) $$d$$p $(DESTDIR)$(includedir)/$$f; \
-	done
-
-uninstall-includeHEADERS:
-	@$(NORMAL_UNINSTALL)
-	@list='$(include_HEADERS)'; for p in $$list; do \
-	  f="`echo $$p | sed -e 's|^.*/||'`"; \
-	  echo " rm -f $(DESTDIR)$(includedir)/$$f"; \
-	  rm -f $(DESTDIR)$(includedir)/$$f; \
-	done
 
 ETAGS = etags
 ETAGSFLAGS =
@@ -486,11 +320,10 @@ distclean-tags:
 	-rm -f TAGS ID GTAGS GRTAGS GSYMS GPATH tags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 
-top_distdir = ..
+top_distdir = ../..
 distdir = $(top_distdir)/$(PACKAGE)-$(VERSION)
 
 distdir: $(DISTFILES)
-	$(mkinstalldirs) $(distdir)/NetPerfDir $(distdir)/NetServerDir $(distdir)/missing
 	@srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`; \
 	topsrcdirstrip=`echo "$(top_srcdir)" | sed 's|.|.|g'`; \
 	list='$(DISTFILES)'; for file in $$list; do \
@@ -519,12 +352,10 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-am
-all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(DATA) $(HEADERS)
-install-binPROGRAMS: install-libLTLIBRARIES
-
+all-am: Makefile $(LTLIBRARIES)
 
 installdirs:
-	$(mkinstalldirs) $(DESTDIR)$(libdir) $(DESTDIR)$(bindir) $(DESTDIR)$(netperfdir) $(DESTDIR)$(includedir)
+	$(mkinstalldirs) $(DESTDIR)$(libdir)
 install: install-am
 install-exec: install-exec-am
 install-data: install-data-am
@@ -551,11 +382,11 @@ maintainer-clean-generic:
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-generic clean-libLTLIBRARIES \
-	clean-libtool mostlyclean-am
+clean-am: clean-generic clean-libLTLIBRARIES clean-libtool \
+	mostlyclean-am
 
 distclean: distclean-am
-	-rm -rf $(DEPDIR)/missing ./$(DEPDIR)
+	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-libtool distclean-tags
@@ -568,10 +399,9 @@ info: info-am
 
 info-am:
 
-install-data-am: install-data-local install-includeHEADERS \
-	install-netperfDATA
+install-data-am:
 
-install-exec-am: install-binPROGRAMS install-libLTLIBRARIES
+install-exec-am: install-libLTLIBRARIES
 
 install-info: install-info-am
 
@@ -580,7 +410,7 @@ install-man:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-am
-	-rm -rf $(DEPDIR)/missing ./$(DEPDIR)
+	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 
@@ -597,43 +427,21 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-binPROGRAMS uninstall-includeHEADERS \
-	uninstall-info-am uninstall-libLTLIBRARIES \
-	uninstall-netperfDATA
+uninstall-am: uninstall-info-am uninstall-libLTLIBRARIES
 
-.PHONY: CTAGS GTAGS all all-am check check-am clean clean-binPROGRAMS \
-	clean-generic clean-libLTLIBRARIES clean-libtool ctags \
-	distclean distclean-compile distclean-generic distclean-libtool \
+.PHONY: CTAGS GTAGS all all-am check check-am clean clean-generic \
+	clean-libLTLIBRARIES clean-libtool ctags distclean \
+	distclean-compile distclean-generic distclean-libtool \
 	distclean-tags distdir dvi dvi-am info info-am install \
-	install-am install-binPROGRAMS install-data install-data-am \
-	install-data-local install-exec install-exec-am \
-	install-includeHEADERS install-info install-info-am \
-	install-libLTLIBRARIES install-man install-netperfDATA \
-	install-strip installcheck installcheck-am installdirs \
-	maintainer-clean maintainer-clean-generic mostlyclean \
-	mostlyclean-compile mostlyclean-generic mostlyclean-libtool pdf \
-	pdf-am ps ps-am tags uninstall uninstall-am \
-	uninstall-binPROGRAMS uninstall-includeHEADERS \
-	uninstall-info-am uninstall-libLTLIBRARIES \
-	uninstall-netperfDATA
+	install-am install-data install-data-am install-exec \
+	install-exec-am install-info install-info-am \
+	install-libLTLIBRARIES install-man install-strip installcheck \
+	installcheck-am installdirs maintainer-clean \
+	maintainer-clean-generic mostlyclean mostlyclean-compile \
+	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
+	tags uninstall uninstall-am uninstall-info-am \
+	uninstall-libLTLIBRARIES
 
-
-missing/getaddrinfo.o: $(srcdir)/missing/getaddrinfo.c
-	$(COMPILE) -o $@ -c $(srcdir)/missing/getaddrinfo.c
-missing/inet_ntop.o: $(srcdir)/missing/inet_ntop.c
-	$(COMPILE) -o $@ -c $(srcdir)/missing/inet_ntop.c
-missing/getopt1.o: $(srcdir)/missing/getopt1.c
-	$(COMPILE) -o $@ -c $(srcdir)/missing/getopt1.c
-missing/getopt.o: $(srcdir)/missing/getopt.c
-	$(COMPILE) -o $@ -c $(srcdir)/missing/getopt.c
-
-# a boatload of assumptions here, but this should create the /etc/xml/catalog
-# with our entry in it. we really should provide some overrides in the 
-# configure script one of these days
-install-data-local:
-	if [ ! -d /etc/xml ]; then mkdir /etc/xml; chmod 555 /etc/xml; fi
-	if [ ! -f /etc/xml/catalog ]; then xmlcatalog --create --noout /etc/xml/catalog;fi
-	xmlcatalog --noout --add "system" "http://www.netperf.org/netperf_docs.dtd/1.0" "file://$(netperfdir)/netperf_docs.dtd" /etc/xml/catalog
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
 .NOEXPORT:

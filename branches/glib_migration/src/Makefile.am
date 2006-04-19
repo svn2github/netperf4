@@ -1,4 +1,4 @@
-#SUBDIRS = missing
+#SUBDIRS = suites
 
 bin_PROGRAMS = netperf netserver
 
@@ -29,13 +29,10 @@ netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
 include_HEADERS = netperf.h netconfidence.h netperf_hist.h
 
 # in theory, the stuff below should deal with creating the requisite libs
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_dns.la nettest_vst.la
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_vst.la
 
 nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
 nettest_bsd_la_LDFLAGS = -module
-
-nettest_dns_la_SOURCES = nettest_dns.c nettest_dns.h
-nettest_dns_la_LDFLAGS = -module
 
 nettest_vst_la_SOURCES = nettest_vst.c nettest_vst.h
 nettest_vst_la_LDFLAGS = -module

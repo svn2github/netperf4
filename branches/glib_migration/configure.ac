@@ -12,8 +12,8 @@ AC_INIT(netperf, 4.0.0rc2)
 AC_CANONICAL_TARGET
 # AC_CONFIG_SRCDIR([src/hist.h])
 AM_INIT_AUTOMAKE([dist-zip])
-AM_CONFIG_HEADER(config.h)
-# AC_CONFIG_HEADER(config.h)
+# AM_CONFIG_HEADER(config.h)
+AC_CONFIG_HEADERS(config.h)
 
 AC_LIBTOOL_DLOPEN
 AC_PROG_LIBTOOL
@@ -190,6 +190,71 @@ then
 	AC_DEFINE([WANT_HISTOGRAM],,
 	[Define to one to enable histogram support. May affect results.])
 fi
+
+# see if we should be enabling dns support
+
+AC_MSG_CHECKING(whether to include dns support)
+
+AC_ARG_ENABLE(dns,
+	[AS_HELP_STRING([--enable-dns],
+	[build the DNS performance test suite]) ])
+
+case "$enable_dns" in
+	yes)
+		use_dns=true
+		;;
+	no)
+		use_dns=false
+		;;
+	'')
+		# whatever
+		use_dns=false
+		;;
+	*)
+		AC_MSG_ERROR([--enable-dns takes yes or no])
+		;;
+esac
+
+if $use_dns
+then
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
+
+AM_CONDITIONAL([WANT_DNS], [test "$use_dns" = true])
+# see if we should be enabling dns support
+
+AC_MSG_CHECKING(whether to include disk support)
+
+AC_ARG_ENABLE(disk,
+	[AS_HELP_STRING([--enable-disk],
+	[build the DISK performance test suite]) ])
+
+case "$enable_disk" in
+	yes)
+		use_disk=true
+		;;
+	no)
+		use_disk=false
+		;;
+	'')
+		# whatever
+		use_disk=false
+		;;
+	*)
+		AC_MSG_ERROR([--enable-disk takes yes or no])
+		;;
+esac
+
+if $use_disk
+then
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
+
+AM_CONDITIONAL([WANT_DISK], [test "$use_disk" = true])
 
 # see if we should be enabling demo support
 
@@ -634,8 +699,12 @@ AC_SUBST(LIBOJBS)
 
 # now spit it all out
 AC_CONFIG_FILES([Makefile
+                 include/Makefile
                  src/Makefile
 		 doc/Makefile
+		 suites/Makefile
+		 suites/dns/Makefile
+		 suites/disk/Makefile
 		 netperf-config])
 
 AC_OUTPUT
