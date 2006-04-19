@@ -15,7 +15,7 @@ LINKLIBS= \
 USE_CRTDLL=1
 UMTYPE=console
 
-INCLUDES=$(SDK_INC_PATH);.;..\..\libxml2-2.6.23.win32\include;..\..\iconv-1.9.1.win32\include;..\..\glib-2.8.6\include\glib-2.0;..\..\glib-2.8.6\lib\glib-2.0\include
+INCLUDES=$(SDK_INC_PATH);.;..\..\include;..\..\libxml2-2.6.23.win32\include;..\..\iconv-1.9.1.win32\include;..\..\glib-2.8.6\include\glib-2.0;..\..\glib-2.8.6\lib\glib-2.0\include
 
 386_STDCALL=0
 
