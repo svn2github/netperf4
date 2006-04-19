@@ -28,14 +28,12 @@ netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
 # test libraries can find them
 include_HEADERS = netperf.h netconfidence.h netperf_hist.h
 
-# in theory, the stuff below should deal with creating the requisite libs
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_vst.la
+# in theory, the stuff below should deal with creating the requisite
+# "core" libs.  optional libs are in suites/
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
 
 nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
 nettest_bsd_la_LDFLAGS = -module
-
-nettest_vst_la_SOURCES = nettest_vst.c nettest_vst.h
-nettest_vst_la_LDFLAGS = -module
 
 # the USE_CPU_SOURCE will pick the apropriate file based on the platform
 netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)

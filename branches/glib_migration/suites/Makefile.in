@@ -96,6 +96,8 @@ WANT_DISK_FALSE = @WANT_DISK_FALSE@
 WANT_DISK_TRUE = @WANT_DISK_TRUE@
 WANT_DNS_FALSE = @WANT_DNS_FALSE@
 WANT_DNS_TRUE = @WANT_DNS_TRUE@
+WANT_VST_FALSE = @WANT_VST_FALSE@
+WANT_VST_TRUE = @WANT_VST_TRUE@
 ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_CXX = @ac_ct_CXX@
@@ -142,9 +144,10 @@ target_cpu = @target_cpu@
 target_os = @target_os@
 target_vendor = @target_vendor@
 @WANT_DNS_TRUE@DNS_OPT = dns
-@WANT_DISK_TRUE@DISK_OPT = disc
+@WANT_DISK_TRUE@DISK_OPT = disk
+@WANT_VST_TRUE@VST_OPT = vst
 
-SUBDIRS = $(DNS_OPT) $(DISK_OPT)
+SUBDIRS = $(DNS_OPT) $(DISK_OPT) $(VST_OPT)
 subdir = suites
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -158,7 +161,7 @@ RECURSIVE_TARGETS = info-recursive dvi-recursive pdf-recursive \
 	installdirs-recursive install-recursive uninstall-recursive \
 	check-recursive installcheck-recursive
 DIST_COMMON = $(srcdir)/Makefile.in Makefile.am
-DIST_SUBDIRS = dns disc
+DIST_SUBDIRS = dns disk vst
 all: all-recursive
 
 .SUFFIXES:

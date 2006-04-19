@@ -223,6 +223,7 @@ else
 fi
 
 AM_CONDITIONAL([WANT_DNS], [test "$use_dns" = true])
+
 # see if we should be enabling dns support
 
 AC_MSG_CHECKING(whether to include disk support)
@@ -255,6 +256,39 @@ else
 fi
 
 AM_CONDITIONAL([WANT_DISK], [test "$use_disk" = true])
+
+# see if we should be enabling vst support
+
+AC_MSG_CHECKING(whether to include vst support)
+
+AC_ARG_ENABLE(vst,
+	[AS_HELP_STRING([--enable-vst],
+	[build the VST performance test suite]) ])
+
+case "$enable_vst" in
+	yes)
+		use_vst=true
+		;;
+	no)
+		use_vst=false
+		;;
+	'')
+		# whatever
+		use_vst=false
+		;;
+	*)
+		AC_MSG_ERROR([--enable-vst takes yes or no])
+		;;
+esac
+
+if $use_vst
+then
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
+
+AM_CONDITIONAL([WANT_VST], [test "$use_vst" = true])
 
 # see if we should be enabling demo support
 
@@ -705,6 +739,7 @@ AC_CONFIG_FILES([Makefile
 		 suites/Makefile
 		 suites/dns/Makefile
 		 suites/disk/Makefile
+		 suites/vst/Makefile
 		 netperf-config])
 
 AC_OUTPUT
