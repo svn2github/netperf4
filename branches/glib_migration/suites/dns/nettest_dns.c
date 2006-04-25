@@ -754,10 +754,17 @@ pick_random_start(test_t *test) {
   struct timeval foo;
   int i;
   
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   my_data = GET_TEST_DATA(test);
   gettimeofday(&foo,NULL);
   srand(foo.tv_usec);
   i = rand() % 65536;
+  if (test->debug) {
+    fprintf(test->where,
+            "%s skipping %d entries\n",__func__,i);
+    fflush(test->where);
+  }
   for (;i>0;i--) {
     if (my_data->request_source) {
       /* ah, good, we do have a file */
@@ -792,9 +799,18 @@ dns_test_init(test_t *test, int type, int protocol)
   struct addrinfo   hints;
   struct addrinfo  *local_ai;
 
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
   /* allocate memory to store the information about this test */
   new_data = (dns_data_t *)malloc(sizeof(dns_data_t));
 
+  if (test->debug) {
+    fprintf(test->where,
+            "%s new_data is %p\n",
+            __func__,
+            new_data);
+    fflush(test->where);
+  }
   args = test->node->xmlChildrenNode;
   /* make sure we go though everything, and do not assume anything
      about the order of the elements. raj 2005-11-30 */
@@ -814,6 +830,8 @@ dns_test_init(test_t *test, int type, int protocol)
   /* probably a good idea to make sure that new_data is real */
   if ((socket_args != NULL) &&
       (NULL != new_data)) {
+    test->test_specific_data = new_data;
+
     /* zero the dns test specific data structure */
     test_specific_data_init(new_data);
 
@@ -1529,8 +1547,12 @@ send_dns_rr_meas(test_t *test)
 	/* my_data->stats.named.responses_received++; */
 	/* so we can continue to "leverage" the nettest_bsd reporter for
 	   now. raj 2005-11-18 */
-	my_data->stats.named.trans_sent++;
-	my_data->stats.named.trans_received++;
+        /* it would seem that if we update both trans_sent and _received
+           it will result in double reporting.  not sure when that started
+           but for now we kludge around it until we can get all the 
+           formatters straightened-out. raj 2006-04-25 */
+	/* my_data->stats.named.trans_sent++; */
+ 	my_data->stats.named.trans_received++; 
 
 	/* hey dummy, don't forget to clear the entry... raj 2005-11-22 */
 	memset(status_entry,0,sizeof(dns_request_status_t));
