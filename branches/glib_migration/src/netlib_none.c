@@ -77,3 +77,10 @@ set_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
 			     debug,
 			     where));
 }
+
+int
+clear_own_locality(char *loc_type, int debug, FILE *where){
+
+  return(NPE_SUCCESS);
+
+}
