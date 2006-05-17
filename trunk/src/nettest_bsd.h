@@ -74,7 +74,8 @@ typedef struct  bsd_test_data {
   int   send_align;     /* what is the alignment of the send buffer? */
   int   send_offset;    /* and at what offset from that alignment? */
   int   no_delay;       /* do we disable the nagle algorithm for send */
-  
+  int   burst_count;    /* number of sends in an interval or first burst */
+  int   interval;       /* minimum time from start to start of bursts */
 
   /* recv parameters */
   int   rbuf_size_ret;  /* receive socket buffer size returned on creation */
@@ -100,6 +101,11 @@ typedef struct  bsd_test_data {
   int   recv_width;
   int   req_size;
   int   rsp_size;
+
+  /* data structures for UDP RR packet loss detection and retransmission. */
+  int    retry_index;
+  int    pending_responses;
+  char **retry_array;  /* addresses of entries in the send_ring */
 
   /* Statistics Counters */
   union {
