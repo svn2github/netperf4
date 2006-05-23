@@ -42,7 +42,6 @@ char    nettest_id[]="\
 #define MAKE_DIRTY(mydata,ring)  /* DIRTY is not currently supported */
 #endif
 
-
 /****************************************************************/
 /*                                                              */
 /*      nettest_bsd.c                                           */
@@ -53,6 +52,10 @@ char    nettest_id[]="\
 /*      recv_tcp_stream()       catch a tcp stream test         */
 /*      send_tcp_rr()           perform a tcp req/rsp test      */
 /*      recv_tcp_rr()           catch a tcp req/rsp test        */
+/*      send_udp_stream()       perform a udp stream test       */
+/*      recv_udp_stream()       catch a udp stream test         */
+/*      send_udp_rr()           perform a udp req/rsp test      */
+/*      recv_udp_rr()           catch a udp req/rsp test        */
 /*                                                              */
 /****************************************************************/
 
@@ -142,11 +145,58 @@ char    nettest_id[]="\
 #define GET_ERRNO errno
 #endif
 
-/* Macros for accessing fields in the global netperf structures. */
-#define SET_TEST_STATE(state)             test->new_state = state
-#define GET_TEST_STATE                    test->new_state
-#define CHECK_REQ_STATE                   test->state_req 
-#define GET_TEST_DATA(test)               test->test_specific_data
+
+#if !defined(WANT_FIRST_BURST)
+#define BURST_VARS            /* Burst variable declarations go here */
+#define TCP_CHECK_BURST_SEND  /* Code to send tcp burst goes here */
+#define UDP_CHECK_FOR_RETRANS /* Code to retrans udp packets goes here  */
+#define UDP_CHECK_BURST_SEND  /* Code to send udp burst goes here */
+#define UDP_CHECK_BURST_RECV  /* code for dropped udp packets goes here */
+#else
+#define TCP_CHECK_BURST_SEND \
+    if (my_data->burst_count > my_data->pending_responses) { \
+      my_data->pending_responses++; \
+      my_data->send_ring = my_data->send_ring->next; \
+      continue; \
+    }
+#define UDP_CHECK_FOR_RETRANS \
+    if (my_data->retry_array != NULL) { \
+      int retry; \
+      retry = my_data->retry_index; \
+      /* A burst size has been specified check if retransmission is needed */ \
+      if (my_data->retry_array[retry] != NULL) { \
+        /* a retransmission is needed a response was not received */ \
+        buffer_ptr  = my_data->retry_array[retry]; \
+        my_data->stats.named.retransmits++;
+      } \
+      buffer_ptr[0] = retry; \
+    }
+#define UDP_CHECK_BURST_SEND \
+    if (my_data->retry_array != NULL) { \
+      int retry   = my_data->retry_index; \
+      int pending = my_data->pending_responses; \
+      int burst   = my_data->burst_count; \
+      if (my_data->retry_array[retry] == NULL) { \
+        my_data->retry_array[retry] = buffer_ptr; \
+        retry++; \
+        if (retry == burst) { \
+          retry = 0; \
+        } \
+        pending++; \
+        my_data->pending_responses = pending; \
+        my_data->retry_index       = retry; \
+        if (pending < burst) { \
+          my_data->send_ring = my_data->send_ring->next; \
+          continue; \
+        } \
+      } \
+    }
+#define UDP_CHECK_BURST_RECV \
+    if (my_data->retry_array != NULL) {
+      my_data->retry_array[buffer_ptr[0]] = NULL; \
+      my_data->pending_responses--; \
+    }
+#endif
 
 
 static void
@@ -246,9 +296,9 @@ wait_to_die(test_t *test)
 {
   while (GET_TEST_STATE != TEST_DEAD) {
     if (CHECK_REQ_STATE == TEST_DEAD) {
-      free(test->test_specific_data);
-      test->test_specific_data = NULL;
-      test->new_state = TEST_DEAD;
+      free(GET_TEST_DATA(test));
+      SET_TEST_DATA(test,NULL);
+      SET_TEST_STATE(TEST_DEAD);
     }
   }
 }
@@ -317,7 +367,7 @@ strtofam(xmlChar *familystr)
 static void
 get_dependency_data(test_t *test, int type, int protocol)
 {
-  bsd_data_t *my_data = test->test_specific_data;
+  bsd_data_t *my_data = GET_TEST_DATA(test);
 
   xmlChar *string;
   xmlChar *remotehost;
@@ -366,12 +416,12 @@ get_dependency_data(test_t *test, int type, int protocol)
   }
   else {
     if (test->debug) {
-      fprintf(test->where,"get_dependency_data: getaddrinfo returned %d %s\n",
-              error, gai_strerror(error));
+      fprintf(test->where,"%s: getaddrinfo returned %d %s\n",
+              __func__, error, gai_strerror(error));
       fflush(test->where);
     }
     report_test_failure(test,
-                        "get_dependency_data",
+                        (char *)__func__,
                         BSDE_GETADDRINFO_ERROR,
                         gai_strerror(error));
   }
@@ -386,7 +436,7 @@ set_dependent_data(test)
   test_t *test;
 {
   
-  bsd_data_t  *my_data = test->test_specific_data;
+  bsd_data_t  *my_data = GET_TEST_DATA(test);
   xmlChar *family;
   char port[8];
   char host[32];
@@ -563,7 +613,7 @@ static SOCKET
 create_data_socket(test)
   test_t *test;
 {
-  bsd_data_t  *my_data = test->test_specific_data;
+  bsd_data_t  *my_data = GET_TEST_DATA(test);
 
   int family           = my_data->locaddr->ai_family;
   int type             = my_data->locaddr->ai_socktype;
@@ -578,8 +628,8 @@ create_data_socket(test)
 
   if (test->debug) {
     fprintf(test->where,
-            "create_data_socket: calling socket family = %d type = %d\n",
-            family, type);
+            "%s: calling socket family = %d type = %d\n",
+            __func__, family, type);
     fflush(test->where);
   }
   /*set up the data socket                        */
@@ -589,7 +639,7 @@ create_data_socket(test)
 
   if (CHECK_FOR_INVALID_SOCKET) {
     report_test_failure(test,
-                        "create_data_socket",
+                        (char *)__func__,
                         BSDE_SOCKET_ERROR,
                         "error creating socket");
     return(temp_socket);
@@ -597,8 +647,8 @@ create_data_socket(test)
 
   if (test->debug) {
     fprintf(test->where,
-            "create_data_socket: socket %d obtained...\n",
-            temp_socket);
+            "%s: socket %d obtained...\n",
+            __func__, temp_socket);
     fflush(test->where);
   }
 
@@ -620,7 +670,7 @@ create_data_socket(test)
     if(setsockopt(temp_socket, SOL_SOCKET, SO_SNDBUF,
                   (void *)&lss_size, sizeof(int)) < 0) {
       report_test_failure(test,
-                          "create_data_socket",
+                          (char *)__func__,
                           BSDE_SETSOCKOPT_ERROR,
                           "error setting local send socket buffer size");
       return(temp_socket);
@@ -637,15 +687,15 @@ create_data_socket(test)
     if(setsockopt(temp_socket, SOL_SOCKET, SO_RCVBUF,
                   (void *)&lsr_size, sizeof(int)) < 0) {
       report_test_failure(test,
-                          "create_data_socket",
+                          (char *)__func__,
                           BSDE_SETSOCKOPT_ERROR,
                           "error setting local recv socket buffer size");
       return(temp_socket);
     }
     if (test->debug > 1) {
       fprintf(test->where,
-              "nettest_bsd: create_data_socket: SO_RCVBUF of %d requested.\n",
-              lsr_size);
+              "nettest_bsd: %s: SO_RCVBUF of %d requested.\n",
+              __func__, lsr_size);
       fflush(test->where);
     }
   }
@@ -661,8 +711,8 @@ create_data_socket(test)
                  (char *)&lss_size,
                  &sock_opt_len) < 0) {
     fprintf(test->where,
-        "nettest_bsd: create_data_socket: getsockopt SO_SNDBUF: errno %d\n",
-        errno);
+        "nettest_bsd: %s: getsockopt SO_SNDBUF: errno %d\n",
+        __func__, errno);
     fflush(test->where);
     lss_size = -1;
   }
@@ -672,14 +722,15 @@ create_data_socket(test)
                  (char *)&lsr_size,
                  &sock_opt_len) < 0) {
     fprintf(test->where,
-        "nettest_bsd: create_data_socket: getsockopt SO_RCVBUF: errno %d\n",
-        errno);
+        "nettest_bsd: %s: getsockopt SO_RCVBUF: errno %d\n",
+        __func__, errno);
     fflush(test->where);
     lsr_size = -1;
   }
   if (test->debug) {
     fprintf(test->where,
-            "nettest_bsd: create_data_socket: socket sizes determined...\n");
+            "nettest_bsd: %s: socket sizes determined...\n",
+            __func__);
     fprintf(test->where,
             "                       send: %d recv: %d\n",
             lss_size,lsr_size);
@@ -706,7 +757,8 @@ create_data_socket(test)
                    &loc_rcvavoid,
                    sizeof(int)) < 0) {
       fprintf(test->where,
-              "nettest_bsd: create_data_socket: Could not enable receive copy avoidance");
+              "nettest_bsd: %s: Could not enable receive copy avoidance",
+              __func__);
       fflush(test->where);
       loc_rcvavoid = 0;
     }
@@ -724,7 +776,8 @@ create_data_socket(test)
                    &loc_sndavoid,
                    sizeof(int)) < 0) {
       fprintf(test->where,
-        "netperf: create_data_socket: Could not enable send copy avoidance\n");
+              "nettest_bsd: %s: Could not enable send copy avoidance\n",
+              __func__);
       fflush(test->where);
       loc_sndavoid = 0;
     }
@@ -749,14 +802,14 @@ create_data_socket(test)
                   (char *)&one,
                   sizeof(one)) < 0) {
       fprintf(test->where,
-              "netperf: create_data_socket: nodelay: errno %d\n",
-              errno);
+              "nettest_bsd: %s: nodelay: errno %d\n",
+              __func__, errno);
       fflush(test->where);
     }
 
     if (test->debug > 1) {
       fprintf(test->where,
-              "netperf: create_data_socket: TCP_NODELAY requested...\n");
+              "netperf: %s: TCP_NODELAY requested...\n", __func__);
       fflush(test->where);
     }
   }
@@ -884,7 +937,28 @@ bsd_test_init(test_t *test, int type, int protocol)
     string =  xmlGetProp(args,(const xmlChar *)"recv_offset");
     new_data->recv_offset = atoi((char *)string);
 
-    /* now get and initialize the local the local addressing info */
+    string =  xmlGetProp(args,(const xmlChar *)"burst_count");
+    if (string) {
+      count = atoi((char *)string);
+      new_data->burst_count = count;
+      if (count >= new_data->send_width) {
+        new_data->send_width  = count + 1;
+      }
+      string = xmlGetProp(test->node,(const xmlChar *)"test_name");
+      if (!xmlStrcmp(string, (const xmlChar *)"send_udp_rr")) {
+        new_data->retry_array = malloc(count * sizeof(char *));
+        if (new_data->retry_array) {
+          memset(new_data->retry_array, 0, count * sizeof(char *));
+        }
+      }
+    }
+
+    string =  xmlGetProp(args,(const xmlChar *)"interval_time");
+    if (string) {
+      new_data->interval    = atoi((char *)string);
+    }
+
+    /* now get and initialize the local addressing info */
     string   =  xmlGetProp(args,(const xmlChar *)"family");
     localfam = strtofam(string);
     memset(&hints, 0, sizeof(hints));
@@ -918,24 +992,24 @@ bsd_test_init(test_t *test, int type, int protocol)
     }
     else {
       if (test->debug) {
-        fprintf(test->where,"bsd_test_init: getaddrinfo returned %d %s\n",
-                error, gai_strerror(error));
+        fprintf(test->where,"%s: getaddrinfo returned %d %s\n",
+                __func__, error, gai_strerror(error));
         fflush(test->where);
       }
       report_test_failure(test,
-                          "bsd_test_init",
+                          (char *)__func__,
                           BSDE_GETADDRINFO_ERROR,
                           gai_strerror(error));
     }
   }
   else {
     report_test_failure(test,
-                        "bsd_test_init",
+                        (char *)__func__,
                         BSDE_NO_SOCKET_ARGS,
                         "no socket_arg element was found");
   }
 
-  test->test_specific_data = new_data;
+  SET_TEST_DATA(test,new_data);
   return(new_data);
 }
 
@@ -1088,7 +1162,7 @@ recv_tcp_stream_preinit(test_t *test)
   struct sockaddr   myaddr;
   netperf_socklen_t mylen;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
   mylen     = sizeof(myaddr);
 
   my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
@@ -1115,19 +1189,19 @@ recv_tcp_stream_preinit(test_t *test)
   }
   if (rc == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_BIND_FAILED,
                         "data socket bind failed");
   }
   else if (listen(s_listen,5) == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_LISTEN_FAILED,
                         "data socket listen failed");
   }
   else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_GETSOCKNAME_FAILED,
                         "getting the listen socket name failed");
   }
@@ -1146,7 +1220,8 @@ recv_tcp_stream_init(test_t *test)
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
+
   peerlen   = sizeof(peeraddr);
 
   if (test->debug) {
@@ -1157,7 +1232,7 @@ recv_tcp_stream_init(test_t *test)
                       &peeraddr,
                       &peerlen)) == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_ACCEPT_FAILED,
                         "listen socket accept failed");
   }
@@ -1182,7 +1257,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
   netperf_socklen_t peerlen;
   int               len;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
   peerlen   = sizeof(peeraddr);
   len       = last_len;
 
@@ -1194,7 +1269,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            __func__,
+                            (char *)__func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
       }
@@ -1217,7 +1292,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
   if (new_state == TEST_IDLE) {
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
     }
@@ -1231,7 +1306,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
                                  &peeraddr,
                                  &peerlen)) == -1) {
         report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_ACCEPT_FAILED,
                           "listen socket accept failed");
       }
@@ -1250,7 +1325,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
 
@@ -1263,7 +1338,9 @@ recv_tcp_stream_meas(test_t *test)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
-  my_data   = test->test_specific_data;
+
+  my_data   = GET_TEST_DATA(test);
+
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data, my_data->recv_ring);
@@ -1277,7 +1354,7 @@ recv_tcp_stream_meas(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_RECV_ERROR(len)) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_DATA_RECV_ERROR,
                           "data_recv_error");
     }
@@ -1290,7 +1367,7 @@ recv_tcp_stream_meas(test_t *test)
   else {
     /* how do we deal with a closed connection in the loaded state */
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed during TEST_MEASURE state");
   }
@@ -1314,7 +1391,7 @@ recv_tcp_stream_load(test_t *test)
   uint32_t          new_state;
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data, my_data->recv_ring);
@@ -1326,7 +1403,7 @@ recv_tcp_stream_load(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_RECV_ERROR(len)) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_DATA_RECV_ERROR,
                           "data_recv_error");
     }
@@ -1359,7 +1436,7 @@ send_tcp_stream_preinit(test_t *test)
 {
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   if (my_data->s_data == 0) {
     my_data->send_ring = allocate_buffer_ring(my_data->send_width,
@@ -1381,7 +1458,7 @@ send_tcp_stream_init(test_t *test)
 {
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   if (test->debug) {
     fprintf(test->where,"%s: in INIT state making connect call\n",__func__);
@@ -1391,7 +1468,7 @@ send_tcp_stream_init(test_t *test)
               my_data->remaddr->ai_addr,
               my_data->remaddr->ai_addrlen) < 0) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_CONNECT_FAILED,
                         "data socket connect failed");
   }
@@ -1409,7 +1486,7 @@ send_tcp_stream_idle_link(test_t *test)
 {
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   if (test->debug) {
     fprintf(test->where,"%s: transition from LOAD to IDLE\n",__func__);
@@ -1417,7 +1494,7 @@ send_tcp_stream_idle_link(test_t *test)
   }
   if (shutdown(my_data->s_data,SHUT_WR) == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_SOCKET_SHUTDOWN_FAILED,
                         "failure shuting down data socket");
   }
@@ -1435,7 +1512,7 @@ send_tcp_stream_idle_link(test_t *test)
                 my_data->remaddr->ai_addr,
                 my_data->remaddr->ai_addrlen) < 0) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_CONNECT_FAILED,
                           "data socket connect failed");
     }
@@ -1455,7 +1532,8 @@ send_tcp_stream_meas(test_t *test)
   uint32_t          new_state;
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
+
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
@@ -1469,7 +1547,7 @@ send_tcp_stream_meas(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_SEND_ERROR(len)) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_DATA_SEND_ERROR,
                           "data send error");
     }
@@ -1497,7 +1575,7 @@ send_tcp_stream_load(test_t *test)
   uint32_t          new_state;
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
@@ -1512,7 +1590,7 @@ send_tcp_stream_load(test_t *test)
     /* this macro hides windows differences */
     if (CHECK_FOR_SEND_ERROR(len)) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_DATA_SEND_ERROR,
                           "data send_error");
     }
@@ -1672,7 +1750,8 @@ recv_tcp_rr_preinit(test_t *test)
   struct sockaddr   myaddr;
   netperf_socklen_t mylen;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
+
   mylen     = sizeof(myaddr);
 
   my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
@@ -1704,19 +1783,19 @@ recv_tcp_rr_preinit(test_t *test)
   }
   if (rc == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_BIND_FAILED,
                         "data socket bind failed");
   } 
   else if (listen(s_listen,5) == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_LISTEN_FAILED,
                         "data socket listen failed");
   }
   else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_GETSOCKNAME_FAILED,
                         "getting the listen socket name failed");
   } 
@@ -1735,7 +1814,8 @@ recv_tcp_rr_init(test_t *test)
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
+
   peerlen   = sizeof(peeraddr);
 
   if (test->debug) {
@@ -1746,7 +1826,7 @@ recv_tcp_rr_init(test_t *test)
                       &peeraddr,
                       &peerlen)) == -1) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_ACCEPT_FAILED,
                         "listen socket accept failed");
   } 
@@ -1771,7 +1851,8 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
+
   len       = last_len;
   peerlen   = sizeof(peeraddr);
 
@@ -1788,7 +1869,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
     }
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "data_recv_error");
     } 
@@ -1807,7 +1888,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
                                  &peeraddr,
                                  &peerlen)) == -1) {
         report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_ACCEPT_FAILED,
                           "listen socket accept failed");
       } 
@@ -1826,7 +1907,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
   }
@@ -1842,7 +1923,7 @@ recv_tcp_rr_meas(test_t *test)
   bsd_data_t       *my_data;
 
   HISTOGRAM_VARS;
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   /* code to timestamp enabled by WANT_HISTOGRAM */
   HIST_TIMESTAMP(&time_one);
@@ -1857,7 +1938,7 @@ recv_tcp_rr_meas(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            __func__,
+                            (char *)__func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
         break;
@@ -1873,7 +1954,7 @@ recv_tcp_rr_meas(test_t *test)
   if (len == 0) {
     /* how do we deal with a closed connection in the measured state */
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed during TEST_MEASURE state");
   }
@@ -1886,7 +1967,7 @@ recv_tcp_rr_meas(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            __func__,
+                            (char *)__func__,
                             BSDE_DATA_SEND_ERROR,
                             "data_send_error");
       }
@@ -1916,7 +1997,7 @@ recv_tcp_rr_load(test_t *test)
   uint32_t          new_state;
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   /* recv the request for the test */
   req_ptr    = my_data->recv_ring->buffer_ptr;
@@ -1929,7 +2010,7 @@ recv_tcp_rr_load(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_RECV_ERROR(len)) {
         report_test_failure(test,
-                            __func__,
+                            (char *)__func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
         break;
@@ -1959,7 +2040,7 @@ recv_tcp_rr_load(test_t *test)
       /* this macro hides windows differences */
       if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            __func__,
+                            (char *)__func__,
                             BSDE_DATA_SEND_ERROR,
                             "data_send_error");
       }
@@ -1980,7 +2061,7 @@ send_tcp_rr_preinit(test_t *test)
 {
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
                                             my_data->rsp_size,
@@ -2002,7 +2083,7 @@ send_tcp_rr_init(test_t *test)
 {
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
   if (test->debug) {
     fprintf(test->where,"%s: in INIT state making connect call\n",__func__);
@@ -2012,7 +2093,7 @@ send_tcp_rr_init(test_t *test)
               my_data->remaddr->ai_addr,
               my_data->remaddr->ai_addrlen) < 0) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_CONNECT_FAILED,
                         "data socket connect failed");
   }
@@ -2032,7 +2113,7 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
   uint32_t          new_state;
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
   len       = last_len;
 
   new_state = CHECK_REQ_STATE;
@@ -2047,7 +2128,7 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
     }
     if (shutdown(my_data->s_data,SHUT_WR) == -1) {
       report_test_failure(test,
-                          __func__,
+                          (char *)__func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
     } 
@@ -2067,7 +2148,7 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
                   my_data->remaddr->ai_addr,
                   my_data->remaddr->ai_addrlen) < 0) {
         report_test_failure(test,
-                            __func__,
+                            (char *)__func__,
                             BSDE_CONNECT_FAILED,
                             "data socket connect failed");
       }
@@ -2083,7 +2164,7 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
 
@@ -2099,61 +2180,64 @@ send_tcp_rr_meas(test_t *test)
   char             *rsp_ptr;
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
-  HISTOGRAM_VARS;
-  /* code to make data dirty macro enabled by DIRTY */
-  MAKE_DIRTY(my_data,my_data->send_ring);
-  /* code to timestamp enabled by WANT_HISTOGRAM */
-  HIST_TIMESTAMP(&time_one);
-  /* send data for the test */
-  if((len=send(my_data->s_data,
-               my_data->send_ring->buffer_ptr,
-               my_data->req_size,
-               0)) != my_data->req_size) {
-    /* this macro hides windows differences */
-    if (CHECK_FOR_SEND_ERROR(len)) {
-      report_test_failure(test,
-                          __func__,
-                          BSDE_DATA_SEND_ERROR,
-                          "data send error");
-    }
-  }
-  /* recv the request for the test */
-  rsp_ptr    = my_data->recv_ring->buffer_ptr;
-  bytes_left = my_data->rsp_size;
-  while (bytes_left > 0) {
-    if ((len=recv(my_data->s_data,
-                  rsp_ptr,
-                  bytes_left,
-                  0)) != 0) {
+  my_data   = GET_TEST_DATA(test);
+
+  while (NO_STATE_CHANGE(test)) {
+    HISTOGRAM_VARS;
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* send data for the test */
+    if((len=send(my_data->s_data,
+                 my_data->send_ring->buffer_ptr,
+                 my_data->req_size,
+                 0)) != my_data->req_size) {
       /* this macro hides windows differences */
-      if (CHECK_FOR_RECV_ERROR(len)) {
+      if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            __func__,
-                            BSDE_DATA_RECV_ERROR,
-                            "data_recv_error");
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data send error");
+      }
+    }
+    TCP_CHECK_BURST_SEND;
+    /* recv the request for the test */
+    rsp_ptr    = my_data->recv_ring->buffer_ptr;
+    bytes_left = my_data->rsp_size;
+    while (bytes_left > 0) {
+      if ((len=recv(my_data->s_data,
+                    rsp_ptr,
+                    bytes_left,
+                    0)) != 0) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              BSDE_DATA_RECV_ERROR,
+                              "data_recv_error");
+          break;
+        }
+        rsp_ptr    += len;
+        bytes_left -= len;
+      } else {
+        /* len is 0 the connection was closed exit the while loop */
         break;
       }
-      rsp_ptr    += len;
-      bytes_left -= len;
     }
-    else {
-      /* len is 0 the connection was closed exit the while loop */
-      break;
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
+    my_data->stats.named.trans_sent++;
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+    if (len == 0) {
+      /* how do we deal with a closed connection in the measured state */
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_CONNECTION_CLOSED_ERROR,
+                          "data connection closed during TEST_MEASURE state");
     }
-  }
-  /* code to timestamp enabled by WANT_HISTOGRAM */
-  HIST_TIMESTAMP(&time_two);
-  HIST_ADD(my_data->time_hist,&time_one,&time_two);
-  my_data->stats.named.trans_sent++;
-  my_data->recv_ring = my_data->recv_ring->next;
-  my_data->send_ring = my_data->send_ring->next;
-  if (len == 0) {
-    /* how do we deal with a closed connection in the measured state */
-    report_test_failure(test,
-                        __func__,
-                        BSDE_DATA_CONNECTION_CLOSED_ERROR,
-                        "data connection closed during TEST_MEASURE state");
   }
   new_state = CHECK_REQ_STATE;
   if (new_state == TEST_LOADED) {
@@ -2165,6 +2249,7 @@ send_tcp_rr_meas(test_t *test)
   return(new_state);
 }
 
+
 static uint32_t
 send_tcp_rr_load(test_t *test)
 {
@@ -2174,49 +2259,55 @@ send_tcp_rr_load(test_t *test)
   char             *rsp_ptr;
   bsd_data_t       *my_data;
 
-  my_data   = test->test_specific_data;
+  my_data   = GET_TEST_DATA(test);
 
-  /* code to make data dirty macro enabled by DIRTY */
-  MAKE_DIRTY(my_data,my_data->send_ring);
-  /* send data for the test */
-  if((len=send(my_data->s_data,
-               my_data->send_ring->buffer_ptr,
-               my_data->req_size,
-               0)) != my_data->req_size) {
-    /* this macro hides windows differences */
-    if (CHECK_FOR_SEND_ERROR(len)) {
-      report_test_failure(test,
-                          __func__,
-                          BSDE_DATA_SEND_ERROR,
-                          "data send error");
-    }
-  }
-  /* recv the request for the test */
-  rsp_ptr    = my_data->recv_ring->buffer_ptr;
-  bytes_left = my_data->rsp_size;
-  while (bytes_left > 0) {
-    if ((len=recv(my_data->s_data,
-                  rsp_ptr,
-                  bytes_left,
-                  0)) != 0) {
+  while (NO_STATE_CHANGE(test)) {
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* send data for the test */
+    if((len=send(my_data->s_data,
+                 my_data->send_ring->buffer_ptr,
+                 my_data->req_size,
+                 0)) != my_data->req_size) {
       /* this macro hides windows differences */
-      if (CHECK_FOR_RECV_ERROR(len)) {
+      if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
-                            __func__,
-                            BSDE_DATA_RECV_ERROR,
-                            "data_recv_error");
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data send error");
+      }
+    }
+    TCP_CHECK_BURST_SEND;
+    /* recv the request for the test */
+    rsp_ptr    = my_data->recv_ring->buffer_ptr;
+    bytes_left = my_data->rsp_size;
+    while (bytes_left > 0) {
+      if ((len=recv(my_data->s_data,
+                    rsp_ptr,
+                    bytes_left,
+                    0)) != 0) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              BSDE_DATA_RECV_ERROR,
+                              "data_recv_error");
+          break;
+        }
+        rsp_ptr    += len;
+        bytes_left -= len;
+      } else {
+        /* len is 0 the connection was closed exit the while loop */
         break;
       }
-      rsp_ptr    += len;
-      bytes_left -= len;
     }
-    else {
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+    if (len == 0) {
       /* len is 0 the connection was closed exit the while loop */
       break;
     }
   }
-  my_data->recv_ring = my_data->recv_ring->next;
-  my_data->send_ring = my_data->send_ring->next;
   new_state = CHECK_REQ_STATE;
   if ((len == 0) ||
       (new_state == TEST_IDLE)) {
@@ -2363,6 +2454,1077 @@ send_tcp_rr(test_t *test)
   } /* end of while */
   wait_to_die(test);
 } /* end of send_tcp_rr */
+
+
+#define BSD_UDP_STREAM_TESTS
+#define BSD_UDP_RR_TESTS
+#ifdef BSD_UDP_STREAM_TESTS
+
+static void
+recv_udp_stream_preinit(test_t *test)
+{
+  int               rc;         
+  int               s_data;
+  bsd_data_t       *my_data;
+  struct sockaddr   myaddr;
+  netperf_socklen_t mylen;
+
+  my_data   = GET_TEST_DATA(test);
+  mylen     = sizeof(myaddr);
+
+  my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
+                                            my_data->recv_size,
+                                            my_data->recv_align,
+                                            my_data->recv_offset,
+                                            my_data->fill_source);
+  s_data = create_data_socket(test);
+  my_data->s_data = s_data;
+  if (test->debug) {
+    dump_addrinfo(test->where, my_data->locaddr,
+                  (xmlChar *)NULL, (xmlChar *)NULL, -1);
+    fprintf(test->where, 
+            "%s:create_data_socket returned %d\n", 
+            __func__, s_data);
+    fflush(test->where);
+  }
+  rc = bind(s_data, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
+  if (test->debug) {
+    fprintf(test->where, 
+            "%s:bind returned %d  errno=%d\n", 
+            __func__, rc, errno);
+    fflush(test->where);
+  }
+  if (rc == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_BIND_FAILED,
+                        "data socket bind failed");
+  } else if (getsockname(s_data,&myaddr,&mylen) == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_GETSOCKNAME_FAILED,
+                        "getting the data socket name failed");
+  } else {
+    memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
+    my_data->locaddr->ai_addrlen = mylen;
+    set_dependent_data(test);
+  }
+}
+
+
+static void
+recv_udp_stream_idle_link(test_t *test)
+{
+  bsd_data_t       *my_data;
+  int               len;
+  int               ready;
+  fd_set            readfds;
+  struct timeval    timeout;
+
+
+  my_data   = GET_TEST_DATA(test);
+
+  FD_ZERO(&readfds);
+  timeout.tv_sec  = 1;
+  timeout.tv_usec = 0;
+
+  FD_SET(my_data->s_data, &readfds);
+  ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+  while (ready > 0) {
+    if ((len=recvfrom(my_data->s_data,
+                      my_data->recv_ring->buffer_ptr,
+                      my_data->recv_size,
+                      0,0,0)) != my_data->recv_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+        break;
+      }
+    }
+    FD_SET(my_data->s_data, &readfds);
+    ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+  } 
+}
+
+static uint32_t
+recv_udp_stream_meas(test_t *test)
+{
+  int               len;
+  uint32_t          new_state;
+  bsd_data_t       *my_data;
+
+
+  my_data   = GET_TEST_DATA(test);
+
+  while (NO_STATE_CHANGE(test)) {
+    HISTOGRAM_VARS;
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data, my_data->recv_ring);
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* recv data for the test */
+    if ((len=recvfrom(my_data->s_data,
+                      my_data->recv_ring->buffer_ptr,
+                      my_data->recv_size,
+                      0,0,0)) != my_data->recv_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+      }
+    }
+    my_data->stats.named.bytes_received += len;
+    my_data->stats.named.recv_calls++;
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
+    my_data->recv_ring = my_data->recv_ring->next;
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_LOADED) {
+    /* transitioning to loaded state from measure state
+       set current timestamp and update elapsed time */
+    gettimeofday(&(my_data->curr_time), NULL);
+    update_elapsed_time(my_data);
+  }
+  return(new_state);
+}
+
+static uint32_t
+recv_udp_stream_load(test_t *test)
+{
+  int               len;
+  int               ready;
+  uint32_t          new_state;
+  bsd_data_t       *my_data;
+  fd_set            readfds;
+  struct timeval    timeout;
+
+
+  my_data   = GET_TEST_DATA(test);
+
+  FD_ZERO(&readfds);
+  timeout.tv_sec  = 1;
+  timeout.tv_usec = 0;
+
+  while (NO_STATE_CHANGE(test)) {
+    /* do a select call to ensure the the recvfrom will not block    */
+    /* if the recvfrom blocks the test may hang on state transitions */
+    FD_SET(my_data->s_data, &readfds);
+    ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+    if (ready > 0) {
+      /* code to make data dirty macro enabled by DIRTY */
+      MAKE_DIRTY(my_data, my_data->recv_ring);
+      /* recv data for the test */
+      if ((len=recvfrom(my_data->s_data,
+                        my_data->recv_ring->buffer_ptr,
+                        my_data->recv_size,
+                        0,0,0)) != my_data->recv_size) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              BSDE_DATA_RECV_ERROR,
+                              "data_recv_error");
+        }
+      }
+      my_data->recv_ring = my_data->recv_ring->next;
+    }
+  }
+  /* check for state transition */
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_MEASURE) {
+    /* transitioning to measure state from loaded state
+       set previous timestamp */
+    gettimeofday(&(my_data->prev_time), NULL);
+  }
+  if (new_state == TEST_IDLE) {
+    /* a request to transition to the idle state */
+    recv_udp_stream_idle_link(test);
+  }
+  return(new_state);
+}
+
+
+static void
+send_udp_stream_preinit(test_t *test)
+{
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  if (my_data->s_data == 0) {
+    my_data->send_ring = allocate_buffer_ring(my_data->send_width,
+                                              my_data->send_size,
+                                              my_data->send_align,
+                                              my_data->send_offset,
+                                              my_data->fill_source);
+    get_dependency_data(test, SOCK_DGRAM, IPPROTO_UDP);
+    my_data->s_data = create_data_socket(test);
+  } else {
+    fprintf(test->where,"entered %s more than once\n",__func__);
+    fflush(test->where);
+  }
+}
+
+
+static uint32_t
+send_udp_stream_init(test_t *test)
+{
+  int               rc;
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  if (test->debug) {
+    fprintf(test->where,"%s: in INIT state making bind call\n",__func__);
+    fflush(test->where);
+  }
+  rc = bind(my_data->s_data,
+            my_data->locaddr->ai_addr,
+            my_data->locaddr->ai_addrlen);
+  if (test->debug) {
+    fprintf(test->where, 
+            "%s:bind returned %d  errno=%d\n", 
+            __func__, rc, errno);
+    fflush(test->where);
+  }
+  if (rc == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_BIND_FAILED,
+                        "data socket bind failed");
+  }
+  return(TEST_IDLE);
+}
+
+
+static uint32_t
+send_udp_stream_meas(test_t *test)
+{
+  int               len;
+  uint32_t          new_state;
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  while (NO_STATE_CHANGE(test)) {
+    HISTOGRAM_VARS;
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* send data for the test */
+    if((len=sendto(my_data->s_data,
+                   my_data->send_ring->buffer_ptr,
+                   my_data->send_size,
+                   0,
+                   my_data->remaddr->ai_addr,
+                   my_data->remaddr->ai_addrlen)) != my_data->send_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data send error");
+      }
+    }
+    my_data->stats.named.bytes_sent += len;
+    my_data->stats.named.send_calls++;
+    my_data->send_ring = my_data->send_ring->next;
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_LOADED) {
+    /* transitioning to loaded state from measure state
+       set current timestamp and update elapsed time */
+    gettimeofday(&(my_data->curr_time), NULL);
+    update_elapsed_time(my_data);
+  }
+  return(new_state);
+}
+
+
+static uint32_t
+send_udp_stream_load(test_t *test)
+{
+  int               len;
+  uint32_t          new_state;
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  while (NO_STATE_CHANGE(test)) {
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* send data for the test */
+    if((len=sendto(my_data->s_data,
+                   my_data->send_ring->buffer_ptr,
+                   my_data->send_size,
+                   0,
+                   my_data->remaddr->ai_addr,
+                   my_data->remaddr->ai_addrlen)) != my_data->send_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data send_error");
+      }
+    }
+    my_data->send_ring = my_data->send_ring->next;
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_MEASURE) {
+    /* transitioning to measure state from loaded state
+       set previous timestamp */
+    gettimeofday(&(my_data->prev_time), NULL);
+  }
+  return(new_state);
+}
+
+int
+recv_udp_stream_clear_stats(test_t *test)
+{
+  return(bsd_test_clear_stats(GET_TEST_DATA(test)));
+}
+
+
+xmlNodePtr
+recv_udp_stream_get_stats(test_t *test)
+{
+  return( bsd_test_get_stats(test));
+}
+
+void
+recv_udp_stream_decode_stats(xmlNodePtr stats,test_t *test)
+{
+  bsd_test_decode_stats(stats,test);
+}
+
+
+int
+send_udp_stream_clear_stats(test_t *test)
+{
+  return(bsd_test_clear_stats(GET_TEST_DATA(test)));
+}
+
+xmlNodePtr
+send_udp_stream_get_stats(test_t *test)
+{
+  return( bsd_test_get_stats(test));
+}
+
+void
+send_udp_stream_decode_stats(xmlNodePtr stats,test_t *test)
+{
+  bsd_test_decode_stats(stats,test);
+}
+
+
+/* This routine implements the server-side of the UDP unidirectional data */
+/* transfer test (a.k.a. stream) for the sockets interface. It receives */
+/* its parameters via the xml node contained in the test structure. */
+/* results are collected by the procedure recv_udp_stream_get_stats */
+
+void
+recv_udp_stream(test_t *test)
+{
+  uint32_t state, new_state;
+  bsd_test_init(test, SOCK_DGRAM, IPPROTO_UDP);
+  state = GET_TEST_STATE;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+    switch(state) {
+    case TEST_PREINIT:
+      recv_udp_stream_preinit(test);
+      new_state = TEST_INIT;
+      break;
+    case TEST_INIT:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        new_state = TEST_IDLE;
+      }
+      break;
+    case TEST_IDLE:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        sleep(1);
+      }
+      break;
+    case TEST_MEASURE:
+      new_state = recv_udp_stream_meas(test);
+      break;
+    case TEST_LOADED:
+      new_state = recv_udp_stream_load(test);
+      break;
+    default:
+      break;
+    } /* end of switch */
+    set_test_state(test, new_state);
+    state = GET_TEST_STATE;
+  } /* end of while */
+  wait_to_die(test);
+} /* end of recv_udp_stream */
+
+
+/* This routine implements the UDP unidirectional data transfer test */
+/* (a.k.a. stream) for the sockets interface. It receives its */
+/* parameters via the xml node contained in the test structure */
+/* output to the standard output. */
+/* results are collected by the procedure send_udp_stream_get_stats */
+
+void
+send_udp_stream(test_t *test)
+{
+  uint32_t state, new_state;
+  bsd_test_init(test, SOCK_DGRAM, IPPROTO_UDP);
+  state = GET_TEST_STATE;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+    switch(state) {
+    case TEST_PREINIT:
+      send_udp_stream_preinit(test);
+      new_state = TEST_INIT;
+      break;
+    case TEST_INIT:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        new_state = send_udp_stream_init(test);
+      }
+      break;
+    case TEST_IDLE:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        sleep(1);
+      }
+      break;
+    case TEST_MEASURE:
+      new_state = send_udp_stream_meas(test);
+      break;
+    case TEST_LOADED:
+      new_state = send_udp_stream_load(test);
+      break;
+    default:
+      break;
+    } /* end of switch */
+    set_test_state(test, new_state);
+    state = GET_TEST_STATE;
+  } /* end of while */
+  wait_to_die(test);
+}  /* end of send_udp_stream */
+
+
+#endif
+/* end of BSD_UDP_STREAM_TESTS */
+#ifdef BSD_UDP_RR_TESTS
+
+static void
+recv_udp_rr_preinit(test_t *test)
+{
+  int               rc;
+  int               s_data;
+  bsd_data_t       *my_data;
+  struct sockaddr   myaddr;
+  netperf_socklen_t mylen;
+
+  my_data   = GET_TEST_DATA(test);
+  mylen     = sizeof(myaddr);
+
+  my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
+                                            my_data->req_size,
+                                            my_data->recv_align,
+                                            my_data->recv_offset,
+                                            my_data->fill_source);
+  my_data->send_ring = allocate_buffer_ring(my_data->send_width,
+                                            my_data->rsp_size,
+                                            my_data->send_align,
+                                            my_data->send_offset,
+                                            my_data->fill_source);
+  s_data = create_data_socket(test);
+  my_data->s_data = s_data;
+  if (test->debug) {
+    dump_addrinfo(test->where, my_data->locaddr,
+                  (xmlChar *)NULL, (xmlChar *)NULL, -1);
+    fprintf(test->where, 
+            "%s:create_data_socket returned %d\n", 
+            __func__, s_data);
+    fflush(test->where);
+  }
+  rc = bind(s_data, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
+  if (test->debug) {
+    fprintf(test->where, 
+            "%s:bind returned %d  errno=%d\n", 
+            __func__, rc, errno);
+    fflush(test->where);
+  }
+  if (rc == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_BIND_FAILED,
+                        "data socket bind failed");
+  } else if (getsockname(s_data,&myaddr,&mylen) == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_GETSOCKNAME_FAILED,
+                        "getting the data socket name failed");
+  } else {
+    memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
+    my_data->locaddr->ai_addrlen = mylen;
+    set_dependent_data(test);
+  }
+}
+
+
+static void
+recv_udp_rr_idle_link(test_t *test)
+{
+  int               len;
+  bsd_data_t       *my_data;
+  int               ready;
+  fd_set            readfds;
+  struct timeval    timeout;
+
+  my_data   = GET_TEST_DATA(test);
+
+  FD_ZERO(&readfds);
+  timeout.tv_sec  = 1;
+  timeout.tv_usec = 0;
+
+  FD_SET(my_data->s_data, &readfds);
+  ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+  while (ready > 0) {
+    if ((len=recvfrom(my_data->s_data,
+                      my_data->recv_ring->buffer_ptr,
+                      my_data->req_size,
+                      0,0,0)) != my_data->req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+        break;
+      }
+    }
+    FD_SET(my_data->s_data, &readfds);
+    ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+  }
+}
+
+static uint32_t
+recv_udp_rr_meas(test_t *test)
+{
+  int               len;
+  int               bytes_left;
+  char             *req_ptr;
+  uint32_t          new_state;
+  bsd_data_t       *my_data;
+  struct sockaddr   peeraddr;
+  netperf_socklen_t peerlen;
+
+
+  my_data   = GET_TEST_DATA(test);
+
+  while(NO_STATE_CHANGE(test)) {
+    HISTOGRAM_VARS;
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* recv the request for the test */
+    peerlen = sizeof(struct sockaddr);
+    if ((len=recvfrom(my_data->s_data,
+                      my_data->recv_ring->buffer_ptr,
+                      my_data->req_size,
+                      0,
+                      &peeraddr,
+                      &peerlen)) != my_data->req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+        break;
+      }
+    }
+    my_data->stats.named.trans_received++;
+    my_data->stats.named.bytes_received += len;
+    if ((len=sendto(my_data->s_data,
+                    my_data->send_ring->buffer_ptr,
+                    my_data->rsp_size,
+                    0,
+                    &peeraddr,
+                    peerlen)) != my_data->rsp_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data_send_error");
+        break;
+      }
+    }
+    my_data->stats.named.bytes_sent += len;
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_LOADED) {
+    /* transitioning to loaded state from measure state
+       set current timestamp and update elapsed time */
+    gettimeofday(&(my_data->curr_time), NULL);
+    update_elapsed_time(my_data);
+  }
+  return(new_state);
+}
+
+static uint32_t
+recv_udp_rr_load(test_t *test)
+{
+  int               len;
+  int               ready;
+  uint32_t          new_state;
+  bsd_data_t       *my_data;
+  struct sockaddr   peeraddr;
+  netperf_socklen_t peerlen;
+  fd_set            readfds;
+  struct timeval    timeout;
+
+
+  my_data   = GET_TEST_DATA(test);
+
+  FD_ZERO(&readfds);
+  timeout.tv_sec  = 1;
+  timeout.tv_usec = 0;
+
+  while (NO_STATE_CHANGE(test)) {
+    /* do a select call to ensure the the recvfrom will not block    */
+    /* if the recvfrom blocks the test may hang on state transitions */
+    FD_SET(my_data->s_data, &readfds);
+    ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+    if (ready > 0) {
+      peerlen = sizeof(struct sockaddr);
+      if ((len=recvfrom(my_data->s_data,
+                        my_data->recv_ring->buffer_ptr,
+                        my_data->req_size,
+                        0,
+                        &peeraddr,
+                        &peerlen)) != my_data->req_size) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_RECV_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              BSDE_DATA_RECV_ERROR,
+                              "data_recv_error");
+          break;
+        }
+      }
+      /* send the response to the test */
+      if ((len=sendto(my_data->s_data,
+                      my_data->send_ring->buffer_ptr,
+                      my_data->rsp_size,
+                      0,
+                      &peeraddr,
+                      peerlen)) != my_data->rsp_size) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_SEND_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              BSDE_DATA_SEND_ERROR,
+                              "data_send_error");
+          break;
+        }
+      }
+      my_data->recv_ring = my_data->recv_ring->next;
+      my_data->send_ring = my_data->send_ring->next;
+    }
+  }
+  /* check for state transition */
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_MEASURE) {
+    /* transitioning to measure state from loaded state
+       set previous timestamp */
+    gettimeofday(&(my_data->prev_time), NULL);
+  }
+  if (new_state == TEST_IDLE) {
+    recv_udp_rr_idle_link(test);
+  }
+  return(new_state);
+}
+
+static void
+send_udp_rr_preinit(test_t *test)
+{
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
+                                            my_data->rsp_size,
+                                            my_data->recv_align,
+                                            my_data->recv_offset,
+                                            my_data->fill_source);
+  my_data->send_ring = allocate_buffer_ring(my_data->send_width,
+                                            my_data->req_size,
+                                            my_data->send_align,
+                                            my_data->send_offset,
+                                            my_data->fill_source);
+
+  get_dependency_data(test, SOCK_DGRAM, IPPROTO_UDP);
+  my_data->s_data = create_data_socket(test);
+}
+
+static uint32_t
+send_udp_rr_init(test_t *test)
+{
+  int               rc;
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  if (test->debug) {
+    fprintf(test->where,"%s: in INIT state making bind call\n",__func__);
+    fflush(test->where);
+  }
+  rc = bind(my_data->s_data,
+            my_data->locaddr->ai_addr,
+            my_data->locaddr->ai_addrlen);
+  if (test->debug) {
+    fprintf(test->where, 
+            "%s:bind returned %d  errno=%d\n", 
+            __func__, rc, errno);
+    fflush(test->where);
+  }
+  if (rc == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_CONNECT_FAILED,
+                        "data socket bind failed");
+  }
+  /* should we add a connect here ?? */
+  return(TEST_IDLE);
+}
+
+static void
+send_udp_rr_idle_link(test_t *test)
+{
+  int               len;
+  bsd_data_t       *my_data;
+  int               ready;
+  fd_set            readfds;
+  struct timeval    timeout;
+
+
+  my_data   = GET_TEST_DATA(test);
+
+  FD_ZERO(&readfds);
+  timeout.tv_sec  = 1;
+  timeout.tv_usec = 0;
+
+  FD_SET(my_data->s_data, &readfds);
+  ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+  while (ready > 0) {
+    if ((len=recvfrom(my_data->s_data,
+                      my_data->recv_ring->buffer_ptr,
+                      my_data->rsp_size,
+                      0,0,0)) != my_data->rsp_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+        break;
+      }
+    }
+    FD_SET(my_data->s_data, &readfds);
+    ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
+  }
+}
+
+static uint32_t
+send_udp_rr_meas(test_t *test)
+{
+  uint32_t          new_state;
+  int               len;
+  bsd_data_t       *my_data;
+  char             *buffer_ptr;
+
+
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+  my_data   = GET_TEST_DATA(test);
+
+  while (NO_STATE_CHANGE(test)) {
+    HISTOGRAM_VARS;
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* send data for the test */
+    buffer_ptr = my_data->send_ring->buffer_ptr;
+    UDP_CHECK_FOR_RETRANS(buffer_ptr);
+    if((len=sendto(my_data->s_data,
+                   buffer_ptr,
+                   my_data->req_size,
+                   0,
+                   my_data->remaddr->ai_addr,
+                   my_data->remaddr->ai_addrlen)) != my_data->req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data send error");
+        break;
+      }
+    }
+    my_data->stats.named.trans_sent++;
+    my_data->stats.named.bytes_sent += len;
+    UDP_CHECK_BURST_SEND;
+    /* recv the request for the test */
+    buffer_ptr = my_data->recv_ring->buffer_ptr;
+    if ((len=recvfrom(my_data->s_data,
+                      buffer_ptr,
+                      my_data->rsp_size,
+                      0,0,0)) != my_data->rsp_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+        break;
+      }
+    }
+    my_data->stats.named.bytes_received += len;
+    UDP_CHECK_BURST_RECV;
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
+    my_data->send_ring = my_data->send_ring->next;
+    my_data->recv_ring = my_data->recv_ring->next;
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_LOADED) {
+    /* transitioning to loaded state from measure state
+       set current timestamp and update elapsed time */
+    gettimeofday(&(my_data->curr_time), NULL);
+    update_elapsed_time(my_data);
+  }
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
+  return(new_state);
+}
+
+static uint32_t
+send_udp_rr_load(test_t *test)
+{
+  uint32_t          new_state;
+  int               len;
+  bsd_data_t       *my_data;
+  char             *buffer_ptr;
+
+
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+  my_data   = GET_TEST_DATA(test);
+
+  while (NO_STATE_CHANGE(test)) {
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* send data for the test */
+    buffer_ptr  = my_data->send_ring->buffer_ptr;
+    UDP_CHECK_FOR_RETRANS;
+    if((len=sendto(my_data->s_data,
+                 buffer_ptr,
+                 my_data->req_size,
+                 0,
+                 my_data->remaddr->ai_addr,
+                 my_data->remaddr->ai_addrlen)) != my_data->req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data send error");
+        break;
+      }
+    }
+    UDP_CHECK_BURST_SEND;
+    buffer_ptr  = my_data->recv_ring->buffer_ptr;
+    /* recv the request for the test */
+    if ((len=recvfrom(my_data->s_data,
+                      buffer_ptr,
+                      my_data->rsp_size,
+                      0,0,0)) != my_data->rsp_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+        break;
+      }
+    }
+    UDP_CHECK_BURST_RECV;
+    my_data->send_ring = my_data->send_ring->next;
+    my_data->recv_ring = my_data->recv_ring->next;
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_MEASURE) {
+    /* transitioning to measure state from loaded state
+       set previous timestamp */
+    gettimeofday(&(my_data->prev_time), NULL);
+  }
+  if (new_state == TEST_IDLE) {
+    send_udp_rr_idle_link(test);
+  }
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
+  return(new_state);
+}
+
+int
+recv_udp_rr_clear_stats(test_t *test)
+{
+  return(bsd_test_clear_stats(GET_TEST_DATA(test)));
+}
+
+
+xmlNodePtr
+recv_udp_rr_get_stats(test_t *test)
+{
+  return( bsd_test_get_stats(test));
+}
+
+void
+recv_udp_rr_decode_stats(xmlNodePtr stats,test_t *test)
+{
+  bsd_test_decode_stats(stats,test);
+}
+
+
+int
+send_udp_rr_clear_stats(test_t *test)
+{
+  return(bsd_test_clear_stats(GET_TEST_DATA(test)));
+}
+
+xmlNodePtr
+send_udp_rr_get_stats(test_t *test)
+{
+  return( bsd_test_get_stats(test));
+}
+
+void
+send_udp_rr_decode_stats(xmlNodePtr stats,test_t *test)
+{
+  bsd_test_decode_stats(stats,test);
+}
+
+
+/* This routine implements the server-side of the TCP request/response */
+/* test (a.k.a. rr) for the sockets interface. It receives its  */
+/* parameters via the xml node contained in the test structure. */
+/* results are collected by the procedure recv_udp_rr_get_stats */
+
+void
+recv_udp_rr(test_t *test)
+{
+  uint32_t state, new_state;
+  bsd_test_init(test, SOCK_DGRAM, IPPROTO_UDP);
+  state = GET_TEST_STATE;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+    switch(state) {
+    case TEST_PREINIT:
+      recv_udp_rr_preinit(test);
+      new_state = TEST_INIT;
+      break;
+    case TEST_INIT:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        new_state = TEST_IDLE;
+      }
+      break;
+    case TEST_IDLE:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        sleep(1);
+      }
+      break;
+    case TEST_MEASURE:
+      new_state = recv_udp_rr_meas(test);
+      break;
+    case TEST_LOADED:
+      new_state = recv_udp_rr_load(test);
+      break;
+    default:
+      break;
+    } /* end of switch */
+    set_test_state(test, new_state);
+    state = GET_TEST_STATE;
+  } /* end of while */
+  wait_to_die(test);
+} /* end of recv_udp_rr */
+
+
+/* This routine implements the TCP request/responce test */
+/* (a.k.a. rr) for the sockets interface. It receives its */
+/* parameters via the xml node contained in the test structure */
+/* output to the standard output. */
+/* results are collected by the procedure send_udp_rr_get_stats */
+
+void
+send_udp_rr(test_t *test)
+{
+  uint32_t state, new_state;
+  bsd_test_init(test, SOCK_DGRAM, IPPROTO_UDP);
+  state = GET_TEST_STATE;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+    switch(state) {
+    case TEST_PREINIT:
+      send_udp_rr_preinit(test);
+      new_state = TEST_INIT;
+      break;
+    case TEST_INIT:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        new_state = send_udp_rr_init(test);
+      }
+      break;
+    case TEST_IDLE:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        sleep(1);
+      }
+      break;
+    case TEST_MEASURE:
+      new_state = send_udp_rr_meas(test);
+      break;
+    case TEST_LOADED:
+      new_state = send_udp_rr_load(test);
+      break;
+    default:
+      break;
+    } /* end of switch */
+    set_test_state(test, new_state);
+    state = GET_TEST_STATE;
+  } /* end of while */
+  wait_to_die(test);
+} /* end of send_udp_rr */
+
+#endif
+/* end of BSD_UDP_STREAM_TESTS */
+
 
 
 /*  This implementation of report_bsd_test_results will generate strange
@@ -2539,11 +3701,10 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(test_set->where);
   }
   if (rd->sd_denominator == 0.0) {
-    if (xmit_rate > 0.0 || recv_rate > 0.0) {
-      rd->sd_denominator = 1000000.0/(8.0*1024.0);
-    }
-    else {
+    if (xmit_trans_rate > 0.0 || recv_trans_rate > 0.0) {
       rd->sd_denominator = 1.0;
+    } else {
+      rd->sd_denominator = 1000000.0/(8.0*1024.0);
     }
   }
   if (test_set->debug) {

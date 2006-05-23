@@ -31,7 +31,7 @@ delete this exception statement from your version.
 
 #ifndef lint
 char    disk_test_id[]="\
-@(#)disktest.c (c) Copyright 2005 Hewlett-Packard Co. $Id: disktest.c 20 2006-2-28 19:45:00Z burger $";
+@(#)disktest.c (c) Copyright 2005 Hewlett-Packard Co. $Id$";
 #endif /* lint */
 
 
@@ -102,7 +102,8 @@ report_test_failure(test, function, err_code, err_string)
 {
   int loc_debug = 1;
   if (test->debug || loc_debug) {
-    fprintf(test->where,"%s: called report_test_failure:",function);
+    fprintf(test->where,"%s - %s: called report_test_failure:",
+            (char *)test->id,function);
     fprintf(test->where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
     fflush(test->where);
   }
@@ -966,6 +967,7 @@ do_raw_seq_disk_io(test_t *test)
                           DISK_TEST_RDWR_OPEN_FAILED,
                           "read/write open of file_name failed");
     }
+    my_data->fd = fd;
   }
 
   /* seek to the starting location on the disk */
@@ -1137,7 +1139,7 @@ disk_test_results_init(tset_t *test_set,char *report_flags,char *output)
     outfd = stdout;
   }
   /* allocate and initialize report data */
-  malloc_size = sizeof(disk_results_t) + 7 * max_count * sizeof(double);
+  malloc_size = sizeof(disk_results_t) + 8 * max_count * sizeof(double);
   rd = malloc(malloc_size);
   if (rd) {
 
@@ -1266,15 +1268,15 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   seek_call_rate   = test_cntr[TST_S_CALLS] / elapsed_seconds;
   iops             = read_call_rate + write_call_rate;
   if (test_set->debug) {
-    fprintf(test_set->where,"\tread_rate = %7g\t%7g\n",
+    fprintf(test_set->where,"\tread_rate       = %7g\t%7g\n",
             read_rate, test_cntr[TST_R_BYTES]);
-    fprintf(test_set->where,"\twrite_rate = %7g\t%7g\n",
+    fprintf(test_set->where,"\twrite_rate      = %7g\t%7g\n",
             write_rate, test_cntr[TST_W_BYTES]);
-    fprintf(test_set->where,"\tread_call_rate = %7g\t%7g\n",
+    fprintf(test_set->where,"\tread_call_rate  = %7g\t%7g\n",
             read_call_rate, test_cntr[TST_R_CALLS]);
     fprintf(test_set->where,"\twrite_call_rate = %7g\t%7g\n",
             write_call_rate, test_cntr[TST_W_CALLS]);
-    fprintf(test_set->where,"\tseek_call_rate = %7g\t%7g\n",
+    fprintf(test_set->where,"\tseek_call_rate  = %7g\t%7g\n",
             seek_call_rate, test_cntr[TST_S_CALLS]);
     fflush(test_set->where);
   }
@@ -1293,6 +1295,21 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   rd->write_iops[index]      += write_call_rate;
   rd->iops[index]            += iops;
 
+  if (test_set->debug) {
+    fprintf(test_set->where,"\trun_time[%d]      = %7g\n",
+            index, rd->run_time[index]);
+    fprintf(test_set->where,"\tread_results[%d]  = %7g\n",
+            index, rd->read_results[index]);
+    fprintf(test_set->where,"\twrite_results[%d] = %7g\n",
+            index, rd->write_results[index]);
+    fprintf(test_set->where,"\tread_iops[%d]     = %7g\n",
+            index, rd->read_iops[index]);
+    fprintf(test_set->where,"\twrite_iops[%d]    = %7g\n",
+            index, rd->write_iops[index]);
+    fprintf(test_set->where,"\tiops[%d]          = %7g\n",
+            index, rd->iops[index]);
+    fflush(test_set->where);
+  }
   if (rd->print_hist) {
     xmlNodePtr  hist;
     hist = stats->xmlChildrenNode;
@@ -1513,7 +1530,7 @@ process_stats_for_run(tset_t *test_set)
     while (stats != NULL) {
       /* process all the statistics records for this test */
       if (test_set->debug) {
-        fprintf(test_set->where,"\tfound some statistics");
+        fprintf(test_set->where,"\tfound some statistics\n");
         fflush(test_set->where);
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"sys_stats")) {

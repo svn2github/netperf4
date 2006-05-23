@@ -51,6 +51,7 @@ enum {
   TRANS_RECEIVED,
   CONNECT_CALLS,
   ACCEPT_CALLS,
+  RETRANSMITS,
   BSD_MAX_COUNTERS
 };
 
@@ -74,7 +75,8 @@ typedef struct  bsd_test_data {
   int   send_align;     /* what is the alignment of the send buffer? */
   int   send_offset;    /* and at what offset from that alignment? */
   int   no_delay;       /* do we disable the nagle algorithm for send */
-  
+  int   burst_count;    /* number of sends in an interval or first burst */
+  int   interval;       /* minimum time from start to start of bursts */
 
   /* recv parameters */
   int   rbuf_size_ret;  /* receive socket buffer size returned on creation */
@@ -101,6 +103,11 @@ typedef struct  bsd_test_data {
   int   req_size;
   int   rsp_size;
 
+  /* data structures for UDP RR packet loss detection and retransmission. */
+  int    retry_index;
+  int    pending_responses;
+  char **retry_array;  /* addresses of entries in the send_ring */
+
   /* Statistics Counters */
   union {
     uint64_t  counter[BSD_MAX_COUNTERS];
@@ -113,6 +120,7 @@ typedef struct  bsd_test_data {
       uint64_t  trans_received;
       uint64_t  connect_calls;
       uint64_t  accepts;
+      uint64_t  retransmits;
     } named;
   } stats;
   struct timeval  elapsed_time;

@@ -1,0 +1,93 @@
+<?xml version="1.0" standalone="no" ?>
+<!DOCTYPE commands SYSTEM "http://www.netperf.org/netperf_docs.dtd/1.0" >
+<commands xmlns="http://www.netperf.org/ns/netperf">
+
+<!-- 20 second UDP_STREAM test
+  <create_test_set set_name="s0" tests_in_set="t0,t1,t2" />
+  <create_test_set set_name="s1" tests_in_set="t0,t1" />
+  <wait tid="s0" />
+  <load tid="s0" />
+  <wait tid="s0" />
+  <measure tid="s0" />
+  <wait tid="s0" seconds="20" />
+  <load tid="s0" />
+  <wait tid="s0" />
+  <get_stats tid="t0" />
+  <get_stats tid="t1" />
+  <wait tid="s0" />
+  <clear_stats tid="t0" />
+  <clear_stats tid="t1" />
+  <clear_stats tid="t2" />
+  <idle tid="s0" />
+  <wait tid="s0" />
+  <report_stats test_set="s1" 
+    library="nettest_bsd.la"
+    function="report_bsd_test_results" />
+ -->
+
+<!-- 20 second UDP_MAERTS test
+  <create_test_set set_name="s6" tests_in_set="t0,t1,t2" />
+  <create_test_set set_name="s7" tests_in_set="t0,t2" />
+  <wait tid="s6" />
+  <load tid="s6" />
+  <wait tid="s6" />
+  <measure tid="s6" />
+  <wait tid="s6" seconds="20" />
+  <load tid="s6" />
+  <wait tid="s6" />
+  <get_stats tid="s7" />
+  <wait tid="s6" />
+  <clear_stats tid="s6" />
+  <idle tid="s6" />
+  <wait tid="s6" />
+  <report_stats test_set="s7"
+    library="nettest_bsd.la"
+    function="report_bsd_test_results" />
+ -->
+
+
+<!-- 20 second UDP_RR test
+  <create_test_set set_name="s2" tests_in_set="t0,t3,t4" />
+  <create_test_set set_name="s3" tests_in_set="t0,t4" />
+  <wait tid="s2" />
+  <load tid="s2" />
+  <wait tid="s2" />
+  <measure tid="s2" />
+  <wait tid="s2" seconds="20" />
+  <load tid="s2" />
+  <wait tid="s2" />
+  <get_stats tid="s2" />
+  <wait tid="s2" />
+  <clear_stats tid="s2" />
+  <idle tid="s2" />
+  <wait tid="s2" />
+  <report_stats test_set="s3" 
+     library="nettest_bsd.la"
+     function="report_bsd_test_results" />
+ -->
+
+<!-- 20 second UDP_RR test with confidence
+ --> 
+  <create_test_set set_name="s4" tests_in_set="t0,t3,t4" />
+  <create_test_set set_name="s5" tests_in_set="t0,t3" />
+  <report_stats test_set="s5" 
+    max_count="10"
+    min_count="3"
+    library="nettest_bsd.la"
+    function="report_bsd_test_results" >
+    <wait tid="s4" />
+    <load tid="s4" />
+    <wait tid="s4" />
+    <measure tid="s4" />
+    <wait tid="s4" seconds="20" />
+    <load tid="s4" />
+    <wait tid="s4" />
+    <get_stats tid="s5" />
+    <wait tid="s4" />
+    <clear_stats tid="s4" />
+    <wait tid="s4" />
+    <idle tid="s4" />
+    <wait tid="s4" />
+  </report_stats>
+
+</commands>

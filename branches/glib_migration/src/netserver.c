@@ -610,15 +610,20 @@ check_test_state_callback(gpointer data)
         }
         switch (new) {
         case TEST_INIT:
-          /* what kind of error checking do we want to add ? */
-          msg = xmlNewNode(NULL,(xmlChar *)"initialized");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
-          new_node = xmlCopyNode(test->dependent_data,1);
-          xmlAddChild(msg,new_node);
-          break;
         case TEST_IDLE:
-          msg = xmlNewNode(NULL,(xmlChar *)"idled");
-          xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          /* remore race condition of to quickly moving through TEST_INIT */
+          if (orig == TEST_PREINIT) {
+            /* what kind of error checking do we want to add ? */
+            msg = xmlNewNode(NULL,(xmlChar *)"initialized");
+            xmlSetProp(msg,(xmlChar *)"tid",test->id);
+            new_node = xmlCopyNode(test->dependent_data,1);
+            xmlAddChild(msg,new_node);
+            new = TEST_INIT;
+          }
+          else {
+            msg = xmlNewNode(NULL,(xmlChar *)"idled");
+            xmlSetProp(msg,(xmlChar *)"tid",test->id);
+          }
           break;
         case TEST_LOADED:
           msg = xmlNewNode(NULL,(xmlChar *)"loaded");
