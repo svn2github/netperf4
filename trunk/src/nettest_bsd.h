@@ -51,6 +51,7 @@ enum {
   TRANS_RECEIVED,
   CONNECT_CALLS,
   ACCEPT_CALLS,
+  RETRANSMITS,
   BSD_MAX_COUNTERS
 };
 
@@ -119,6 +120,7 @@ typedef struct  bsd_test_data {
       uint64_t  trans_received;
       uint64_t  connect_calls;
       uint64_t  accepts;
+      uint64_t  retransmits;
     } named;
   } stats;
   struct timeval  elapsed_time;

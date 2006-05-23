@@ -1071,6 +1071,13 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
     test = test->next;
   }
   NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
+  if (debug) {
+    fprintf(where,
+            "%s: exiting status is %d\n",
+            __func__,
+            rc);
+    fflush(where);
+  }
   return(rc);
 }
 

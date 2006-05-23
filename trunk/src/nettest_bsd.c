@@ -155,6 +155,7 @@ char    nettest_id[]="\
       if (my_data->retry_array[retry] != NULL) { \
         /* a retransmission is needed a response was not received */ \
         buffer_ptr  = my_data->retry_array[retry]; \
+        my_data->stats.named.retransmits++;
       } \
       buffer_ptr[0] = retry; \
     }
@@ -2544,14 +2545,13 @@ recv_udp_stream_meas(test_t *test)
                             (char *)__func__,
                             BSDE_DATA_RECV_ERROR,
                             "data_recv_error");
-      } else {
-        my_data->stats.named.bytes_received += len;
-        my_data->stats.named.recv_calls++;
-        /* code to timestamp enabled by WANT_HISTOGRAM */
-        HIST_TIMESTAMP(&time_two);
-        HIST_ADD(my_data->time_hist,&time_one,&time_two);
       }
     }
+    my_data->stats.named.bytes_received += len;
+    my_data->stats.named.recv_calls++;
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
     my_data->recv_ring = my_data->recv_ring->next;
   }
   new_state = CHECK_REQ_STATE;
@@ -2600,10 +2600,9 @@ recv_udp_stream_load(test_t *test)
                               (char *)__func__,
                               BSDE_DATA_RECV_ERROR,
                               "data_recv_error");
-        } else {
-          my_data->recv_ring = my_data->recv_ring->next;
         }
       }
+      my_data->recv_ring = my_data->recv_ring->next;
     }
   }
   /* check for state transition */
@@ -2900,7 +2899,7 @@ static void
 recv_udp_rr_preinit(test_t *test)
 {
   int               rc;
-  int               s_listen;
+  int               s_data;
   bsd_data_t       *my_data;
   struct sockaddr   myaddr;
   netperf_socklen_t mylen;
@@ -2918,17 +2917,17 @@ recv_udp_rr_preinit(test_t *test)
                                             my_data->send_align,
                                             my_data->send_offset,
                                             my_data->fill_source);
-  s_listen = create_data_socket(test);
-  my_data->s_listen = s_listen;
+  s_data = create_data_socket(test);
+  my_data->s_data = s_data;
   if (test->debug) {
     dump_addrinfo(test->where, my_data->locaddr,
                   (xmlChar *)NULL, (xmlChar *)NULL, -1);
     fprintf(test->where, 
             "%s:create_data_socket returned %d\n", 
-            __func__, s_listen);
+            __func__, s_data);
     fflush(test->where);
   }
-  rc = bind(s_listen, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
+  rc = bind(s_data, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
@@ -2940,7 +2939,7 @@ recv_udp_rr_preinit(test_t *test)
                         (char *)__func__,
                         BSDE_BIND_FAILED,
                         "data socket bind failed");
-  } else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
+  } else if (getsockname(s_data,&myaddr,&mylen) == -1) {
     report_test_failure(test,
                         (char *)__func__,
                         BSDE_GETSOCKNAME_FAILED,
@@ -3008,6 +3007,7 @@ recv_udp_rr_meas(test_t *test)
     /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_one);
     /* recv the request for the test */
+    peerlen = sizeof(struct sockaddr);
     if ((len=recvfrom(my_data->s_data,
                       my_data->recv_ring->buffer_ptr,
                       my_data->req_size,
@@ -3022,9 +3022,9 @@ recv_udp_rr_meas(test_t *test)
                             "data_recv_error");
         break;
       }
-      my_data->stats.named.trans_received++;
-      my_data->stats.named.bytes_received += len;
     }
+    my_data->stats.named.trans_received++;
+    my_data->stats.named.bytes_received += len;
     if ((len=sendto(my_data->s_data,
                     my_data->send_ring->buffer_ptr,
                     my_data->rsp_size,
@@ -3039,8 +3039,8 @@ recv_udp_rr_meas(test_t *test)
                             "data_send_error");
         break;
       }
-      my_data->stats.named.bytes_sent += len;
     }
+    my_data->stats.named.bytes_sent += len;
     /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_two);
     HIST_ADD(my_data->time_hist,&time_one,&time_two);
@@ -3082,6 +3082,7 @@ recv_udp_rr_load(test_t *test)
     FD_SET(my_data->s_data, &readfds);
     ready = select(my_data->s_data+1, &readfds, NULL, NULL, &timeout);
     if (ready > 0) {
+      peerlen = sizeof(struct sockaddr);
       if ((len=recvfrom(my_data->s_data,
                         my_data->recv_ring->buffer_ptr,
                         my_data->req_size,
@@ -3110,8 +3111,8 @@ recv_udp_rr_load(test_t *test)
                               (char *)__func__,
                               BSDE_DATA_SEND_ERROR,
                               "data_send_error");
+          break;
         }
-        break;
       }
       my_data->recv_ring = my_data->recv_ring->next;
       my_data->send_ring = my_data->send_ring->next;
@@ -3165,8 +3166,8 @@ send_udp_rr_init(test_t *test)
     fflush(test->where);
   }
   rc = bind(my_data->s_data,
-            my_data->remaddr->ai_addr,
-            my_data->remaddr->ai_addrlen);
+            my_data->locaddr->ai_addr,
+            my_data->locaddr->ai_addrlen);
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
@@ -3177,7 +3178,7 @@ send_udp_rr_init(test_t *test)
     report_test_failure(test,
                         (char *)__func__,
                         BSDE_CONNECT_FAILED,
-                        "data socket connect failed");
+                        "data socket bind failed");
   }
   /* should we add a connect here ?? */
   return(TEST_IDLE);
@@ -3229,6 +3230,7 @@ send_udp_rr_meas(test_t *test)
   char             *buffer_ptr;
 
 
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
   my_data   = GET_TEST_DATA(test);
 
   while (NO_STATE_CHANGE(test)) {
@@ -3288,6 +3290,7 @@ send_udp_rr_meas(test_t *test)
     gettimeofday(&(my_data->curr_time), NULL);
     update_elapsed_time(my_data);
   }
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
   return(new_state);
 }
 
@@ -3300,6 +3303,7 @@ send_udp_rr_load(test_t *test)
   char             *buffer_ptr;
 
 
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
   my_data   = GET_TEST_DATA(test);
 
   while (NO_STATE_CHANGE(test)) {
@@ -3308,10 +3312,12 @@ send_udp_rr_load(test_t *test)
     /* send data for the test */
     buffer_ptr  = my_data->send_ring->buffer_ptr;
     UDP_CHECK_FOR_RETRANS;
-    if((len=send(my_data->s_data,
+    if((len=sendto(my_data->s_data,
                  buffer_ptr,
                  my_data->req_size,
-                 0)) != my_data->req_size) {
+                 0,
+                 my_data->remaddr->ai_addr,
+                 my_data->remaddr->ai_addrlen)) != my_data->req_size) {
       /* this macro hides windows differences */
       if (CHECK_FOR_SEND_ERROR(len)) {
         report_test_failure(test,
@@ -3350,6 +3356,7 @@ send_udp_rr_load(test_t *test)
   if (new_state == TEST_IDLE) {
     send_udp_rr_idle_link(test);
   }
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
   return(new_state);
 }
 
@@ -3656,10 +3663,10 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(test_set->where);
   }
   if (rd->sd_denominator == 0.0) {
-    if (xmit_rate > 0.0 || recv_rate > 0.0) {
-      rd->sd_denominator = 1000000.0/(8.0*1024.0);
-    } else {
+    if (xmit_trans_rate > 0.0 || recv_trans_rate > 0.0) {
       rd->sd_denominator = 1.0;
+    } else {
+      rd->sd_denominator = 1000000.0/(8.0*1024.0);
     }
   }
   if (test_set->debug) {
