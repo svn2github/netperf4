@@ -1,4 +1,4 @@
-static char netlib_specific_id[]="\
+char netlib_specific_id[]="\
 @(#)(c) Copyright 2006, Hewlett-Packard Company, $Id$";
 
 /*
@@ -58,15 +58,17 @@ delete this exception statement from your version.
 
 #ifdef HAVE_SCHED_SETAFFINITY
 int
-set_thread_locality(test_t *test, char *loc_type, char *loc_value)
-{
+set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug, FILE *where) {
   int   err = -1;
   int   value;
   char *err_str;
   cpu_set_t      mask;
 
+  pthread_t thread_id;
 
-  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  thread_id = *(pthread_t *)(threadid);
 
   CPU_ZERO(&mask);
 
@@ -83,60 +85,123 @@ set_thread_locality(test_t *test, char *loc_type, char *loc_value)
      grins. raj 2006-01-24 */
 
   if (strcmp(loc_type,"PROC") == 0) {
-    err  = sched_setaffinity(test->thread_id,
+    err  = sched_setaffinity(thread_id,
 			     sizeof(mask),
 			     &mask);
   }
   else if (strcmp(loc_type,"LDOM") == 0) {
-    err  = sched_setaffinity(test->thread_id,
+    err  = sched_setaffinity(thread_id,
 			     sizeof(mask),
 			     &mask);
   }
   else if (strcmp(loc_type,"PSET") == 0) {
-    err  = sched_setaffinity(test->thread_id,
+    err  = sched_setaffinity(thread_id,
 			     sizeof(mask),
 			     &mask);
   }
   if (err) {
-    if (err == EINVAL) {
+    if (errno == EINVAL) {
       err_str = "Invalid locality value";
     }
-    if (err == EPERM) {
+    if (errno == EPERM) {
       err_str = "Netserver Permission Failure";
     }
-    if (err == ESRCH) {
+    if (errno == ESRCH) {
       err_str = "Invalid thread id";
     }
-    if (err == EFAULT) {
+    if (errno == EFAULT) {
       err_str = "Invalid memory address";
     }
     if (err == -1) {
       err_str = "Invalid locality type";
     }
-    fprintf(test->where,
+    fprintf(where,
             "%s: failed to set locality %s\n",
             __func__,
             err_str);
-    fflush(test->where);
+    fflush(where);
     err = NPE_SET_THREAD_LOCALITY_FAILED;
   }
   else {
     err = NPE_SUCCESS;
   }
-  NETPERF_DEBUG_EXIT(test->debug,test->where);
+  NETPERF_DEBUG_EXIT(debug,where);
   return(err);
+}
+int 
+clear_own_locality(char *loc_type, int debug, FILE *where) {
+  cpu_set_t      mask;
+  int i;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  for(i = 0; i < CPU_SETSIZE; i++) {
+    CPU_SET(i,&mask);
+  }
+
+  i = sched_setaffinity(pthread_self(),
+			sizeof(mask),
+			&mask);
+  /* yes, we really should do some error checking here */
+  return(NPE_SUCCESS);
+
 }
 #else
 int
-set_thread_locality(test_t *test, char *loc_type, char *loc_value)
-{
-  NETPERF_DEBUG_ENTRY(test->debug,test->where);
-  if (test->debug) {
-    fprintf(test->where,
+set_thread_locality(void  *threadid, char *loc_type, char *loc_value, int debug, FILE *where) {
+  NETPERF_DEBUG_ENTRY(debug,where);
+  if (debug) {
+    fprintf(where,
 	    "No call to set CPU affinity available, request ignored.\n");
-    fflush(test->where);
+    fflush(where);
   }
-  NETPERF_DEBUG_EXIT(test->debug,test->where);
+  NETPERF_DEBUG_EXIT(debug,where);
   return(NPE_SUCCESS);
 }
+int 
+clear_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
+  pthread_t my_id;
+  NETPERF_DEBUG_ENTRY(debug,where);
+  if (debug) {
+    fprintf(where,
+	    "No call to set CPU affinity available, request ignored.\n");
+    fflush(where);
+  }
+  return(NPE_SUCCESS);
+}
+
 #endif
+
+int 
+set_own_locality(char *loc_type, char *loc_value, int debug, FILE *where) {
+  pthread_t my_id;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  my_id = pthread_self();
+
+  return(set_thread_locality((void *)&my_id,
+			     loc_type,
+			     loc_value,
+			     debug,
+			     where));
+}
+
+int
+set_test_locality(test_t *test, char *loc_type, char *loc_value)
+{
+  int   ret;
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
+  ret = set_thread_locality(test->native_thread_id_ptr,
+			    loc_type,
+			    loc_value,
+			    test->debug,
+			    test->where);
+
+  NETPERF_DEBUG_EXIT(test->debug,test->where);
+  return(ret);
+}
+
+

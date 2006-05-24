@@ -40,6 +40,8 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#include <glib.h>
+
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #ifdef TIME_WITH_SYS_TIME
@@ -51,7 +53,7 @@ delete this exception statement from your version.
 #include <sys/socket.h>
 #endif
 
-#ifndef WIN32
+#ifndef G_OS_WIN32
 #define SOCKET int
 #endif
 
@@ -76,8 +78,20 @@ extern  GenReport get_report_function(xmlNodePtr cmd);
 extern  const char * netperf_error_name(int rc);
 extern  char * npe_to_str(int npe_error);
 extern  int set_test_locality(test_t  *test,
-                              xmlChar *loc_type,
-                              xmlChar *loc_value);
+                              char *loc_type,
+                              char *loc_value);
+extern int set_thread_locality(void *thread_id,
+			       char *loc_type,
+			       char *loc_value,
+			       int debug,
+			       FILE *where);
+extern  int set_own_locality(char *loc_type,
+			     char *loc_value,
+			     int debug,
+			     FILE *where);
+extern int clear_own_locality(char *loc_type,
+			      int debug,
+			      FILE *where);
 
 #ifdef HAVE_GETHRTIME
 extern void netperf_timestamp(hrtime_t *timestamp);
@@ -92,31 +106,25 @@ extern int  delta_milli(struct timeval *begin,struct timeval *end);
 extern int strtofam(xmlChar *familystr);
 extern void dump_addrinfo(FILE *dumploc, struct addrinfo *info,
 			  xmlChar *host, xmlChar *port, int family);
-extern int establish_control(xmlChar *hostname,  xmlChar *port, int remfam,
+extern SOCKET establish_control(xmlChar *hostname,  xmlChar *port, int remfam,
 			     xmlChar *localhost, xmlChar *localport, int locfam);
 extern int get_test_function(test_t *test, const xmlChar *func);
 extern int add_test_to_hash(test_t *new_test);
-extern int send_control_message(const int control_sock, xmlNodePtr body,
-				xmlChar *nid, const xmlChar *fromnid);
-extern int32_t recv_control_message(int control_sock, xmlDocPtr *message);
+extern int write_to_control_connection(GIOChannel *channel, 
+				       xmlNodePtr body,
+				       xmlChar *nid,
+				       const xmlChar *fromnid);
+extern int32_t recv_control_message(SOCKET control_sock, xmlDocPtr *message);
 extern void report_server_error(server_t *server);
-#ifdef WITH_GLIB
 extern int launch_thread(GThread **tid, void *(*start_routine)(void *), void *data);
-#else
-extern int launch_thread(pthread_t *tid, void *(*start_routine)(void *), void *data);
-#endif
-extern int set_thread_locality(test_t *test, char *loc_type, char *loc_value);
 extern void break_args_explicit(char *s, char *arg1, char *arg2);
 extern int parse_address_family(char family_string[]);
-extern int establish_listen(char *hostname, char *service, 
+extern SOCKET establish_listen(char *hostname, char *service, 
 			    int af, netperf_socklen_t *addrlenp);
-#ifndef HAVE_GET_EXPIRATION_TIME
-/* we need a proto since we are providing the fuction ourselves */
-extern int get_expiration_time(struct timespec *delta,
-			       struct timespec *abstime );
-#endif
 
 extern int netperf_complete_filename(char *name, char *full, int fulllen);
+extern gboolean read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data);
+extern void *launch_pad(void *data);
 
 /* state machine data structure for process message */
 
@@ -127,6 +135,27 @@ struct msgs {
   msg_func_t msg_func;
   unsigned int valid_states;
 };
+
+typedef struct message_state {
+  gboolean have_header;
+  gint32  bytes_received;
+  gint32  bytes_remaining;
+  gchar   *buffer;
+} message_state_t;
+
+typedef struct global_state {
+  server_hash_t   *server_hash;   /* where to find netperf/netserver hash */
+  test_hash_t     *test_hash;     /* where to find the test hash */
+  message_state_t *message_state; /* so we can keep track of partials */
+  GMainLoop       *loop;          /* so we can add things to the loop */
+  gboolean        is_netserver;   /* not sure if this is really necessary */
+  gboolean        first_message;  /* do we await the first message? */
+} global_state_t;
+
+typedef struct thread_launch_state {
+  void *data_arg;                 /* the actual data to be passed */
+  void *(*start_routine)(void *); /* the actual routine to execute */
+} thread_launch_state_t;
 
 extern void netlib_init();
 

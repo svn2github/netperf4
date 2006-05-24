@@ -903,7 +903,7 @@ get_next_vst_transaction(test_t *test)
     if (test->debug && loc_debug) {
       fprintf(test->where, "**** end of pattern reached ******\n");
       fprintf(test->where,
-              "%s:  value = %d  key = %d\n",
+              "%s:  value = %d  key = %ld\n",
               (char *)__func__, value, key);
       fflush(test->where);
     }
@@ -911,7 +911,7 @@ get_next_vst_transaction(test_t *test)
       value = value - dist->dist_count[i];
       if (test->debug && loc_debug) {
         fprintf(test->where,
-                "\tdist_count = %d  new_value = %d  pattern = %d\n",
+                "\tdist_count = %d  new_value = %d  pattern = %ld\n",
                 dist->dist_count[i], value, dist->pattern[i]);
         fflush(test->where);
       }
@@ -1210,7 +1210,6 @@ vst_test_init(test_t *test, int type, int protocol)
   int               error;
   struct addrinfo   hints;
   struct addrinfo  *local_ai;
-  struct addrinfo  *local_temp;
 
   NETPERF_DEBUG_ENTRY(test->debug, test->where);
 
@@ -1419,7 +1418,7 @@ vst_test_get_stats(test_t *test)
 {
   xmlNodePtr  stats = NULL;
   xmlAttrPtr  ap    = NULL;
-  int         i,j;
+  int         i;
   char        value[32];
   char        name[32];
   uint64_t    loc_cnt[VST_MAX_COUNTERS];
@@ -1439,7 +1438,7 @@ vst_test_get_stats(test_t *test)
     for (i = 0; i < VST_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
       if (test->debug) {
-        fprintf(test->where,"VST_COUNTER%X = %#llx\n",i,loc_cnt[i]);
+        fprintf(test->where,"VST_COUNTER%X = %#"PRIx64"\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -1484,7 +1483,7 @@ vst_test_get_stats(test_t *test)
         break;
       }
       if (loc_cnt[i]) {
-        sprintf(value,"%#llx",my_data->stats.counter[i]);
+        sprintf(value,"%#"PRIx64,my_data->stats.counter[i]);
         sprintf(name,"cntr%1X_value",i);
         ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value);
         if (test->debug) {
@@ -2451,7 +2450,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = strtod(value_str,NULL);
       if (test_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+        sscanf(value_str,"%"PRIx64,&x);
         test_cntr[i] = (double)x;
       }
     }
@@ -2533,7 +2532,6 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   FILE          *outfd;
   vst_results_t *rd;
   double         elapsed_seconds;
-  double         sys_util;
   double         calibration;
   double         local_idle;
   double         local_busy;
@@ -2576,7 +2574,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = strtod(value_str,NULL);
       if (sys_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+        sscanf(value_str,"%"PRIx64,&x);
         sys_cntr[i] = (double)x;
       }
     }
@@ -2755,34 +2753,37 @@ update_results_and_confidence(tset_t *test_set)
   NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
 
   /* calculate confidence and summary result values */
-  confidence                    = get_confidence(rd->xmit_results,
-                                      &(test_set->confidence),
-                                      &(rd->xmit_measured_mean),
-                                      &(rd->xmit_interval));
+  confidence    = (test_set->get_confidence)(rd->xmit_results,
+					     &(test_set->confidence),
+					     &(rd->xmit_measured_mean),
+					     &(rd->xmit_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\txmit_results conf = %.2f%%\tmean = %10f +/- %8f\n",
             100.0 * confidence, rd->xmit_measured_mean, rd->xmit_interval);
     fflush(test_set->where);
   }
-  confidence                    = get_confidence(rd->recv_results,
-                                      &(test_set->confidence),
-                                      &(rd->recv_measured_mean),
-                                      &(rd->recv_interval));
+
+  confidence     = (test_set->get_confidence)(rd->recv_results,
+					      &(test_set->confidence),
+					      &(rd->recv_measured_mean),
+					      &(rd->recv_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\trecv_results conf = %.2f%%\tmean = %10f +/- %8f\n",
             100.0 * confidence, rd->recv_measured_mean, rd->recv_interval);
     fflush(test_set->where);
   }
-  confidence                    = get_confidence(rd->run_time,
-                                      &(test_set->confidence),
-                                      &(rd->ave_time),
-                                      &(temp));
-  rd->result_confidence         = get_confidence(rd->results,
-                                      &(test_set->confidence),
-                                      &(rd->result_measured_mean),
-                                      &(rd->result_interval));
+
+  confidence      = (test_set->get_confidence)(rd->run_time,
+					       &(test_set->confidence),
+					       &(rd->ave_time),
+					       &(temp));
+
+  rd->result_confidence  = (test_set->get_confidence)(rd->results,
+						      &(test_set->confidence),
+						      &(rd->result_measured_mean),
+						      &(rd->result_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\tresults      conf = %.2f%%\tmean = %10f +/- %8f\n",
@@ -2790,7 +2791,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->result_measured_mean, rd->result_interval);
     fflush(test_set->where);
   }
-  rd->cpu_util_confidence       = get_confidence(rd->utilization,
+  rd->cpu_util_confidence       = (test_set->get_confidence)(rd->utilization,
                                       &(test_set->confidence),
                                       &(rd->cpu_util_measured_mean),
                                       &(rd->cpu_util_interval));
@@ -2801,7 +2802,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->cpu_util_measured_mean, rd->cpu_util_interval);
     fflush(test_set->where);
   }
-  rd->service_demand_confidence = get_confidence(rd->servdemand,
+  rd->service_demand_confidence = (test_set->get_confidence)(rd->servdemand,
                                       &(test_set->confidence),
                                       &(rd->service_demand_measured_mean),
                                       &(rd->service_demand_interval));

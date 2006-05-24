@@ -6,7 +6,7 @@
   <!-- within the netserver there can be several "test" entities -->
   <test tid="t0"
     test_name = "send_dns_rr"
-    library   = "nettest_dns.la" >
+    library   = "nettest_dns" >
     <!-- The dependency data section gives the info for the DNS server -->
     <dependency_data use_tcp = "false" remote_port = "53" remote_host="15.243.160.51" />
     <!-- We get local addressing info from the socket_args entity -->

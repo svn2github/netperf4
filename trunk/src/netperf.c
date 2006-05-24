@@ -43,18 +43,19 @@ delete this exception statement from your version.
 #include <stdio.h>
 #endif
 
-#ifdef WITH_GLIB
 # ifdef HAVE_GLIB_H
 #  include <glib.h>
 # endif 
-#else
-# ifdef HAVE_PTHREAD_H
-#  include <pthread.h>
-# endif
-#endif
 
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
+#endif
+
+#ifdef HAVE_SYS_TIME_H
+#include <sys/time.h>
+#ifdef TIME_WITH_SYS_TIME
+#include <time.h>
+#endif
 #endif
 
 #ifdef HAVE_SYS_STAT_H
@@ -85,8 +86,8 @@ delete this exception statement from your version.
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_POLL_H
-#include <poll.h>
+#ifdef HAVE_SYS_SELECT_H
+#include <sys/select.h>
 #endif
 
 #ifdef HAVE_UNISTD_H
@@ -176,105 +177,94 @@ static struct option const long_options[] =
   {NULL, 0, NULL, 0}
 };
 
-static void
-usage (int status)
-{
-  printf ("%s - network-oriented performance benchmarking\n", program_name);
-  printf ("Usage: %s [OPTION]... [FILE]...\n", program_name);
-  printf ("\
-Options:\n\
-  -o, --output NAME          send output to NAME instead of standard output\n\
-  -i, --input  NAME          get input from NAME instead of standard input\n\
-  -c, --config NAME          get config from NAME instead of standard input\n\
-  -d, --debug                increase level of debugging output\n\
-  -q, --quiet, --silent      inhibit usual output\n\
-  --brief                    shorten output\n\
-  --verbose                  print more information\n\
-  -h, --help                 display this help and exit\n\
-  -V, --version              output version information and exit\n\
-");
-  exit (status);
-}
 
-/* Set all the option flags according to the switches specified.
-   Return the index of the first non-option argument.  */
-
-static int
-decode_switches (int argc, char **argv)
-{
-  int c;
-
-  ofile = stdout;
-
-  while ((c = getopt_long (argc, argv,
-                           "q"  /* quiet or silent */
-                           "v"  /* verbose */
-                           "o:" /* output */
-                           "i:" /* input */
-                           "c:" /* config */
-			   "d"  /* debug */
-                           "h"  /* help */
-                           "V", /* version */
-                           long_options, (int *) 0)) != EOF) {
-    switch (c) {
-    case 'c':               /* --config */
-      cname = strdup(optarg);
-      break;
-    case 'd':                 /* --debug */
-      debug++;
-      break;
-    case 'o':               /* --output */
-      oname = strdup(optarg);
-      ofile = fopen(oname, "w");
-      if (!ofile) {
-	fprintf(where,
-		"%s: cannot open %s for writing\n",
-		program_name,
-		optarg);
-	fflush(where);
-	exit(1);
-      }
-      break;
-    case 'i':               /* --input */
-      iname = strdup(optarg);
-      ifile = fopen(iname, "r");
-      if (!ifile) {
-	fprintf(where,
-		"%s: cannot open %s for reading\n",
-		program_name,
-		optarg);
-	fflush(where);
-	exit(1);
-      } else {
-	want_batch = 1;
-	fclose(ifile);
-	ifile = NULL;
-      }
-    case 'q':               /* --quiet, --silent */
-      want_quiet = 1;
-      break;
-    case BRIEF_CODE:        /* --brief */
-      want_brief = 1;
-      break;
-    case 'v':               /* --verbose */
-      want_verbose = 1;
-      break;
-    case 'V':
-      printf ("netperf %s.%s.%s\n",
-	      NETPERF_VERSION,
-	      NETPERF_UPDATE,
-	      NETPERF_FIX);
-      exit (0);
-      
-    case 'h':
-      usage (0);
-      
-    default:
-      usage (EXIT_FAILURE);
-    }
+gboolean set_debug(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  if (option_value) {
+    /* set to value */
+    debug = atoi(option_value);
   }
-  return optind;
+  else {
+    /* simple increment */
+    debug++;
+  }
+  return(TRUE);
 }
+
+
+
+gboolean set_verbose(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  if (option_value) {
+    /* set to value */
+    want_verbose = atoi(option_value);
+  }
+  else {
+    /* simple increment */
+    want_verbose++;
+  }
+  return(TRUE);
+}
+  
+
+gboolean show_version(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  g_printf("netserver: %s.%s.%s\n",
+	   NETPERF_VERSION,
+	   NETPERF_UPDATE,
+	   NETPERF_FIX);
+  exit(0);
+}
+
+gboolean set_output_destination(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  oname = g_strdup(option_value);
+  ofile = fopen(oname, "w");
+  if (!ofile) {
+    g_fprintf(stderr,
+	    "%s: cannot open %s for writing\n",
+	    program_name,
+	    option_value);
+    exit(1);
+  }
+  return(TRUE);
+}
+
+gboolean set_input_source(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+
+  iname = g_strdup(option_value);
+  ifile = fopen(iname, "r");
+  if (!ifile) {
+    g_fprintf(where,
+	      "%s: cannot open %s for reading\n",
+	      program_name,
+	      option_value);
+    fflush(where);
+    exit(1);
+  } 
+  else {
+    want_batch = 1;
+    fclose(ifile);
+    ifile = NULL;
+  }
+
+  return(TRUE);
+}
+
+gboolean set_config_source(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  cname = g_strdup(option_value);
+  return(TRUE);
+}
+
+
+static GOptionEntry netperf_entries[] = 
+  {
+    {"output",'o', 0, G_OPTION_ARG_CALLBACK, (void *)set_output_destination, "Specify where misc output should go", NULL},
+    {"input",'i',0, G_OPTION_ARG_CALLBACK, (void *)set_input_source, "Specify the command file", NULL},
+    {"config", 'c', 0, G_OPTION_ARG_CALLBACK, (void *)set_config_source, "Specify the configuration file", NULL},
+    {"debug", 'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, (void *)set_debug, "Set the level of debugging output", NULL},
+    {"version", 'V', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, (void *)show_version, "Display the netserver version and exit", NULL},
+    {"verbose", 'v', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, (void *)set_verbose, "Set verbosity level for output", NULL},
+    {"brief", 'b', 0, G_OPTION_ARG_NONE, &want_brief, "Request brief output", NULL},
+    {"quiet", 'q', 0, G_OPTION_ARG_NONE, &want_quiet, "Display no test banners", NULL},
+    { NULL }
+  };
 
 
 static xmlNodePtr
@@ -296,24 +286,24 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
   }
   if (fname == NULL) {
     if (!xmlStrcmp(doctype,(const xmlChar *)"netperf")) {
-      if (0 == stat("default_config.xml",&buf)) {
+      if (0 == g_stat("default_config.xml",&buf)) {
 	fname = "default_config.xml";
       }
-      else if (0 == stat(NETPERFDIR NETPERF_PATH_SEP "default_config.xml",
+      else if (0 == g_stat(NETPERFDIR G_DIR_SEPARATOR_S "default_config.xml",
 			 &buf)) {
-	fname = NETPERFDIR NETPERF_PATH_SEP "default_config.xml";
+	fname = NETPERFDIR G_DIR_SEPARATOR_S "default_config.xml";
       }
       else {
 	fname = "missing config file";
       }
     }
     if (!xmlStrcmp(doctype,(const xmlChar *)"commands")) {
-      if (0 == stat("default_commands.xml",&buf)) {
+      if (0 == g_stat("default_commands.xml",&buf)) {
 	fname = "default_commands.xml";
       }
-      else if (0 == stat(NETPERFDIR NETPERF_PATH_SEP "default_commands.xml",
+      else if (0 == g_stat(NETPERFDIR G_DIR_SEPARATOR_S "default_commands.xml",
 			 &buf)) {
-	fname = NETPERFDIR NETPERF_PATH_SEP "default_commands.xml";
+	fname = NETPERFDIR G_DIR_SEPARATOR_S "default_commands.xml";
       }
       else {
 	fname = "missing commands file";
@@ -377,11 +367,10 @@ static void
 netperf_init()
 {
   int i;
-  int rc;
+
 
   for (i = 0; i < SERVER_HASH_BUCKETS; i++) {
     server_hash[i].server = NULL;
-#ifdef WITH_GLIB
     server_hash[i].hash_lock = g_mutex_new();
     if (NULL == server_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -396,43 +385,10 @@ netperf_init()
       fflush(where);
       exit(-2);
     }
-#else
-    server_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == server_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(server_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "%s: pthread_mutex_init error %d\n",__func__,rc);
-      fflush(where);
-      exit(-2);
-    }
-    server_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == server_hash[i].condition) {
-      fprintf(where, "%s: unable to malloc a pthread_cond_t \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init((server_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-#endif
   }
 
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     test_hash[i].test = NULL;
-#ifdef WITH_GLIB
     test_hash[i].hash_lock = g_mutex_new();
     if (NULL == test_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -447,39 +403,6 @@ netperf_init()
       fflush(where);
       exit(-2);
     }
-#else
-    test_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == test_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(test_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-
-    test_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == test_hash[i].condition) {
-      fprintf(where, "netperf_init: unable to malloc a pthread_cond_t \n");
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init((test_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-#endif
   }
 
   /* you know, it might not be a bad idea to also properly initialize
@@ -487,7 +410,6 @@ netperf_init()
 
   for (i = 0; i < TEST_SET_HASH_BUCKETS; i ++) {
     test_set_hash[i].test_set = NULL;
-#ifdef WITH_GLIB
     test_set_hash[i].hash_lock = g_mutex_new();
     if (NULL == test_set_hash[i].hash_lock) {
       /* not sure we will even get here */
@@ -502,39 +424,6 @@ netperf_init()
       fflush(where);
       exit(-2);
     }
-#else
-    test_set_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == test_set_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(test_set_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_mutex_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-
-    test_set_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == test_set_hash[i].condition) {
-      fprintf(where, "netperf_init: unable to malloc a pthread_cond_t \n");
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init((test_set_hash[i].condition), NULL);
-    if (rc) {
-      fprintf(where, "netperf_init: pthread_cond_init error %d\n",rc);
-      fflush(where);
-      exit(-2);
-    }
-#endif
   }
 
   netlib_init();
@@ -551,8 +440,8 @@ display_server_hash()
     server = server_hash[i].server;
     fprintf(where,"server_hash_bucket[%d]=%p\n",i,server_hash[i].server);
     while (server) {
-      fprintf(where,"\tserver->id %s, server->sock %d, server->state %d\n",
-              server->id,server->sock,server->state);
+      fprintf(where,"\tserver->id %s, server->channel %p, server->state %d\n",
+              server->id,server->source,server->state);
       server = server->next;
     }
     fflush(where);
@@ -726,7 +615,7 @@ find_test_set_in_hash(const xmlChar *id)
 }
 
 
-static int
+static SOCKET
 connect_netserver(xmlDocPtr doc, xmlNodePtr netserver, server_t *new_server)
 {
   xmlChar   *remotehost;
@@ -736,7 +625,7 @@ connect_netserver(xmlDocPtr doc, xmlNodePtr netserver, server_t *new_server)
 
   int      localfamily;
   int      remotefamily;
-  int      sock;
+  SOCKET      sock;
 
   /* validation means that we know that the host informaion is in attributes
      of the netserver element. The xml parser checked them and initialized
@@ -821,6 +710,8 @@ instantiate_netservers()
   xmlNodePtr  this_netserver;
   server_t   *new_server;
   xmlChar    *netserverid;
+  GIOStatus   status;
+  GError      *error = NULL;
 
   /* first, get the netperf element which was checked at parse time.  The
      netperf element has only netserver elements each with its own unique
@@ -849,17 +740,7 @@ instantiate_netservers()
       new_server->id        = netserverid;
       if (add_server_to_hash(new_server) == NPE_SUCCESS) {
         new_server->node      = this_netserver;
-#ifdef WITH_GLIB
 	g_static_rw_lock_init(&new_server->rwlock);
-#else
-        rc = pthread_rwlock_init(&new_server->rwlock, NULL);
-        if (rc) {
-          fprintf(where, "instaniate_netservers: ");
-          fprintf(where, "pthread_rwlock_init error %d\n", rc);
-          fflush(where);
-          rc = NPE_PTHREAD_RWLOCK_INIT_FAILED;
-        }
-#endif
         if (rc == NPE_SUCCESS) {
           rc = instantiate_tests(this_netserver, new_server);
         }
@@ -875,6 +756,33 @@ instantiate_netservers()
               new_server->state_req = NSRV_PREINIT;
               rc = NPE_CONNECT_FAILED;
             }
+#ifdef G_OS_WIN32
+	    new_server->source = g_io_channel_win32_new_socket(new_server->sock);
+#else
+	    new_server->source = g_io_channel_unix_new(new_server->sock);
+#endif
+	    status = g_io_channel_set_flags(new_server->source,
+					    G_IO_FLAG_NONBLOCK,
+					    &error);
+	    if (error) {
+	      g_warning("g_io_channel_set_flags %s %d %s\n",
+			g_quark_to_string(error->domain),
+			error->code,
+			error->message);
+	      g_clear_error(&error);
+	    }
+    
+	    status = g_io_channel_set_encoding(new_server->source,NULL,&error);
+	    if (error) {
+	      g_warning("g_io_channel_set_encoding %s %d %s\n",
+			g_quark_to_string(error->domain),
+			error->code,
+			error->message);
+	      g_clear_error(&error);
+	    }
+	    
+	    g_io_channel_set_buffered(new_server->source,FALSE);
+
             new_server->state     = NSRV_CONNECTED;
             new_server->state_req = NSRV_CONNECTED;
           rc = send_version_message(new_server, my_nid);
@@ -906,7 +814,10 @@ static int
 wait_for_version_response(server_t *server)
 {
   int        rc = NPE_SUCCESS;
-  struct     pollfd fds;
+  fd_set     read_fds;
+  fd_set     error_fds;
+  struct timeval timeout;
+
   xmlDocPtr  message;
 
   if (debug) {
@@ -915,11 +826,19 @@ wait_for_version_response(server_t *server)
   }
   NETPERF_MUTEX_LOCK(server->lock);
   while (server->state == NSRV_VERS) {
-    fds.fd      = server->sock;
-    fds.events  = POLLIN;
-    fds.revents = 0;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    FD_ZERO(&read_fds);
+    FD_ZERO(&error_fds);
+    FD_SET(server->sock,&read_fds);
+    FD_SET(server->sock,&error_fds);
+
     NETPERF_MUTEX_UNLOCK(server->lock);
-    if (poll(&fds,1,5000) > 0) {
+    if (select(server->sock + 1,
+	       &read_fds,
+	       NULL,
+	       &error_fds,
+	       &timeout) > 0) {
       if (debug) {
         fprintf(where,"wait_for_version_response ");
         fprintf(where,"calling recv_control_message\n");
@@ -1020,31 +939,18 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
       /* wait for test to initialize */
       while (test->state == TEST_PREINIT) {
         NETPERF_MUTEX_UNLOCK(h->hash_lock);
-        if (debug) {
+        if (debug > 1) {
           fprintf(where,
-                  "resolve_dependency: waiting on test %s thread %d\n",
-                  (char *)id,
-                  test->thread_id);
+                  "resolve_dependency: waiting on test %s\n",
+                  (char *)id);
           fflush(where);
         }
 
         NETPERF_MUTEX_LOCK(h->hash_lock);
 
-#ifdef WITH_GLIB
 	g_get_current_time(&abstime);
 	g_time_val_add(&abstime,1000);
 	g_cond_timed_wait(h->condition, h->hash_lock, &abstime);
-#else
-        get_expiration_time(&delta_time,&abstime);
-
-
-        rc = pthread_cond_timedwait(h->condition, h->hash_lock, &abstime);
-        if (debug) {
-            fprintf(where,
-                    "resolve_dependency: pthread_cond_wait exited %d\n",rc);
-            fflush(where);
-        }
-#endif
       }  /* end wait */
       
       /* test has reached at least the TEST_INIT state */
@@ -1086,7 +992,7 @@ static void *
 initialize_test(void *data)
 {
   test_t     *test            = data;
-  xmlChar    *id;
+  xmlChar    *id              = NULL;
   xmlNodePtr  dep_data        = NULL;
   int         rc              = NPE_SUCCESS;
   xmlNodePtr  cur             = NULL;
@@ -1115,9 +1021,14 @@ initialize_test(void *data)
 
   if (rc == NPE_SUCCESS) {
     if (debug) {
+      /* there may not have been an actual dependency, which means
+	 that 'id' (which used to be uninitialized, tsk, tsk, tsk) may
+	 be NULL */
       fprintf(where,
-              "%s: %s dependencey on %s successfully resolved\n",
-              __func__, test->id, id);
+              "%s: %s's dependency on %s successfully resolved\n",
+              __func__,
+	      test->id,
+	      (id == NULL ? "none" : (char *)id));
       fflush(where);
     }
     /* any dependency has been successfully resolved
@@ -1136,10 +1047,10 @@ initialize_test(void *data)
       }
       /* is the lock around the send required? */
       NETPERF_RWLOCK_WRLOCK(&server->rwlock);
-      rc = send_control_message(server->sock,
-                                msg,
-                                server->id,
-                                my_nid);
+      rc = write_to_control_connection(server->source,
+				       msg,
+				       server->id,
+				       my_nid);
       NETPERF_RWLOCK_WRITER_UNLOCK(&server->rwlock);
     } else {
       if (debug) {
@@ -1160,6 +1071,8 @@ initialize_test(void *data)
 
 
   NETPERF_DEBUG_EXIT(debug,where);
+
+  if (msg) xmlFreeNode(msg);
 
   return(test);
 }
@@ -1220,7 +1133,10 @@ netperf_worker(void *data)
 {
   int rc;
   server_t     *server = data;
-  struct pollfd fds;
+  fd_set read_fds;
+  fd_set error_fds;
+  struct timeval timeout;
+
   xmlDocPtr     message;
   
   rc = wait_for_version_response(server);
@@ -1230,11 +1146,19 @@ netperf_worker(void *data)
   NETPERF_MUTEX_LOCK(server->lock);
 
   while (server->state != NSRV_ERROR) {
-    fds.fd      = server->sock;
-    fds.events  = POLLIN;
-    fds.revents = 0;
+    FD_ZERO(&read_fds);
+    FD_ZERO(&error_fds);
+    FD_SET(server->sock,&read_fds);
+    FD_SET(server->sock,&error_fds);
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+
     NETPERF_MUTEX_UNLOCK(server->lock);
-    if (poll(&fds,1,5000) > 0) {
+    if (select(server->sock + 1,
+	       &read_fds,
+	       NULL,
+	       &error_fds,
+	       &timeout) > 0) {
       rc = recv_control_message(server->sock, &message);
       if (rc > 0) {
         rc = process_message(server, message);
@@ -1298,8 +1222,9 @@ launch_worker_threads()
         /* netserver worker thread is not yet initialized start it */
         rc = launch_thread(&server->thread_id, netperf_worker, server);
         if (debug) {
-          fprintf(where,"launched thread %d for netserver %s\n",
-                  server->thread_id,server->id);
+          fprintf(where,
+		  "launched thread for netserver %s\n",
+		  server->id);
           fflush(where);
         }
         NETPERF_MUTEX_LOCK(h->hash_lock);
@@ -1323,7 +1248,7 @@ static int
 wait_for_tests_to_initialize()
 {
   int              rc = NPE_SUCCESS;
-  int              prc;
+
   int              i;
   server_t        *server;
   test_t          *test;
@@ -1362,20 +1287,9 @@ wait_for_tests_to_initialize()
           break;
         }
         /* test is not yet initialized wait for it */
-#ifdef WITH_GLIB
 	g_get_current_time(&abstime);
 	g_time_val_add(&abstime,1000);
 	g_cond_timed_wait(h->condition, h->hash_lock, &abstime);
-#else
-        get_expiration_time(&delta_time,&abstime);
-
-        prc = pthread_cond_timedwait(h->condition, h->hash_lock, &abstime);
-        if (debug && (prc != 0)) {
-          fprintf(where,
-            "wait_for_tests_to_initialize: thread conditional wait returned %d\n",prc);
-          fflush(where);
-        }
-#endif
         /* since the mutex was unlocked during the conditional wait
            should the hash chain be restarted in case a new test was
            inserted ? */
@@ -1438,7 +1352,7 @@ wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
           }
           if (i) {
             i--;
-            sleep(1);
+            g_usleep(1000000);
           }
           else {
             i = 15;
@@ -1460,7 +1374,7 @@ wait_for_tests_to_enter_requested_state(xmlNodePtr cmd)
         }
         if (i) {
           i--;
-          sleep(1);
+          g_usleep(1000000);
         }
         else {
           i = 15;
@@ -1505,10 +1419,10 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
         server = find_server_in_hash(test->server_id);
         test->state_req = state;
         xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-        rc = send_control_message(server->sock,
-                                  cmd,
-                                  server->id,
-                                  my_nid);
+        rc = write_to_control_connection(server->source,
+					 cmd,
+					 server->id,
+					 my_nid);
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
@@ -1529,10 +1443,10 @@ request_state_change(xmlNodePtr cmd, uint32_t state)
       server = find_server_in_hash(test->server_id);
       test->state_req = state;
       xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-      rc = send_control_message(server->sock,
-                                cmd,
-                                server->id,
-                                my_nid);
+      rc = write_to_control_connection(server->source,
+				       cmd,
+				       server->id,
+				       my_nid);
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
@@ -1740,6 +1654,7 @@ create_test_set(xmlNodePtr cmd, uint32_t junk)
     test_set->id           =  setid;
     test_set->tests_in_set = xmlGetProp(cmd,(const xmlChar *)"tests_in_set");
     tests = (char *)(test_set->tests_in_set);
+    test_set->get_confidence = get_confidence;
   } else {
     /* test set could not be allocated  report error */
     rc = NPE_MALLOC_FAILED5;
@@ -1951,10 +1866,10 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
         }
         server = find_server_in_hash(test->server_id);
         xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-        rc = send_control_message(server->sock,
-                                  cmd,
-                                  server->id,
-                                  my_nid);
+        rc = write_to_control_connection(server->source,
+					 cmd,
+					 server->id,
+					 my_nid);
         if (rc != NPE_SUCCESS) {
           test->state  = TEST_ERROR;
           test->err_rc = rc;
@@ -1974,10 +1889,10 @@ stats_command(xmlNodePtr cmd, uint32_t junk)
       }
       server = find_server_in_hash(test->server_id);
       xmlSetProp(cmd,(const xmlChar *)"tid", test->id);
-      rc = send_control_message(server->sock,
-                                cmd,
-                                server->id,
-                                my_nid);
+      rc = write_to_control_connection(server->source,
+				       cmd,
+				       server->id,
+				       my_nid);
       if (rc != NPE_SUCCESS) {
         test->state  = TEST_ERROR;
         test->err_rc = rc;
@@ -2012,7 +1927,7 @@ wait_command(xmlNodePtr cmd, uint32_t junk)
     seconds = 0;
   }
   if (seconds) {
-    sleep(seconds);
+    g_usleep(seconds*1000000);
   }
   return(NPE_SUCCESS);
 }
@@ -2035,10 +1950,10 @@ close_command(xmlNodePtr cmd, uint32_t junk)
   sid    = xmlGetProp(cmd,(const xmlChar *)"sid");
   server = find_server_in_hash(sid);
   xmlSetProp(cmd,(const xmlChar *)"sid", server->id);
-  rc = send_control_message(server->sock,
-                            cmd,
-                            server->id,
-                            my_nid);
+  rc = write_to_control_connection(server->source,
+				   cmd,
+				   server->id,
+				   my_nid);
   if (rc != NPE_SUCCESS) {
     server->state  = NSRV_ERROR;
     server->err_rc = rc;
@@ -2047,7 +1962,7 @@ close_command(xmlNodePtr cmd, uint32_t junk)
   while ((server->state != NSRV_ERROR) &&
          (server->state != NSRV_CLOSE) &&
          (server->state != NSRV_EXIT ))  {
-    sleep(1);
+    g_usleep(1000000);
   }
   delete_server(sid);
   return(rc);
@@ -2155,8 +2070,6 @@ process_commands_and_events()
      end of default command file commands */
 
   /* parse command file */
-  fprintf(where,"parsing command file %s\n",iname);
-  fflush(where);
   commands = parse_xml_file(iname, (const xmlChar *)"commands", &doc);
 
   /* execute commands and events in a loop */
@@ -2201,16 +2114,40 @@ int
 main(int argc, char **argv)
 {
   int       rc = NPE_SUCCESS;
+  GOptionContext *option_context;
+  gboolean ret;
+  GError *error=NULL;
+#ifdef G_OS_WIN32
+  WSADATA	wsa_data ;
+
+#endif
 
   program_name = argv[0];
 
-#ifdef WITH_GLIB
   g_thread_init(NULL);
-#endif
 
   where = stderr;
 
-  decode_switches(argc, argv);
+#ifdef G_OS_WIN32
+  /* Initialize the winsock lib ( version 2.2 ) */
+  if ( WSAStartup(MAKEWORD(2,2), &wsa_data) == SOCKET_ERROR ){
+    g_fprintf(where,"WSAStartup() failed : %d\n", GetLastError()) ;
+    return 1 ;
+  }
+#endif
+
+  option_context = g_option_context_new(" - netperf4 netperf options");
+  g_option_context_add_main_entries(option_context,netperf_entries, NULL);
+  ret = g_option_context_parse(option_context, &argc, &argv, &error);
+  if (error) {
+    /* it sure would be nice to know how to trigger the help output */
+    g_error("%s g_option_context_parse %s %d %s\nUse netserver --help for help\n",
+	      __func__,
+	      g_quark_to_string(error->domain),
+	      error->code,
+	      error->message);
+    g_clear_error(&error);
+  }
 
   xmlInitParser();
   xmlKeepBlanksDefault(0);

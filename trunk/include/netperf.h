@@ -68,10 +68,10 @@ typedef unsigned long long uint64_t;
 #include <ws2tcpip.h>
 #endif
 
-#ifdef WITH_GLIB
 #include <glib.h>
 #include <glib/gstdio.h>
 #include <glib/gprintf.h>
+
 #define NETPERF_MUTEX_T GMutex
 #define NETPERF_RWLOCK_T GStaticRWLock
 #define NETPERF_THREAD_T GThread *
@@ -86,52 +86,45 @@ typedef unsigned long long uint64_t;
 #define NETPERF_RWLOCK_WRITER_UNLOCK g_static_rw_lock_writer_unlock
 #define NETPERF_STAT g_stat
 #define NETPERF_SNPRINTF g_snprintf
-#elif defined(HAVE_PTHREAD_H)
-#include <pthread.h>
-#define NETPERF_MUTEX_T pthread_mutex_t
-#define NETPERF_RWLOCK_T pthread_rwlock_t
-#define NETPERF_THREAD_T pthread_t
-#define NETPERF_COND_T pthread_cond_t
-#define NETPERF_ABS_TIMESPEC struct timespec
-#define NETPERF_ABS_TIMESET(base,a,b) base.tv_sec = a;base.tv_nsec=b;
-#define NETPERF_MUTEX_LOCK pthread_mutex_lock
-#define NETPERF_MUTEX_UNLOCK pthread_mutex_unlock
-#define NETPERF_COND_TIMEDWAIT pthread_cond_timedwait
-#define NETPERF_COND_BROADCAST pthread_cond_broadcast
-#define NETPERF_RWLOCK_WRLOCK pthread_rwlock_wrlock
-#define NETPERF_RWLOCK_WRITER_UNLOCK pthread_rwlock_unlock
-#define NETPERF_STAT stat
-#define NETPERF_SNPRINTF snprintf
-#else
-#error Netperf4 requires either glib or pthreads
-#endif
+
+#define NETPERF_RING_BUFFER_STRING "netperf4 ring data"
 
 #include "netperf_hist.h"
 
-#ifdef WIN32
-#define NETPERF_DEBUG_LOG_DIR "c:\\temp\\"
-#define NETPERF_DEBUG_LOG_PREFIX  "netperf"
-#define NETPERF_DEBUG_LOG_SUFFIX  ".log"
+#define NETPERF_DEBUG_LOG_PREFIX "netperf_"
+#define NETPERF_DEBUG_LOG_SUFFIX "_log.txt"
+
+#ifdef G_OS_WIN32
 #define netperf_socklen_t socklen_t
-#define close(x) closesocket(x)
+#define CLOSE_SOCKET(x) closesocket(x)
 #define strcasecmp(a,b) _stricmp(a,b)
 #define getpid() ((int)GetCurrentProcessId())
+#define __func__ __FUNCTION__
+#define PATH_MAX MAXPATHLEN
+#define gettimeofday(a,b) g_get_current_time((GTimeVal *)a)
+#define strdup(buffer) _strdup(buffer)
+#ifndef PRIu64
+# define PRIx64 "I64x"
+# define PRIu64 "I64u"
+# define PRId64 "I64d"
+#endif
 #else
-#define NETPERF_DEBUG_LOG_DIR "/tmp/"
-#define NETPERF_DEBUG_LOG_PREFIX  "netperf"
-#define NETPERF_DEBUG_LOG_SUFFIX  ".log"
 #define INVALID_SOCKET -1
 #define SOCKET_ERROR -1
 #define SOCKET int
+#define CLOSE_SOCKET(x) close(x)
+#define GET_ERRNO errno
 #endif
 
 #include "netconfidence.h"
+
+#define NETPERF_MESSAGE_HEADER_SIZE sizeof(guint32)
 
 #define NETPERF_DEFAULT_SERVICE_NAME     "netperf4"
 #define NETPERF_DTD_FILE (const xmlChar *)"http://www.netperf.org/netperf_docs.dtd/1.0"
 #define NETPERF_VERSION (const xmlChar *)"4"
 #define NETPERF_UPDATE  (const xmlChar *)"0"
-#define NETPERF_FIX     (const xmlChar *)"999"
+#define NETPERF_FIX     (const xmlChar *)"997"
 
 #define NETPERF_DEBUG_ENTRY(d,w) \
   if (d) { \
@@ -160,21 +153,22 @@ typedef unsigned long long uint64_t;
 #define SET_TEST_DATA(test,ptr)           test->test_specific_data = ptr
 
 
-#ifdef WIN32
+#ifdef G_OS_WIN32
 #define CHECK_FOR_NOT_SOCKET (WSAGetLastError() == WSAENOTSOCK)
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
 #define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
 #define CHECK_FOR_SEND_ERROR(len) (len >= 0) || \
         (len == SOCKET_ERROR && WSAGetLastError() == WSAEINTR)
 #define GET_ERRNO WSAGetLastError()
-#define NETPERF_PATH_SEP "\\"
+#ifndef SHUT_WR
+#define SHUT_WR SD_SEND
+#endif
 #else
 #define CHECK_FOR_NOT_SOCKET (errno == ENOTSOCK)
 #define CHECK_FOR_INVALID_SOCKET (temp_socket < 0)
 #define CHECK_FOR_RECV_ERROR(len) (len < 0)
 #define CHECK_FOR_SEND_ERROR(len) (len >=0) || (errno == EINTR)
 #define GET_ERRNO errno
-#define NETPERF_PATH_SEP "/"
 #endif
 
 
@@ -203,6 +197,9 @@ typedef struct server_instance {
   xmlChar          *id;          /* the id of the server instance. used
                                     in searches and as sanity checks  */
 
+  xmlChar          *my_nid;      /* used in netserver, used to be
+				    global */
+
   NETPERF_RWLOCK_T rwlock;       /* the mutex used to ensure exclusive
                                     access to this servers resources */
 
@@ -214,6 +211,9 @@ typedef struct server_instance {
 
   SOCKET           sock;         /* the socket over which we communicate
                                     with the server */
+
+  GIOChannel       *source;      /* the control channel over which we
+				    communicate with the server */
 
   ns_state_t       state;        /* in what state is this server
                                     presently? */
@@ -265,10 +265,14 @@ typedef enum {
 } test_state_t;
 
 
-typedef int       *(*TestFunc)(void *test_data);
+typedef void      *(*TestFunc)(void *test_data);
 typedef xmlNodePtr (*TestDecode)(xmlNodePtr statistics);
 typedef int        (*TestClear)(void *test_info);
 typedef xmlNodePtr (*TestStats)(void *test_data);
+/* a kludge until we restructure to have the get_confidence routine in
+   a utility dynamic library that netperf, netserver and test libs can
+   link against. */
+typedef double     (*GetConfidence)();
 
 #define NETPERF_MAX_TEST_FUNCTION_NAME 64
 #define NETPERF_MAX_TEST_LIBRARY_NAME  PATH_MAX
@@ -322,6 +326,11 @@ typedef struct test_instance {
 				   opaque thread id should be we will
 				   have to do some interesting
 				   backflips to deal with them */
+  void   *native_thread_id_ptr; /* a pointer to the "native" thread id
+				  of the test thread, used for things
+				  like processor affinity since
+				  GThread doesn't do that sort of
+				  thing :( */
 
   xmlChar   *test_name;        /* the ASCII name of the test being
                                   performed by this test instance. */
@@ -350,7 +359,7 @@ typedef struct test_instance {
                                   is called by netperf to decode, accumulate,
                                   and report statistics nodes returned by tests
                                   from this library. */
-  
+
   xmlNodePtr received_stats;   /* a node to which all test_stats received
                                   by netperf from this test are appended as
                                   children */
@@ -423,6 +432,14 @@ typedef struct test_set_instance {
 
   struct test_set_instance *next;  /* pointer to the next test set instance
                                       in the hash */
+
+  GetConfidence  get_confidence;   /* a temporary kludge to allow the
+				      formatters in the test libraries
+				      to access the get_confidence
+				      routine in the main executable.
+				      At least until we can create a
+				      "utility" library for everyone
+				      to link against. */
 
   confidence_t   confidence;       /* confidence parameters structure */
 

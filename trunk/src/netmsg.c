@@ -52,10 +52,6 @@ delete this exception statement from your version.
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_POLL_H
-#include <poll.h>
-#endif
-
 #ifdef HAVE_SYS_TIME_H
 /* seems that Darwin or at least MacOS X 4.3 needs sys/time with
    sys/resource */
@@ -129,7 +125,7 @@ const struct msgs   NP_Msgs[] = {
 };
 
 const struct msgs   NS_Msgs[] = {
-  /* Message name, function,             StateBitMap */
+  /* Message name,     function,                StateBitMap */
 #ifdef OFF
   { "clear",           clear_message,            0x00000000 },
   { "error",           error_message,            0x00000000 },
@@ -198,7 +194,7 @@ process_message(server_t *server, xmlDocPtr doc)
           fflush(where);
           server->state = NSRV_ERROR;
           if (server->sock != -1) {
-            close(server->sock);
+            CLOSE_SOCKET(server->sock);
             /* should we delete the server from the server_hash ? sgb */
             break;
           }
@@ -216,6 +212,7 @@ process_message(server_t *server, xmlDocPtr doc)
     }
   }
   xmlFreeDoc(doc);
+  if (fromnid) free(fromnid);
 
   NETPERF_DEBUG_EXIT(debug,where);
 
@@ -274,14 +271,14 @@ send_version_message(server_t *server, const xmlChar *fromnid)
         (xmlSetProp(message,(xmlChar *)"fix", NETPERF_FIX)     != NULL))  {
       /* still smiling */
       /* almost there... */
-      rc = send_control_message(server->sock,
-                                message,
-                                server->id,
-                                fromnid);
+      rc = write_to_control_connection(server->source,
+				       message,
+				       server->id,
+				       fromnid);
       if (rc != NPE_SUCCESS) {
         if (debug) {
           fprintf(where,
-                  "send_version_message: send_control_message failed\n");
+                  "send_version_message: write_to_control_connection failed\n");
           fflush(where);
         }
       }
@@ -293,7 +290,10 @@ send_version_message(server_t *server, const xmlChar *fromnid)
       }
       rc = NPE_SEND_VERSION_XMLSETPROP_FAILED;
     }
-  } else {
+    /* now that we are done with it, best to free the message node */
+    xmlFreeNode(message);
+  }
+  else {
     if (debug) {
       fprintf(where,
               "send_version_message: xmlNewNode failed\n");
@@ -328,7 +328,7 @@ ns_version_check(xmlNodePtr msg, xmlDocPtr doc, server_t *netperf)
     /* versions match */
     netperf->state      =  NSRV_VERS;
     netperf->state_req  =  NSRV_WORK;
-    rc = send_version_message(netperf,my_nid);
+    rc = send_version_message(netperf,netperf->my_nid);
   } else {
     /* versions don't match */
     if (debug) {
@@ -506,14 +506,14 @@ get_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       fflush(where);
     }
     stats = (test->test_stats)(test);
-    rc = send_control_message(server->sock,
-                              stats,
-                              server->id,
-                              my_nid);
+    rc = write_to_control_connection(server->source,
+				     stats,
+				     server->id,
+				     server->my_nid);
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "%s: send_control_message failed\n",
+                "%s: write_to_control_connection failed\n",
                 __func__);
         fflush(where);
       }
@@ -541,14 +541,14 @@ get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
       fflush(where);
     }
     sys_stats = (test->test_stats)(test);
-    rc = send_control_message(server->sock,
-                              sys_stats,
-                              server->id,
-                              my_nid);
+    rc = write_to_control_connection(server->source,
+				     sys_stats,
+				     server->id,
+				     server->my_nid);
     if (rc != NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "%s: send_control_message failed\n",
+                "%s: write_to_control_connection failed\n",
                  __func__);
         fflush(where);
       }
@@ -595,15 +595,7 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     test->state = TEST_IDLE;
     /* I'd have liked to have abstracted this with the NETPERF_mumble
        macros, but the return values differ. raj 2006-03-02 */
-#ifdef WITH_GLIB
     g_cond_broadcast(test_hash[hash_value].condition);
-#else
-    rc = pthread_cond_broadcast(test_hash[hash_value].condition);
-    if (debug) {
-      fprintf(where," new_state = %d\n",test->state);
-      fflush(where);
-    }
-#endif
   }
   if (debug) {
     fprintf(where,"np_idle_message: unlocking mutex\n");
@@ -760,15 +752,9 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 
     /* since the different cond broadcast calls return different
        things, we cannot use the nice NETPERF_mumble abstractions. */
-#ifdef WITH_GLIB
 
     g_cond_broadcast(test_hash[hash_value].condition);
 
-#else
-
-    rc = NETPERF_COND_BROADCAST(test_hash[hash_value].condition);
-
-#endif      
 
     if (debug) {
       fprintf(where," new_state = %d rc = %d\n",test->state,rc);
@@ -883,12 +869,13 @@ int
 test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
 {
   int        rc = NPE_SUCCESS;
+  int        rc2;
   test_t    *new_test;
   xmlNodePtr test_node;
   xmlChar   *testid;
-  xmlChar   *loc_type;
-  xmlChar   *loc_value;
-
+  xmlChar   *loc_type = NULL;
+  xmlChar   *loc_value = NULL;
+  thread_launch_state_t *launch_state;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -939,45 +926,92 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
     if (rc == NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "test_message: about to launch thread %d for test using func %p\n",
-                new_test->thread_id,
+                "test_message: launching test thread using func %p\n",
                 new_test->test_func);
         fflush(where);
       }
-      rc = launch_thread(&new_test->thread_id,new_test->test_func,new_test);
-      if (debug) {
-        fprintf(where,
-                "test_message: launched thread %d for test\n",
-                new_test->thread_id);
-        fflush(where);
+      launch_state =
+	(thread_launch_state_t *)malloc(sizeof(thread_launch_state_t));
+      if (launch_state) {
+	launch_state->data_arg = new_test;
+	launch_state->start_routine = new_test->test_func;
+
+	/* before we launch the thread, we should bind ourselves to
+	   the cpu to which the thread will be bound (if at all) to
+	   make sure that stuff like stack allocation happens on the
+	   desired CPU. raj 2006-04-11 */
+
+	loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
+	loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
+	if ((loc_type != NULL) && (loc_value != NULL)) {
+	  /* we use rc2 because we aren't going to fail the run if the
+	     affinity didn't work, but eventually we should emit some
+	     sort of warning */
+	  rc2 = set_own_locality((char *)loc_type,
+				 (char *)loc_value,
+				 debug,
+				 where);
+	}
+
+	rc = launch_thread(&new_test->thread_id,launch_pad,launch_state);
+	if (debug) {
+	  fprintf(where,
+		  "test_message: launched test thread\n");
+	  fflush(where);
+	}
+	/* having launched the test thread, we really aught to unbind
+	   ourselves from that CPU. at the moment, we do not do that */
+      }
+      else {
+	rc = NPE_MALLOC_FAILED2;
       }
     }
-    /* Set test thread locality */
-    if (rc == NPE_SUCCESS) {
-      loc_type  = xmlGetProp(test_node,(const xmlChar *)"locality_type");
-      loc_value = xmlGetProp(test_node,(const xmlChar *)"locality_value");
-      if ((loc_type != NULL) && (loc_value != NULL)) {
-        rc = set_thread_locality(new_test, (char *)loc_type, (char *)loc_value);
-      }
-    }
-    /* wait for test to initialize */
+
+    /* wait for test to initialize, then we will know that it's native
+       thread id has been set in the test_t */
     if (rc == NPE_SUCCESS) {
       while (new_test->new_state == TEST_PREINIT) {
         if (debug) {
           fprintf(where,
-                  "test_message: waiting on thread %d\n",
-                  new_test->thread_id);
+                  "test_message: waiting on thread\n");
           fflush(where);
         }
-        sleep(1);
+        g_usleep(1000000);
       }  /* end wait */
       if (debug) {
         fprintf(where,
-                "test_message: test has finished initialization on thread %d\n",
-                new_test->thread_id);
+                "test_message: test initialization finished on thread\n");
         fflush(where);
       }
     }
+
+    /* now we can set test thread locality */
+    if (rc == NPE_SUCCESS) {
+      /* we will have already extracted loc_type and loc_value if they
+	 exist and there is no possibility of them having spontaneously
+	 appeared in the last N lines of code, so we don't need the
+	 xmlGetProp calls here :)  raj 2006-04-11 */
+      if ((loc_type != NULL) && (loc_value != NULL)) {
+	/* we use rc2 because we aren't going to fail the run if the
+	   affinity didn't work, but eventually we should emit some
+	   sort of warning */
+        rc2 = set_test_locality(new_test, (char *)loc_type, (char *)loc_value);
+	rc2 = clear_own_locality((char *)loc_type,debug,where);
+      }
+      /* however, at this point we need to be sure to free loc_type
+	 and/or loc_value. nulling may be a bit over the top, but
+	 might as well, this isn't supposed to be that performance
+	 critical */
+      if (NULL != loc_type)  {
+	free(loc_type);
+	loc_type = NULL;
+      }
+      if (NULL != loc_value) {
+	free(loc_value);
+	loc_value = NULL;
+      }
+    }
+
     if (rc != NPE_SUCCESS) {
       new_test->state  = TEST_ERROR;
       new_test->err_rc = rc;
@@ -1001,7 +1035,7 @@ sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
   test_t      *test;
-  xmlNodePtr  stats;
+  xmlNodePtr  stats = NULL;
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
   test   = find_test_in_hash(testid);
@@ -1042,7 +1076,7 @@ test_stats_message(xmlNodePtr msg, xmlDocPtr doc, server_t *server)
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
   test_t      *test;
-  xmlNodePtr  stats;
+  xmlNodePtr  stats = NULL;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");

@@ -1,0 +1,7 @@
+LIBRARY netsysstat
+
+EXPORTS
+	sys_stats_get_stats
+	sys_stats_decode_stats
+	sys_stats_clear_stats
+	sys_stats

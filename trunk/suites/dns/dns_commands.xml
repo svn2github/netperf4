@@ -21,6 +21,6 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s0" 
-    library="nettest_dns.la"
+    library="nettest_dns"
     function="report_dns_test_results" />
 </commands>

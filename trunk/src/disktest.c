@@ -31,7 +31,7 @@ delete this exception statement from your version.
 
 #ifndef lint
 char    disk_test_id[]="\
-@(#)disktest.c (c) Copyright 2005 Hewlett-Packard Co. $Id: disktest.c 20 2006-2-28 19:45:00Z burger $";
+@(#)disktest.c (c) Copyright 2005 Hewlett-Packard Co. $Id$";
 #endif /* lint */
 
 

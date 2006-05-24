@@ -1,9 +1,9 @@
-#SUBDIRS = missing
+#SUBDIRS = suites
 
 bin_PROGRAMS = netperf netserver
 
 AM_CFLAGS = $(NETPERF_CFLAGS)
-AM_CPPFLAGS = -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$(netperfdir)\""
+AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$(netperfdir)\""
 
 # for now we will use "NETSYS_SOURCE" for both the netsysstats and
 # netlib platform-specific stuff
@@ -13,9 +13,10 @@ USE_NETLIB_SOURCE=netlib_@NETSYS_SOURCE@.c
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 
-EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netperf.h netsysstats*.c netlib_*.c
+EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netsysstats*.c netlib_*.c
 
-COMMON_SRC = netperf_hist.h netlib.c netperf.h netlib.h netcpu.h netmsg.c netmsg.h netconfidence.c netconfidence.h 
+# some of the other include files are actually up in include/
+COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
 
 netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
@@ -23,22 +24,12 @@ netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 netperfdir = @datadir@/netperf
 netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
 
-# in theory this will cause these header files to be put in the
-# installed headers location, where folks who want to make their own
-# test libraries can find them
-include_HEADERS = netperf.h netconfidence.h netperf_hist.h
-
-# in theory, the stuff below should deal with creating the requisite libs
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettest_dns.la nettest_vst.la
+# in theory, the stuff below should deal with creating the requisite
+# "core" libs.  optional libs are in suites/
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
 
 nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
 nettest_bsd_la_LDFLAGS = -module
-
-nettest_dns_la_SOURCES = nettest_dns.c nettest_dns.h
-nettest_dns_la_LDFLAGS = -module
-
-nettest_vst_la_SOURCES = nettest_vst.c nettest_vst.h
-nettest_vst_la_LDFLAGS = -module
 
 # the USE_CPU_SOURCE will pick the apropriate file based on the platform
 netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)

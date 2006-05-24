@@ -91,7 +91,9 @@ char    nettest_dns_id[]="\
 #include <arpa/nameser.h>
 #endif
 
-#ifdef HAVE_ARPA_NAMESER_COMPAT_H
+/* for some reason, AIX (5.3 at least) does not like having
+   nameser_compat.h included along with nameser.h raj 2006-04-04 */
+#if defined(HAVE_ARPA_NAMESER_COMPAT_H) && !defined(_AIX)
 #include <arpa/nameser_compat.h>
 #endif
 
@@ -123,6 +125,10 @@ char    nettest_dns_id[]="\
 #include "netlib.h"
 
 #include "nettest_dns.h"
+
+#ifndef C_NONE
+#define C_NONE ns_c_none
+#endif
 
 #ifdef WIN32
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
@@ -662,8 +668,12 @@ strtotype(char type_string[]){
   else if (!strcasecmp(type_string,"T_RT")) return(T_RT);
   else if (!strcasecmp(type_string,"T_NSAP")) return(T_NSAP);
   else if (!strcasecmp(type_string,"T_NSAP_PTR")) return(T_NSAP_PTR);
+#ifdef T_ATMA
   else if (!strcasecmp(type_string,"T_ATMA")) return(T_ATMA);
+#endif
+#ifdef T_NAPTR
   else if (!strcasecmp(type_string,"T_NAPTR")) return(T_NAPTR);
+#endif
 #ifdef T_A6
   else if (!strcasecmp(type_string,"T_A6")) return(T_A6);
 #endif
@@ -986,7 +996,7 @@ dns_test_get_stats(test_t *test)
     for (i = 0; i < DNS_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
       if (test->debug) {
-        fprintf(test->where,"DNS_COUNTER%X = %#llx\n",i,loc_cnt[i]);
+        fprintf(test->where,"DNS_COUNTER%X = %#"PRIx64"\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -1030,7 +1040,7 @@ dns_test_get_stats(test_t *test)
         break;
       }
       if (loc_cnt[i]) {
-        sprintf(value,"%#llx",my_data->stats.counter[i]);
+        sprintf(value,"%#"PRIx64,my_data->stats.counter[i]);
         sprintf(name,"cntr%1X_value",i);
         ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value);
         if (test->debug) {
@@ -1566,7 +1576,7 @@ send_dns_rr_load(test_t *test)
 {
   uint32_t          new_state;
   int               ret;
-  int               len;
+  int               len = -1;
   int               bytes_left;
   uint16_t         *rsp_ptr;
   dns_data_t       *my_data;
@@ -1941,7 +1951,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = strtod(value_str,NULL);
       if (test_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+        sscanf(value_str,"%"PRIx64,&x);
         test_cntr[i] = (double)x;
       }
     } else {
@@ -2066,7 +2076,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = strtod(value_str,NULL);
       if (sys_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+        sscanf(value_str,"%"PRIx64,&x);
         sys_cntr[i] = (double)x;
       }
     } else {
@@ -2241,11 +2251,11 @@ update_results_and_confidence(tset_t *test_set)
   NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
 
   /* calculate confidence and summary result values */
-  confidence                    = get_confidence(rd->run_time,
+  confidence                    = (test_set->get_confidence)(rd->run_time,
                                       &(test_set->confidence),
                                       &(rd->ave_time),
                                       &(temp));
-  rd->result_confidence         = get_confidence(rd->results,
+  rd->result_confidence         = (test_set->get_confidence)(rd->results,
                                       &(test_set->confidence),
                                       &(rd->result_measured_mean),
                                       &(rd->result_interval));
@@ -2256,7 +2266,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->result_measured_mean, rd->result_interval);
     fflush(test_set->where);
   }
-  rd->cpu_util_confidence       = get_confidence(rd->utilization,
+  rd->cpu_util_confidence       = (test_set->get_confidence)(rd->utilization,
                                       &(test_set->confidence),
                                       &(rd->cpu_util_measured_mean),
                                       &(rd->cpu_util_interval));
@@ -2267,7 +2277,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->cpu_util_measured_mean, rd->cpu_util_interval);
     fflush(test_set->where);
   }
-  rd->service_demand_confidence = get_confidence(rd->servdemand,
+  rd->service_demand_confidence = (test_set->get_confidence)(rd->servdemand,
                                       &(test_set->confidence),
                                       &(rd->service_demand_measured_mean),
                                       &(rd->service_demand_interval));

@@ -68,8 +68,6 @@ delete this exception statement from your version.
 
 #include "netperf.h"
 
-#define GET_ERRNO errno
-
 #include "netsysstats.h"
 
 /* variables are kept in the test_specific data section of the test stucture.
@@ -114,9 +112,9 @@ update_sys_stats(test_t *test)
 
   if (test->debug) {
     fprintf(test->where,"\tdelta_sec  = %d\t%d\t%d\n",
-            dtime->tv_sec,curr->tv_sec,prev->tv_sec);
+            (int)dtime->tv_sec,(int)curr->tv_sec,(int)prev->tv_sec);
     fprintf(test->where,"\tdelta_usec = %d\t%d\t%d\n",
-            dtime->tv_usec,curr->tv_usec,prev->tv_usec);
+            (int)dtime->tv_usec,(int)curr->tv_usec,(int)prev->tv_usec);
     fflush(test->where);
   }
 
@@ -132,14 +130,14 @@ update_sys_stats(test_t *test)
 
   if (test->debug) {
     fprintf(test->where,"\tdelta_sec  = %d\t%d\t%d\n",
-            dtime->tv_sec,curr->tv_sec,prev->tv_sec);
+            (int)dtime->tv_sec,(int)curr->tv_sec,(int)prev->tv_sec);
     fprintf(test->where,"\tdelta_usec = %d\t%d\t%d\n",
-            dtime->tv_usec,curr->tv_usec,prev->tv_usec);
+            (int)dtime->tv_usec,(int)curr->tv_usec,(int)prev->tv_usec);
     fflush(test->where);
   }
 
   if (test->debug) {
-    fprintf(test->where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
+    fprintf(test->where,"\tttime = %d.%d\n",(int)ttime->tv_sec,(int)ttime->tv_usec);
     fflush(test->where);
   }
 
@@ -152,7 +150,7 @@ update_sys_stats(test_t *test)
   }
 
   if (test->debug) {
-    fprintf(test->where,"\tttime = %d.%d\n",ttime->tv_sec,ttime->tv_usec);
+    fprintf(test->where,"\tttime = %d.%d\n",(int)ttime->tv_sec,(int)ttime->tv_usec);
     fflush(test->where);
   }
 
@@ -172,6 +170,29 @@ update_sys_stats(test_t *test)
     subtotal += delta[i].interrupt;
 
     delta[i].other = delta[i].calibrate - subtotal;
+
+    if(test->debug) {
+      fprintf(test->where, 
+	      "%s delta calibrate[%d] = %"PRIx64,
+	      __func__, i, delta[i].calibrate);
+      fprintf(test->where, 
+	      "\n\tdelta idle[%d] = %"PRIx64,
+	      i, delta[i].idle);
+      fprintf(test->where,
+	      "\n\tdelta user[%d] = %"PRIx64,
+	      i, delta[i].user);
+      fprintf(test->where,
+	      "\n\tdelta kern[%d] = %"PRIx64,
+	      i, delta[i].kernel);
+      fprintf(test->where,
+	      "\n\tdelta intr[%d] = %"PRIx64,
+	      i, delta[i].interrupt);
+      fprintf(test->where,
+	      "\n\tdelta othr[%d] = %"PRIx64,
+	      i, delta[i].other);
+      fprintf(test->where, "\n");
+      fflush(test->where);
+    }
 
     if (subtotal > delta[i].calibrate) {
       /* hmm, what is the right thing to do here? for now simply
@@ -197,6 +218,7 @@ update_sys_stats(test_t *test)
     sys_total->interrupt += delta[i].interrupt;
     sys_total->other     += delta[i].other;
   }
+  NETPERF_DEBUG_EXIT(test->debug,test->where);
 }
   
 static void
@@ -289,14 +311,19 @@ set_counter_attribute(test_t *test, xmlNodePtr stats,char *name, uint64_t value)
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
-  sprintf(value_str,"%#llx",value);
+  sprintf(value_str,"%#"PRIx64,value);
   ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value_str);
   if (test->debug) {
-    fprintf(test->where,"%s=%s\n",name,value_str);
+    fprintf(test->where,"%s=%s from %"PRIx64"\n",name,value_str,value);
     fflush(test->where);
   }
   return(ap);
 }
+
+/* NOTE - we need to figure-out where/when to free the attributes
+   returned by set_*_attribute otherwise we have a memory leak. what I
+   don't know is if the attribute pointers can/should be freed here or
+   if they become part of the xmlNode... */
 
 static xmlAttrPtr
 add_per_cpu_attributes(test_t *test,
@@ -304,13 +331,13 @@ add_per_cpu_attributes(test_t *test,
                        cpu_time_counters_t *cpu,
                        uint32_t num_cpus)
 {
-  int        i;
+  uint32_t        i;
   xmlNodePtr cpu_stats = NULL;
   xmlAttrPtr ap        = NULL;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
   
-  for (i=0;i<num_cpus;i++) {
+  for (i = 0; i < num_cpus; i++) {
     if ((cpu_stats = xmlNewNode(NULL,(xmlChar *)"per_cpu_stats")) != NULL) {
       /* set the properites of the per_cpu_stats -
          the cpu_id counter values  sgb 2005-10-17 */
@@ -504,9 +531,18 @@ sys_stats(test_t *test)
 	       good. raj 2005-10-27
 	       for good measure, make sure we are doing a memset for
 	       the proper size of each of these blessed things! raj
-	       2006-01-23 */ 
+	       2006-01-23
+	       and do it for all the counters just to make sure that
+	       stuff like valgrind remains happy. raj 2006-02-29 */
+
 	    memset(tsd->total_sys_counters,0,sizeof(cpu_time_counters_t));
 	    memset(tsd->total_cpu_counters,0,
+		   (num_cpus * sizeof(cpu_time_counters_t)));
+	    memset(tsd->starting_cpu_counters,0,
+		   (num_cpus * sizeof(cpu_time_counters_t)));
+	    memset(tsd->ending_cpu_counters,0,
+		   (num_cpus * sizeof(cpu_time_counters_t)));
+	    memset(tsd->delta_cpu_counters,0,
 		   (num_cpus * sizeof(cpu_time_counters_t)));
 	    SET_TEST_STATE(TEST_INIT);
 	  } else {
@@ -550,7 +586,7 @@ sys_stats(test_t *test)
 	}
 	/* check for state transition */
 	if (CHECK_REQ_STATE == TEST_IDLE) {
-	  sleep(1);
+	  g_usleep(1000000);
 	} else if (CHECK_REQ_STATE == TEST_LOADED) {
 	  SET_TEST_STATE(TEST_LOADED);
 	} else if (CHECK_REQ_STATE == TEST_DEAD) {
@@ -569,13 +605,15 @@ sys_stats(test_t *test)
 	}
 	
 	if (CHECK_REQ_STATE == TEST_MEASURE) {
-	  sleep(1);
-	} else if (CHECK_REQ_STATE == TEST_LOADED) {
+	  g_usleep(1000000);
+	} 
+	else if (CHECK_REQ_STATE == TEST_LOADED) {
 	  /* get_cpu_time_counters sets current timestamp */
 	  get_cpu_time_counters(tsd->ending_cpu_counters,&(tsd->curr_time),test);
 	  update_sys_stats(test);
 	  SET_TEST_STATE(TEST_LOADED);
-	} else {
+	} 
+	else {
 	  report_test_failure(test,
 			      "sys_stats",
 			      SYS_STATS_REQUESTED_STATE_INVALID,
@@ -589,7 +627,7 @@ sys_stats(test_t *test)
 	}
 	
 	if (CHECK_REQ_STATE == TEST_LOADED) {
-	  sleep(1);
+	  g_usleep(1000000);
 	} else if (CHECK_REQ_STATE == TEST_MEASURE) {
 	  /* transitioning to measure state from loaded state set
 	     get_cpu_time_counters sets previous timestamp */
@@ -615,7 +653,7 @@ sys_stats(test_t *test)
     /* do we ever get here? seems that if we do, it would be spinning
        like crazy?!?  raj 2005-10-06 */
     while (GET_TEST_STATE != TEST_DEAD) {
-      sleep(1);
+      g_usleep(1000000);
       if (CHECK_REQ_STATE == TEST_DEAD) {
 	SET_TEST_STATE(TEST_DEAD);
       }

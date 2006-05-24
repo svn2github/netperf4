@@ -18,6 +18,6 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s1" 
-     library="nettest_bsd.la"
+     library="nettest_bsd"
      function="report_bsd_test_results" />
 </commands>

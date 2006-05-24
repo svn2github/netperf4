@@ -1,6 +1,13 @@
-EXTRA_DIST = netperf4.man netserver4.man netperf4.txt netperf4.html netperf4.xml  netperf4.pdf netperf4.ps netperf4.texi examples netperf4_design.txt
+# what is your philosophy - distribute pre-made .pdf et al in a make dist
+# or not?  choose your EXTRA_DIST line accordingly
+# EXTRA_DIST = netperf4.man netserver4.man netperf4.txt netperf4.html netperf4.xml  netperf4.pdf netperf4.ps netperf4.texi examples netperf4_design.txt
+
+EXTRA_DIST = netperf4.man netserver4.man netperf4.texi examples netperf4_design.txt
+
 man1_MANS = netperf4.man netserver4.man
+
 info_TEXINFOS = netperf4.texi
+
 CLEANFILES = netperf4.txt netperf4.xml netperf4.html
 
 netperf4.html: $(info_TEXINFOS)

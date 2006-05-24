@@ -117,19 +117,31 @@ char    nettest_id[]="\
 #include <netdb.h>
 #endif
 
+#ifdef HAVE_WINSOCK2_H
+#include <winsock2.h>
+#endif
+
+#ifdef HAVE_WINDOWS_H
+#include <windows.h>
+#endif
+
+#ifdef HAVE_WS2TCPIP_H
+#include <ws2tcpip.h>
+#endif
+
 #include "netperf.h"
 
 #include "nettest_bsd.h"
 
+#include "netconfidence.h"
+
 #ifdef WIN32
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
 #define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
-#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (len == SOCKET_ERROR && WSAGetLastError() == WSAEINTR) 
 #define GET_ERRNO WSAGetLastError()
 #else
 #define CHECK_FOR_INVALID_SOCKET (temp_socket < 0)
 #define CHECK_FOR_RECV_ERROR(len) (len < 0)
-#define CHECK_FOR_SEND_ERROR(len) (len >=0) || (errno == EINTR)
 #define GET_ERRNO errno
 #endif
 
@@ -188,20 +200,15 @@ char    nettest_id[]="\
 
 
 static void
-report_test_failure(test, function, err_code, err_string)
-  test_t *test;
-  char   *function;
-  int     err_code;
-  char   *err_string;
-{
+report_test_failure(test_t *test, const char *function, int err_code, const char * err_string) {
   if (test->debug) {
     fprintf(test->where,"%s: called report_test_failure:",function);
     fprintf(test->where,"reporting  %s  errno = %d\n",err_string,GET_ERRNO);
     fflush(test->where);
   }
   test->err_rc    = err_code;
-  test->err_fn    = function;
-  test->err_str   = err_string;
+  test->err_fn    = (char *)function;
+  test->err_str   = (char *)err_string;
   test->new_state = TEST_ERROR;
   test->err_no    = GET_ERRNO;
 }
@@ -272,7 +279,8 @@ set_test_state(test_t *test, uint32_t new_state)
       }
       if (valid) {
         test->new_state = state;
-      } else {
+      }
+      else {
         sprintf(error_msg,"bad state transition from %s state",state_name);
         report_test_failure( test,
                              "set_test_state",
@@ -283,7 +291,7 @@ set_test_state(test_t *test, uint32_t new_state)
   }
 }
 
-void
+static void
 wait_to_die(test_t *test)
 {
   while (GET_TEST_STATE != TEST_DEAD) {
@@ -295,53 +303,6 @@ wait_to_die(test_t *test)
   }
 }
 
-#ifdef OFF
-/* the following lines are a template for any test
-   just copy the 37 lines for generic_test change
-   the procedure name and write you own TEST_SPECIFC_XXX
-   functions.  Have Fun   sgb 2005-10-26 */
-
-void
-generic_test(test_t *test)
-{
-  uint32_t state, new_state;
-  TEST_SPECIFIC_INITIALIZE(test);
-  state = GET_TEST_STATE;
-  while ((state != TEST_ERROR) &&
-         (state != TEST_DEAD )) {
-    switch(state) {
-    case TEST_PREINIT:
-      TEST_SPECIFIC_PREINIT(test);
-      new_state = TEST_INIT;
-      break;
-    case TEST_INIT:
-      new_state = CHECK_REQ_STATE;
-      if (new_state == TEST_IDLE) {
-        new_state = TEST_SPECIFIC_INIT(test);
-      }
-      break;
-    case TEST_IDLE:
-      new_state = CHECK_REQ_STATE;
-      if (new_state == TEST_IDLE) {
-        sleep(1);
-      }
-      break;
-    case TEST_MEASURE:
-      new_state = TEST_SPECIFIC_MEASURE(test);
-      break;
-    case TEST_LOADED:
-      new_state = TEST_SPECIFIC_LOAD(test);
-      break;
-    default:
-      break;
-    } /* end of switch */
-    set_test_state(test, new_state);
-    state = GET_TEST_STATE;
-  } /* end of while */
-  wait_to_die(test);
-}
- 
-#endif /* OFF end of generic_test example code  sgb  2005-10-26 */
 
 
 static void
@@ -388,13 +349,16 @@ strtofam(xmlChar *familystr)
 {
   if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET")) {
     return(AF_INET);
-  } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_UNSPEC")) {
+  } 
+  else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_UNSPEC")) {
     return(AF_UNSPEC);
 #ifdef AF_INET6
-  } else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET6")) {
+  }
+  else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET6")) {
     return(AF_INET6);
 #endif /* AF_INET6 */
-  } else {
+  }
+  else {
     /* we should never get here if the validator is doing its thing */
     return(-1);
   }
@@ -439,7 +403,7 @@ get_dependency_data(test_t *test, int type, int protocol)
         fprintf(test->where,"Sleeping on getaddrinfo EAI_AGAIN\n");
         fflush(test->where);
       }
-      sleep(1);
+      g_usleep(1000000);
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
     
@@ -449,7 +413,8 @@ get_dependency_data(test_t *test, int type, int protocol)
 
   if (!error) {
     my_data->remaddr = remote_ai;
-  } else {
+  }
+  else {
     if (test->debug) {
       fprintf(test->where,"%s: getaddrinfo returned %d %s\n",
               __func__, error, gai_strerror(error));
@@ -460,6 +425,9 @@ get_dependency_data(test_t *test, int type, int protocol)
                         BSDE_GETADDRINFO_ERROR,
                         gai_strerror(error));
   }
+  if (string) free(string);
+  if (remotehost) free(remotehost);
+  if (remoteport) free(remoteport);
 }
 
 
@@ -501,13 +469,15 @@ set_dependent_data(test)
         (xmlSetProp(dep_data,(const xmlChar *)"remote_host",
                     (xmlChar *)host) != NULL))  {
     test->dependent_data = dep_data;
-    } else {
+    }
+    else {
       report_test_failure(test,
                           "set_dependent_data",
                           BSDE_XMLSETPROP_ERROR,
                           "error setting properties for dependency data");
     }
-  } else {
+  } 
+  else {
     report_test_failure(test,
                         "set_dependent_data",
                         BSDE_XMLNEWNODE_ERROR,
@@ -516,7 +486,7 @@ set_dependent_data(test)
 }
 
 
-unsigned int
+static unsigned int
 convert(string,units)
      unsigned char *string;
      unsigned char *units;
@@ -590,10 +560,18 @@ allocate_buffer_ring(width, buffer_size, alignment, offset, fill_source)
     if (i == 1) {
       first_link = temp_link;
     }
-    temp_link->buffer_base = (char *)malloc(malloc_size);
+    temp_link->buffer_base = (char *)g_malloc(malloc_size);
+#ifndef G_OS_WIN32
     temp_link->buffer_ptr = (char *)(( (long)(temp_link->buffer_base) +
                           (long)alignment - 1) &
                          ~((long)alignment - 1));
+#else
+    /* 64-bit Windows is P64, not LP64 like the rest of the world, 
+       so we cannot cast as a "long" */
+    temp_link->buffer_ptr = (char *)(( (ULONG_PTR)(temp_link->buffer_base) +
+                          (long)alignment - 1) &
+                         ~((long)alignment - 1));
+#endif
     temp_link->buffer_ptr += offset;
     /* is where the buffer fill code goes. */
     if (do_fill) {
@@ -608,6 +586,12 @@ allocate_buffer_ring(width, buffer_size, alignment, offset, fill_source)
         }
         bytes_left -= bytes_read;
       }
+    }
+    else {
+      /* put our own special "stamp" upon the buffer */
+      strncpy(temp_link->buffer_ptr,
+	      NETPERF_RING_BUFFER_STRING,
+	      buffer_size);
     }
     temp_link->next = prev_link;
     prev_link = temp_link;
@@ -625,7 +609,7 @@ allocate_buffer_ring(width, buffer_size, alignment, offset, fill_source)
  /* called by either the netperf or netserver programs, all output */
  /* should be directed towards "where." family is generally AF_INET, */
  /* and type will be either SOCK_STREAM or SOCK_DGRAM */
-static int
+static SOCKET
 create_data_socket(test)
   test_t *test;
 {
@@ -638,7 +622,7 @@ create_data_socket(test)
   int loc_sndavoid     = my_data->send_avoid;
   int loc_rcvavoid     = my_data->recv_avoid;
 
-  int temp_socket;
+  SOCKET temp_socket;
   int one;
   netperf_socklen_t sock_opt_len;
 
@@ -684,7 +668,7 @@ create_data_socket(test)
 #ifdef SO_SNDBUF
   if (lss_size > 0) {
     if(setsockopt(temp_socket, SOL_SOCKET, SO_SNDBUF,
-                  &lss_size, sizeof(int)) < 0) {
+                  (void *)&lss_size, sizeof(int)) < 0) {
       report_test_failure(test,
                           (char *)__func__,
                           BSDE_SETSOCKOPT_ERROR,
@@ -701,7 +685,7 @@ create_data_socket(test)
 
   if (lsr_size > 0) {
     if(setsockopt(temp_socket, SOL_SOCKET, SO_RCVBUF,
-                  &lsr_size, sizeof(int)) < 0) {
+                  (void *)&lsr_size, sizeof(int)) < 0) {
       report_test_failure(test,
                           (char *)__func__,
                           BSDE_SETSOCKOPT_ERROR,
@@ -914,14 +898,16 @@ bsd_test_init(test_t *test, int type, int protocol)
     string =  xmlGetProp(args,(const xmlChar *)"port_min");
     if (string) {
       new_data->port_min = atoi((char *)string);
-    } else {
+    }
+    else {
       new_data->port_min = -1;
     }
 
     string =  xmlGetProp(args,(const xmlChar *)"port_max");
     if (string) {
       new_data->port_max = atoi((char *)string);
-    } else {
+    }
+    else {
       new_data->port_max = -1;
     }
     
@@ -993,7 +979,7 @@ bsd_test_init(test_t *test, int type, int protocol)
           fprintf(test->where,"Sleeping on getaddrinfo EAI_AGAIN\n");
           fflush(test->where);
         }
-        sleep(1);
+        g_usleep(1000000);
       }
     } while ((error == EAI_AGAIN) && (count <= 5));
     
@@ -1003,7 +989,8 @@ bsd_test_init(test_t *test, int type, int protocol)
 
     if (!error) {
       new_data->locaddr = local_ai;
-    } else {
+    }
+    else {
       if (test->debug) {
         fprintf(test->where,"%s: getaddrinfo returned %d %s\n",
                 __func__, error, gai_strerror(error));
@@ -1014,7 +1001,8 @@ bsd_test_init(test_t *test, int type, int protocol)
                           BSDE_GETADDRINFO_ERROR,
                           gai_strerror(error));
     }
-  } else {
+  }
+  else {
     report_test_failure(test,
                         (char *)__func__,
                         BSDE_NO_SOCKET_ARGS,
@@ -1094,7 +1082,7 @@ bsd_test_get_stats(test_t *test)
     for (i = 0; i < BSD_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
       if (test->debug) {
-        fprintf(test->where,"BSD_COUNTER%X = %#llx\n",i,loc_cnt[i]);
+        fprintf(test->where,"BSD_COUNTER%X = %#"PRIx64"\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -1115,7 +1103,8 @@ bsd_test_get_stats(test_t *test)
           fflush(test->where);
         }
       }
-    } else {
+    }
+    else {
       if (ap != NULL) {
         sprintf(value,"%ld",my_data->elapsed_time.tv_sec);
         ap = xmlSetProp(stats,(xmlChar *)"elapsed_sec",(xmlChar *)value);
@@ -1138,7 +1127,7 @@ bsd_test_get_stats(test_t *test)
         break;
       }
       if (loc_cnt[i]) {
-        sprintf(value,"%#llx",my_data->stats.counter[i]);
+        sprintf(value,"%#"PRIx64,my_data->stats.counter[i]);
         sprintf(name,"cntr%1X_value",i);
         ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value);
         if (test->debug) {
@@ -1153,8 +1142,11 @@ bsd_test_get_stats(test_t *test)
     }
   }
   if (test->debug) {
-    fprintf(test->where,"bsd_test_get_stats: exiting for %s test %s\n",
-            test->id, test->test_name);
+    fprintf(test->where,
+	    "%s: exiting for %s test %s\n",
+	    __func__,
+            test->id,
+	    test->test_name);
     fflush(test->where);
   }
   return(stats);
@@ -1165,7 +1157,7 @@ static void
 recv_tcp_stream_preinit(test_t *test)
 {
   int               rc;         
-  int               s_listen;
+  SOCKET           s_listen;
   bsd_data_t       *my_data;
   struct sockaddr   myaddr;
   netperf_socklen_t mylen;
@@ -1200,17 +1192,20 @@ recv_tcp_stream_preinit(test_t *test)
                         (char *)__func__,
                         BSDE_BIND_FAILED,
                         "data socket bind failed");
-  } else if (listen(s_listen,5) == -1) {
+  }
+  else if (listen(s_listen,5) == -1) {
     report_test_failure(test,
                         (char *)__func__,
                         BSDE_LISTEN_FAILED,
                         "data socket listen failed");
-  } else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
+  }
+  else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
     report_test_failure(test,
                         (char *)__func__,
                         BSDE_GETSOCKNAME_FAILED,
                         "getting the listen socket name failed");
-  } else {
+  }
+  else {
     memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
     my_data->locaddr->ai_addrlen = mylen;
     set_dependent_data(test);
@@ -1220,12 +1215,13 @@ recv_tcp_stream_preinit(test_t *test)
 static uint32_t
 recv_tcp_stream_init(test_t *test)
 {
-  int               s_data;
+  SOCKET            s_data;
   bsd_data_t       *my_data;
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
   my_data   = GET_TEST_DATA(test);
+
   peerlen   = sizeof(peeraddr);
 
   if (test->debug) {
@@ -1239,7 +1235,8 @@ recv_tcp_stream_init(test_t *test)
                         (char *)__func__,
                         BSDE_ACCEPT_FAILED,
                         "listen socket accept failed");
-  } else {
+  }
+  else {
     if (test->debug) {
       fprintf(test->where, 
               "%s:accept returned successfully %d\n", 
@@ -1285,7 +1282,7 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
     fflush(test->where);
   }
   while (new_state == TEST_LOADED) {
-    sleep(1);
+    g_usleep(1000000);
     new_state = CHECK_REQ_STATE;
   }
   if (test->debug) {
@@ -1298,8 +1295,9 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
                           (char *)__func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
-    } else {
-      close(my_data->s_data);
+    }
+    else {
+      CLOSE_SOCKET(my_data->s_data);
       if (test->debug) {
         fprintf(test->where,"%s: waiting in accept\n",__func__);
         fflush(test->where);
@@ -1311,7 +1309,8 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
                           (char *)__func__,
                           BSDE_ACCEPT_FAILED,
                           "listen socket accept failed");
-      } else {
+      }
+      else {
         if (test->debug) {
           fprintf(test->where,
                   "%s: accept returned successfully %d\n",
@@ -1321,7 +1320,8 @@ recv_tcp_stream_idle_link(test_t *test, int last_len)
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
@@ -1338,7 +1338,9 @@ recv_tcp_stream_meas(test_t *test)
   int               len;
   uint32_t          new_state;
   bsd_data_t       *my_data;
+
   my_data   = GET_TEST_DATA(test);
+
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data, my_data->recv_ring);
@@ -1355,12 +1357,14 @@ recv_tcp_stream_meas(test_t *test)
                           (char *)__func__,
                           BSDE_DATA_RECV_ERROR,
                           "data_recv_error");
-    } else {
+    }
+    else {
       my_data->stats.named.bytes_received += len;
       my_data->stats.named.recv_calls++;
       my_data->recv_ring = my_data->recv_ring->next;
     }
-  } else {
+  }
+  else {
     /* how do we deal with a closed connection in the loaded state */
     report_test_failure(test,
                         (char *)__func__,
@@ -1402,7 +1406,8 @@ recv_tcp_stream_load(test_t *test)
                           (char *)__func__,
                           BSDE_DATA_RECV_ERROR,
                           "data_recv_error");
-    } else {
+    }
+    else {
       my_data->recv_ring = my_data->recv_ring->next;
     }
   }
@@ -1414,7 +1419,8 @@ recv_tcp_stream_load(test_t *test)
        a request to transition to the idle state */
     recv_tcp_stream_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  } 
+  else {
     if (new_state == TEST_MEASURE) {
         /* transitioning to measure state from loaded state
            set previous timestamp */
@@ -1440,7 +1446,8 @@ send_tcp_stream_preinit(test_t *test)
                                               my_data->fill_source);
     get_dependency_data(test, SOCK_STREAM, IPPROTO_TCP);
     my_data->s_data = create_data_socket(test);
-  } else {
+  }
+  else {
     fprintf(test->where,"entered send_tcp_stream_preinit more than once\n");
     fflush(test->where);
   }
@@ -1464,7 +1471,8 @@ send_tcp_stream_init(test_t *test)
                         (char *)__func__,
                         BSDE_CONNECT_FAILED,
                         "data socket connect failed");
-  } else {
+  }
+  else {
     if (test->debug) {
       fprintf(test->where,"%s: connected and moving to IDLE\n",__func__);
       fflush(test->where);
@@ -1489,11 +1497,12 @@ send_tcp_stream_idle_link(test_t *test)
                         (char *)__func__,
                         BSDE_SOCKET_SHUTDOWN_FAILED,
                         "failure shuting down data socket");
-  } else {
+  }
+  else {
     recv(my_data->s_data,
          my_data->send_ring->buffer_ptr,
          my_data->send_size, 0);
-    close(my_data->s_data);
+    CLOSE_SOCKET(my_data->s_data);
     my_data->s_data = create_data_socket(test);
     if (test->debug) {
       fprintf(test->where,"%s: connecting from LOAD state\n",__func__);
@@ -1506,7 +1515,8 @@ send_tcp_stream_idle_link(test_t *test)
                           (char *)__func__,
                           BSDE_CONNECT_FAILED,
                           "data socket connect failed");
-    } else {
+    }
+    else {
       if (test->debug) {
         fprintf(test->where,"%s: connected moving to IDLE\n", __func__);
         fflush(test->where);
@@ -1523,6 +1533,7 @@ send_tcp_stream_meas(test_t *test)
   bsd_data_t       *my_data;
 
   my_data   = GET_TEST_DATA(test);
+
   HISTOGRAM_VARS;
   /* code to make data dirty macro enabled by DIRTY */
   MAKE_DIRTY(my_data,my_data->send_ring);
@@ -1664,7 +1675,7 @@ recv_tcp_stream(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -1711,7 +1722,7 @@ send_tcp_stream(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -1734,12 +1745,13 @@ static void
 recv_tcp_rr_preinit(test_t *test)
 {
   int               rc;
-  int               s_listen;
+  SOCKET           s_listen;
   bsd_data_t       *my_data;
   struct sockaddr   myaddr;
   netperf_socklen_t mylen;
 
   my_data   = GET_TEST_DATA(test);
+
   mylen     = sizeof(myaddr);
 
   my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
@@ -1774,17 +1786,20 @@ recv_tcp_rr_preinit(test_t *test)
                         (char *)__func__,
                         BSDE_BIND_FAILED,
                         "data socket bind failed");
-  } else if (listen(s_listen,5) == -1) {
+  } 
+  else if (listen(s_listen,5) == -1) {
     report_test_failure(test,
                         (char *)__func__,
                         BSDE_LISTEN_FAILED,
                         "data socket listen failed");
-  } else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
+  }
+  else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
     report_test_failure(test,
                         (char *)__func__,
                         BSDE_GETSOCKNAME_FAILED,
                         "getting the listen socket name failed");
-  } else {
+  } 
+  else {
     memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
     my_data->locaddr->ai_addrlen = mylen;
     set_dependent_data(test);
@@ -1794,12 +1809,13 @@ recv_tcp_rr_preinit(test_t *test)
 static uint32_t
 recv_tcp_rr_init(test_t *test)
 {
-  int               s_data;
+  SOCKET             s_data;
   bsd_data_t       *my_data;
   struct sockaddr   peeraddr;
   netperf_socklen_t peerlen;
 
   my_data   = GET_TEST_DATA(test);
+
   peerlen   = sizeof(peeraddr);
 
   if (test->debug) {
@@ -1813,7 +1829,8 @@ recv_tcp_rr_init(test_t *test)
                         (char *)__func__,
                         BSDE_ACCEPT_FAILED,
                         "listen socket accept failed");
-  } else {
+  } 
+  else {
     if (test->debug) {
       fprintf(test->where, 
               "%s:accept returned successfully %d\n", 
@@ -1835,12 +1852,13 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
   netperf_socklen_t peerlen;
 
   my_data   = GET_TEST_DATA(test);
+
   len       = last_len;
   peerlen   = sizeof(peeraddr);
 
   new_state = CHECK_REQ_STATE;
   while (new_state == TEST_LOADED) {
-    sleep(1);
+    g_usleep(1000000);
     new_state = CHECK_REQ_STATE;
   }
 
@@ -1854,13 +1872,14 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
                           (char *)__func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "data_recv_error");
-    } else {
+    } 
+    else {
       while (len > 0) {
         len=recv(my_data->s_data,
                  my_data->recv_ring->buffer_ptr,
                  my_data->req_size, 0);
       }
-      close(my_data->s_data);
+      CLOSE_SOCKET(my_data->s_data);
       if (test->debug) {
         fprintf(test->where,"%s: waiting in accept\n",__func__);
         fflush(test->where);
@@ -1872,7 +1891,8 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
                           (char *)__func__,
                           BSDE_ACCEPT_FAILED,
                           "listen socket accept failed");
-      } else {
+      } 
+      else {
         if (test->debug) {
           fprintf(test->where,
                   "%s: accept returned successfully %d\n",
@@ -1882,7 +1902,8 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
@@ -1895,7 +1916,7 @@ recv_tcp_rr_idle_link(test_t *test, int last_len)
 static uint32_t
 recv_tcp_rr_meas(test_t *test)
 {
-  int               len;
+  int               len = -1;
   int               bytes_left;
   char             *req_ptr;
   uint32_t          new_state;
@@ -1924,7 +1945,8 @@ recv_tcp_rr_meas(test_t *test)
       }
       req_ptr    += len;
       bytes_left -= len;
-    } else {
+    }
+    else {
       /* just got a data connection close break out of while loop */
       break;
     }
@@ -1935,7 +1957,8 @@ recv_tcp_rr_meas(test_t *test)
                         (char *)__func__,
                         BSDE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed during TEST_MEASURE state");
-  } else {
+  }
+  else {
     my_data->stats.named.trans_received++;
     if ((len=send(my_data->s_data,
                   my_data->send_ring->buffer_ptr,
@@ -1968,7 +1991,7 @@ recv_tcp_rr_meas(test_t *test)
 static uint32_t
 recv_tcp_rr_load(test_t *test)
 {
-  int               len;
+  int               len=-1;
   int               bytes_left;
   char             *req_ptr;
   uint32_t          new_state;
@@ -1994,7 +2017,8 @@ recv_tcp_rr_load(test_t *test)
       }
       req_ptr    += len;
       bytes_left -= len;
-    } else {
+    } 
+    else {
       /* just got a data connection close break out of while loop */
       break;
     }
@@ -2007,7 +2031,8 @@ recv_tcp_rr_load(test_t *test)
        a request to transition to the idle state */
     recv_tcp_rr_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  }
+  else {
     if ((len=send(my_data->s_data,
                   my_data->send_ring->buffer_ptr,
                   my_data->rsp_size,
@@ -2071,7 +2096,8 @@ send_tcp_rr_init(test_t *test)
                         (char *)__func__,
                         BSDE_CONNECT_FAILED,
                         "data socket connect failed");
-  } else {
+  }
+  else {
     if (test->debug) {
       fprintf(test->where,"%s: connected and moving to IDLE\n",__func__);
       fflush(test->where);
@@ -2092,7 +2118,7 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
 
   new_state = CHECK_REQ_STATE;
   while (new_state == TEST_LOADED) {
-    sleep(1);
+    g_usleep(1000000);
     new_state = CHECK_REQ_STATE;
   }
   if (new_state == TEST_IDLE) {
@@ -2105,13 +2131,14 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
                           (char *)__func__,
                           BSDE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
-    } else {
+    } 
+    else {
       while (len > 0) {
         len = recv(my_data->s_data,
                    my_data->recv_ring->buffer_ptr,
                    my_data->rsp_size, 0);
       }
-      close(my_data->s_data);
+      CLOSE_SOCKET(my_data->s_data);
       my_data->s_data = create_data_socket(test);
       if (test->debug) {
         fprintf(test->where,"%s: connecting from LOAD state\n",__func__);
@@ -2124,14 +2151,16 @@ send_tcp_rr_idle_link(test_t *test, int last_len)
                             (char *)__func__,
                             BSDE_CONNECT_FAILED,
                             "data socket connect failed");
-      } else {
+      }
+      else {
         if (test->debug) {
           fprintf(test->where,"%s: connected moving to IDLE\n",__func__);
           fflush(test->where);
         }
       }
     }
-  } else {
+  }
+  else {
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
@@ -2220,6 +2249,7 @@ send_tcp_rr_meas(test_t *test)
   return(new_state);
 }
 
+
 static uint32_t
 send_tcp_rr_load(test_t *test)
 {
@@ -2283,7 +2313,8 @@ send_tcp_rr_load(test_t *test)
       (new_state == TEST_IDLE)) {
     send_tcp_rr_idle_link(test,len);
     new_state = TEST_IDLE;
-  } else {
+  } 
+  else {
     if (new_state == TEST_MEASURE) {
       /* transitioning to measure state from loaded state
          set previous timestamp */
@@ -2359,7 +2390,7 @@ recv_tcp_rr(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -2378,7 +2409,7 @@ recv_tcp_rr(test_t *test)
 } /* end of recv_tcp_rr */
 
 
-/* This routine implements the TCP request/responce test */
+/* This routine implements the TCP request/response test */
 /* (a.k.a. rr) for the sockets interface. It receives its */
 /* parameters via the xml node contained in the test structure */
 /* output to the standard output. */
@@ -2406,7 +2437,7 @@ send_tcp_rr(test_t *test)
     case TEST_IDLE:
       new_state = CHECK_REQ_STATE;
       if (new_state == TEST_IDLE) {
-        sleep(1);
+        g_usleep(1000000);
       }
       break;
     case TEST_MEASURE:
@@ -3520,7 +3551,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
       fflush(test_set->where);
     }
     outfd = fopen(output,"a");
-  } else {
+  }
+  else {
     if (test_set->debug) {
       fprintf(test_set->where,
               "report_bsd_test_results: report going to file stdout\n");
@@ -3545,6 +3577,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
     rd->utilization    = &(rd->trans_results[max_count]);
     rd->servdemand     = &(rd->utilization[max_count]);
     rd->run_time       = &(rd->servdemand[max_count]);
+    /* we should initialize result_confidence here? */
+    rd->result_confidence = 0.0;
     rd->result_minimum = DBL_MAX;
     rd->result_maximum = DBL_MIN;
     rd->outfd          = outfd;
@@ -3568,7 +3602,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
       rd->print_per_cpu = 1;
     }
     test_set->report_data = rd;
-  } else {
+  }
+  else {
     /* could not allocate memory can't generate report */
     fprintf(outfd,
             "bsd_test_results_init: malloc failed can't generate report\n");
@@ -3634,10 +3669,13 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = strtod(value_str,NULL);
       if (test_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+	/* MUST use the PRIx64 macro to get the proper format under
+           Windows or we get garbage.  raj 2006-04-12 */
+        sscanf(value_str,"%"PRIx64,&x);
         test_cntr[i] = (double)x;
       }
-    } else {
+    }
+    else {
       test_cntr[i] = 0.0;
     }
     if (test_set->debug) {
@@ -3675,7 +3713,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   }
   if (rd->sd_denominator != 1.0) {
     result = recv_rate + xmit_rate;
-  } else {
+  } 
+  else {
     result = recv_trans_rate + xmit_trans_rate;
   }
   if (test_set->debug) {
@@ -3699,7 +3738,8 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       fprintf(outfd,"%7.2f ",result);                 /* 19,8 */
       fprintf(outfd,"%7.2f ",xmit_rate);              /* 27,8 */
       fprintf(outfd,"%7.2f ",recv_rate);              /* 35,8 */
-    } else {
+    }
+    else {
       fprintf(outfd,"%10.2f ",result);                /* 19,11 */
     }
     fprintf(outfd,"\n");
@@ -3761,10 +3801,12 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = strtod(value_str,NULL);
       if (sys_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%llx",&x);
+	/* MUST use PRIx64 to get proper results under Windows */
+        sscanf(value_str,"%"PRIx64,&x);
         sys_cntr[i] = (double)x;
       }
-    } else {
+    }
+    else {
       sys_cntr[i] = 0.0;
     }
     if (test_set->debug) {
@@ -3821,7 +3863,8 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(outfd,"%-6.2f ",elapsed_seconds);         /* 12,7 */
     if (rd->sd_denominator != 1.0) {
       fprintf(outfd,"%24s","");                       /* 19,24*/
-    } else {
+    }
+    else {
       fprintf(outfd,"%11s","");                       /* 19,11*/
     }
     fprintf(outfd,"%7.1e ",calibration);              /* 43,8 */
@@ -3882,7 +3925,8 @@ process_stats_for_run(tset_t *test_set)
         fprintf(test_set->where,
                 "\ttest %s has '%s' statistics\n",
                 test->id,stats->name);
-      } else {
+      } 
+      else {
         fprintf(test_set->where,
                 "\ttest %s has no statistics available!\n",
                 test->id);
@@ -3965,14 +4009,14 @@ update_results_and_confidence(tset_t *test_set)
   NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
 
     /* calculate confidence and summary result values */
-  confidence                    = get_confidence(rd->run_time,
-                                      &(test_set->confidence),
-                                      &(rd->ave_time),
-                                      &(temp));
-  rd->result_confidence         = get_confidence(rd->results,
-                                      &(test_set->confidence),
-                                      &(rd->result_measured_mean),
-                                      &(rd->result_interval));
+  confidence            = (test_set->get_confidence)(rd->run_time,
+						     &(test_set->confidence),
+						     &(rd->ave_time),
+						     &(temp));
+  rd->result_confidence = (test_set->get_confidence)(rd->results,
+						     &(test_set->confidence),
+						     &(rd->result_measured_mean),
+						     &(rd->result_interval));
   if (test_set->debug) {
     fprintf(test_set->where,
             "\tresults      conf = %.2f%%\tmean = %10f +/- %8f\n",
@@ -3980,7 +4024,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->result_measured_mean, rd->result_interval);
     fflush(test_set->where);
   }
-  rd->cpu_util_confidence       = get_confidence(rd->utilization,
+  rd->cpu_util_confidence       = (test_set->get_confidence)(rd->utilization,
                                       &(test_set->confidence),
                                       &(rd->cpu_util_measured_mean),
                                       &(rd->cpu_util_interval));
@@ -3991,7 +4035,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->cpu_util_measured_mean, rd->cpu_util_interval);
     fflush(test_set->where);
   }
-  rd->service_demand_confidence = get_confidence(rd->servdemand,
+  rd->service_demand_confidence = (test_set->get_confidence)(rd->servdemand,
                                       &(test_set->confidence),
                                       &(rd->service_demand_measured_mean),
                                       &(rd->service_demand_interval));
@@ -4067,7 +4111,8 @@ print_run_results(tset_t *test_set)
       fprintf(outfd,"%7s ",field4A[i]);                       /* 19,8 */
       fprintf(outfd,"%7s ",field5[i]);                        /* 27,8 */
       fprintf(outfd,"%7s ",field6[i]);                        /* 35,8 */
-    } else {
+    }
+    else {
       fprintf(outfd,"%10s ",field4B[i]);                      /* 19,11 */
     }
     fprintf(outfd,"%7s ",field7[i]);                          /* 43,8 */
@@ -4088,7 +4133,8 @@ print_run_results(tset_t *test_set)
     fprintf(outfd,"%7.2f ",rd->results[index]);               /* 19,8 */
     fprintf(outfd,"%7.2f ",rd->xmit_results[index]);          /* 27,8 */
     fprintf(outfd,"%7.2f ",rd->recv_results[index]);          /* 35,8 */
-  } else {
+  } 
+  else {
     fprintf(outfd,"%10.2f ",rd->results[index]);              /* 19,11*/
   }
   fprintf(outfd,"%7.3f ",rd->servdemand[index]);              /* 43,8 */
@@ -4188,7 +4234,8 @@ print_results_summary(tset_t *test_set)
       field10[i] = field10A[i];
       field11[i] = field11A[i];
     }
-  } else {
+  }
+  else {
     for (i = 0; i < HDR_LINES; i++) {
       field4[i]  = field4B[i];
       field5[i]  = field5B[i];
@@ -4225,7 +4272,8 @@ print_results_summary(tset_t *test_set)
     fprintf(outfd,"%7.3f ",rd->result_confidence);                /* 27,8 */
     fprintf(outfd,"%7.2f ",rd->result_minimum);                   /* 35,8 */
     fprintf(outfd,"%7.2f ",rd->result_maximum);                   /* 43,8 */
-  } else {
+  }
+  else {
     fprintf(outfd,"%7.0f ",rd->result_measured_mean);             /* 19,8 */
     fprintf(outfd,"%7.2f ",rd->result_interval);                  /* 27,8 */
     fprintf(outfd,"%7.0f ",rd->result_minimum);                   /* 35,8 */

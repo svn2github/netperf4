@@ -1,1 +1,82 @@
-Netperf4 has yet to be compiled under any flavor of Windows.
+Netperf4 presently compiles under Windows - that is one can get a
+cleanly compiled netperf and netserver binary.  The DLLs are still a
+work in progress.  It appears that they load and run, but the results 
+obtained seem a little squirrely.
+
+This work is being done in the Windows DDK, specifically version 3790.1830.
+
+There are a number of dependencies that have to be satisfied:
+
+libxml2 development and runtime
+  iconv runtime
+  zlib  runtime
+
+For those follow the download links from:
+
+http://www.xmlsoft.org/downloads.html
+
+to Igor Zlatkovic's download site at:
+
+http://www.zlatkovic.com/libxml.en.html
+
+Version 2.6.23 of libxml2, 1.9.1 of iconv and 1.2.3 of zlib are
+presently presumed to be sufficient.  This may change without warning
+as actual tests are run :)
+
+You will also need glib:
+
+glib development and runtime
+  gettext runtime
+
+For those follow the download links from:
+
+http://www.gtk.org/download/  to:
+
+http://www.gtk.org/download/
+
+version 2.8.6 of glib and 0.14.5 of gettext are presently presumed to
+be sufficient.  This may change without warning as actual tests are
+run :)
+
+under src/ in the directory where you place the netperf4 sources,
+there will be four (presently) subdirectories:
+
+ NetPerfDir
+ NetServerDir
+ NetTestBSDDir
+ NetSysstatsDir
+
+In each is a "sources" file.  If you have "installed" the dependencies
+in peer directories to src and they are the same versions as listed
+above, the sources files should be OK as is.  Otherwise, you will need
+to edit them to point to all the right places for the dependencies.
+
+In subdirectory each you need to do a:
+
+build /cD
+
+When you have finished that you will also need to make sure that the
+Path variable points to all the respective bin directories so the DLLs
+can be found.  
+
+For testing, I've been copying the .exe and .dll files created via
+build /cD up to src/ in the netperf tree.
+
+It is also necessary to add an apropriate entry in the XML catalog
+file. By default, Igor's port assumes the catalog is in etc\catalog
+under the directory where the libxml2 runtime bits have been placed.
+You will need to create the etc subdir, and then you can mimic the
+xmlcatalog commands you see in src/Makefile.am to provide the mapping
+from http://www.netperf.org/netperf_docs.dtd to where the DTD actually
+resides.  The format for the second half will be something like:
+
+file:///C%3A/netperf4/src/netperf_docs.dtd
+
+which in this case assumes you have the DTD at (in native
+Windows-speak):
+
+C:/netperf4/src/netperf_docs.dtd
+
+Yes, that is three slashes ('/') after "file:" which I found a triffle
+surprising - I thought it should need only two but I guess I was wrong.
+

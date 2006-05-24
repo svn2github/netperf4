@@ -1,5 +1,5 @@
 char netserver_id[]="\
-@(#)netserver.c (c) Copyright 2005, Hewlett-Packard Company, $Id$";
+@(#)netserver.c (c) Copyright 2006, Hewlett-Packard Company, $Id$";
 /*
 
 This file is part of netperf4.
@@ -29,25 +29,13 @@ this file, you may extend this exception to your version of the file,
 but you are not obligated to do so.  If you do not wish to do so,
 delete this exception statement from your version.
 
-#include <termios.h>
-#include <grp.h>
-#include <pwd.h>
-
 */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
-#ifdef WITH_GLIB
-# ifdef HAVE_GLIB_H
-#  include <glib.h>
-# endif 
-#else
-# ifdef HAVE_PTHREAD_H
-#  include <pthread.h>
-# endif
-#endif
+# include <glib.h>
 
 #ifdef HAVE_STDIO_H
 #include <stdio.h>
@@ -93,10 +81,6 @@ delete this exception statement from your version.
 #include <netinet/in.h>
 #endif
 
-#ifdef HAVE_POLL_H
-#include <poll.h>
-#endif
-
 #ifdef HAVE_LIMITS_H
 #include <limits.h>
 #endif
@@ -124,7 +108,6 @@ int debug = 0;
 
 /* gcc does not like intializing where here */
 FILE *where;
-xmlChar *my_nid=NULL;
 
 #define NETPERF_HASH_BUCKETS 1
 
@@ -140,150 +123,329 @@ FILE      *ofile = NULL;
 int        want_quiet;                                  /* --quiet, --silent */
 int        want_brief;                                  /* --brief */
 int        want_verbose;                                /* --verbose */
+gboolean   spawn_on_accept = TRUE;
+gboolean   want_daemonize = TRUE;
+gboolean   exit_on_control_eof = TRUE;
+gboolean   stdin_is_socket = FALSE;
+int        control_socket = -1;
+
+GIOChannel *control_channel;
+
 int        forground = 0;
 char      *listen_port = NETPERF_DEFAULT_SERVICE_NAME;  /* --port */
-uint16_t   listen_port_num = 0;                         /* --port */
+guint16    listen_port_num = 0;                         /* --port */
 char      *local_host_name       = NULL;
 int        local_address_family  = AF_UNSPEC;
-int        need_setup = 0;
+gboolean   need_setup = FALSE;
+
+int        orig_argc;
+gchar    **orig_argv;
 
 char	local_host_name_buf[BUFSIZ];
 char    local_addr_fam_buf[BUFSIZ];
 
-/* getopt_long return codes */
-enum {DUMMY_CODE=129
-      ,BRIEF_CODE
-};
+
 
-static struct option const long_options[] =
-{
-  {"output", required_argument, 0, 'o'},
-  {"input", required_argument, 0, 'i'},
-  {"config", required_argument, 0, 'c'},
-  {"debug", no_argument, 0, 'd'},
-  {"forground", no_argument, 0, 'f'},
-  {"quiet", no_argument, 0, 'q'},
-  {"local", required_argument, 0, 'L'},
-  {"silent", no_argument, 0, 'q'},
-  {"brief", no_argument, 0, BRIEF_CODE},
-  {"verbose", no_argument, 0, 'v'},
-  {"help", no_argument, 0, 'h'},
-  {"version", no_argument, 0, 'V'},
-  {NULL, 0, NULL, 0}
-};
+gboolean set_port_number(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
 
-static void
-usage (int status)
-{
-  printf ("%s - network-oriented performance benchmarking\n", program_name);
-  printf ("Usage: %s [OPTION]... [FILE]...\n", program_name);
-  printf ("\
-Options:\n\
-  -d, --debug                increase the debugging level\n\
-  -h, --help                 display this help and exit\n\
-  -L, --local host,af        bind control endpoint to host with family af\n\
-  -o, --output NAME          send output to NAME instead of standard output\n\
-  -p, --port port            bind control to portnumber port\n\
-  -q, --quiet, --silent      inhibit usual output\n\
-  --brief                    shorten output\n\
-  -v, --verbose              print more information\n\
-  -V, --version              output version information and exit\n\
-");
-  exit (status);
+  listen_port = g_strdup(option_value);
+  listen_port_num = (guint16)atoi(listen_port);
+
+  return(TRUE);
+
+}
+gboolean set_local_address(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+ 
+  break_args_explicit(option_value,local_host_name_buf,local_addr_fam_buf);
+  if (local_host_name_buf[0]) {
+    local_host_name = &local_host_name_buf[0];
+  }
+  if (local_addr_fam_buf[0]) {
+    local_address_family = parse_address_family(local_addr_fam_buf);
+    /* if only the address family was set, we may need to set the
+       local_host_name accordingly. since our defaults are IPv4 this
+       should only be necessary if we have IPv6 support raj
+       2005-02-07 */  
+#if defined (AF_INET6)
+    if (!local_host_name_buf[0]) {
+      strncpy(local_host_name_buf,"::0",sizeof(local_host_name_buf));
+      local_host_name = &local_host_name_buf[0];
+    }
+#endif
+  }
+
+  return(TRUE);
 }
 
-/* Set all the option flags according to the switches specified.
-   Return the index of the first non-option argument.  */
+gboolean set_output_destination(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  oname = g_strdup(option_value);
+  ofile = fopen(oname, "w");
+  if (!ofile) {
+    g_fprintf(stderr,
+	    "%s: cannot open %s for writing\n",
+	    program_name,
+	    option_value);
+    exit(1);
+  }
+  return(TRUE);
+}
 
-static int
-decode_command_line (int argc, char **argv)
-{
-  int c;
+gboolean do_closesocket(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  SOCKET toclose;
 
-  while ((c = getopt_long (argc, argv,
-			   "d"  /* debug */
-			   "f"  /* forground */
-			   "L:" /* local control sock address info */
-                           "o:" /* output */
-                           "p:" /* port */
-                           "q"  /* quiet or silent */
-                           "v"  /* verbose */
-                           "h"  /* help */
-                           "V", /* version */
-                           long_options, (int *) 0)) != EOF)
-    {
-      switch (c)
-        {
-	case 'd':       /* --debug */
-	  debug++;
-	  break;
-        case 'f':       /* --forground */
-          forground++;  /* 1 means no deamon, 2 means no fork after accept */
-	  need_setup = 1;
-          break;
-	case 'L':
-	  break_args_explicit(optarg,local_host_name_buf,local_addr_fam_buf);
-	  if (local_host_name_buf[0]) {
-            local_host_name = &local_host_name_buf[0];
-	  }
-	  if (local_addr_fam_buf[0]) {
-	    local_address_family = parse_address_family(local_addr_fam_buf);
-	    /* if only the address family was set, we may need to set the
-	       local_host_name accordingly. since our defaults are IPv4
-	       this should only be necessary if we have IPv6 support raj
-	       2005-02-07 */  
-#if defined (AF_INET6)
-	    if (!local_host_name_buf[0]) {
-	      strncpy(local_host_name_buf,"::0",sizeof(local_host_name_buf));
-              local_host_name = &local_host_name_buf[0];
-	    }
+  toclose = atoi(option_value);
+  g_fprintf(where,"was asked to close socket %d\n",toclose);
+#ifdef G_OS_WIN32
+  closesocket(toclose);
+#else
+  close(toclose);
 #endif
-	  }
-	  need_setup = 1;
-	  break;
-        case 'o':               /* --output */
-          oname = strdup(optarg);
-          ofile = fopen(oname, "w");
-          if (!ofile) {
-            fprintf(stderr,
-                    "%s: cannot open %s for writing\n",
-                    program_name,
-                    optarg);
-              exit(1);
-            }
-          break;
-        case 'p':               
-          /* we want to open a listen socket at a */
-          /* specified port number */
-          listen_port = strdup(optarg);
-          listen_port_num = atoi(listen_port);
-	  need_setup = 1;
-          break;
-        case 'q':               /* --quiet, --silent */
-          want_quiet = 1;
-          break;
-        case BRIEF_CODE:        /* --brief */
-          want_brief = 1;
-          break;
-        case 'v':               /* --verbose */
-          want_verbose = 1;
-          break;
-        case 'V':
-          printf ("netserver %s.%s.%s\n",
-                  NETPERF_VERSION,
-                  NETPERF_UPDATE,
-                  NETPERF_FIX);
-          exit (0);
-        case 'h':
-          usage (0);
-        default:
-          usage (EXIT_FAILURE);
-        }
+  return(TRUE);
+}
+
+
+gboolean set_debug(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  if (option_value) {
+    /* set to value */
+    debug = atoi(option_value);
+  }
+  else {
+    /* simple increment */
+    debug++;
+  }
+  return(TRUE);
+}
+
+
+
+gboolean set_verbose(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  if (option_value) {
+    /* set to value */
+    want_verbose = atoi(option_value);
+  }
+  else {
+    /* simple increment */
+    want_verbose++;
+  }
+  return(TRUE);
+}
+  
+
+gboolean show_version(gchar *option_name, gchar *option_value, gpointer data, GError **error) {
+  g_printf("netserver: %s.%s.%s\n",
+	   NETPERF_VERSION,
+	   NETPERF_UPDATE,
+	   NETPERF_FIX);
+  exit(0);
+}
+
+gboolean
+spawn_new_netserver(int argc, char *argv[], SOCKET control, SOCKET toclose) {
+
+  int new_argc;
+  int i,j;
+  gboolean ret;
+  gboolean need_nodaemonize = TRUE;
+  gboolean need_nospawn = TRUE;
+  gchar **new_argv;
+  gchar control_string[10]; /* that should be more than enough
+			       characters I hope */
+  GPid new_pid;
+  GError *error=NULL;
+
+  /* while we will _probably_ be stripping things from the argument
+     vector, we want to make sure we have enough to add the control FD
+     specification and the --nospawn. */
+
+  new_argv = g_new(gchar *,argc+6);
+
+  for (i = 0, j = 0, new_argc = 0; i < argc; i++) {
+    /* this actually isn't correct for the future, but for now it will
+       suffice to test passing the control FD to the new process */
+    if (strcmp(argv[i],"--daemonize") == 0) {
+      if (need_nodaemonize) {
+	/* replace it with "--nodaemonize" in the new argument vector */
+	new_argv[j++] = g_strdup("--nodaemonize");
+	new_argc++;
+	need_nodaemonize = FALSE;
+      }
+      continue;
+    }
+    if (strcmp(argv[i],"--nodaemonize") == 0) {
+      if (need_nodaemonize) {
+	need_nodaemonize = FALSE;
+      }
+      else {
+	/* we already have one, so skip it */
+	continue;
+      }
+    }
+    if (strcmp(argv[i],"--nospawn") == 0) {
+      if (need_nospawn) {
+	need_nospawn = FALSE;
+      }
+      else {
+	/* skip it */
+	continue;
+      }
+    }
+    if (strcmp(argv[i],"--spawn") == 0) {
+      if (need_nospawn) {
+	/* replace it with --nospawn */
+	new_argv[j++] = g_strdup("--nospawn");
+	new_argc++;
+	need_nospawn = FALSE;
+      }
+      continue;
+    }
+    /* it is exceedingly unlikely that some of these options will be
+       in the original argument vector, but just in case */
+    if ((strcmp(argv[i],"--control") == 0) ||
+	(strcmp(argv[i],"--port") == 0) ||
+	(strcmp(argv[i],"-p") == 0) ||
+	(strcmp(argv[i],"-L") == 0) ||
+	(strcmp(argv[i],"--local") == 0)) {
+      /* we want to skip the option AND its argument */
+      i++;
+      continue;
+    }
+    /* otherwise, we just copy old to new */
+    new_argc++;
+    new_argv[j++] = g_strdup(argv[i]);
+
+  }
+  if (need_nospawn) {
+    new_argv[j++] = g_strdup("--nospawn"); /* don't recurse :) */
+    new_argc++;
+  }
+  if (need_nodaemonize) {
+    new_argv[j++] = g_strdup("--nodaemonize"); /* don't recurse */
+    new_argc++;
+  }
+  new_argv[j++] = g_strdup("--control");
+  g_snprintf(control_string,sizeof(control_string),"%d",control);
+  new_argv[j++] = g_strdup(control_string);
+  new_argc += 2;
+  new_argv[j++] = g_strdup("--closesocket");
+  g_snprintf(control_string,sizeof(control_string),"%d",toclose);
+  new_argv[j++] = g_strdup(control_string);
+  new_argc += 2;
+  new_argv[j] = NULL;
+
+  if (debug) {
+    g_fprintf(where,"spawning with new_argc of %d and:\n",new_argc);
+    for (i = 0; i < new_argc; i++) {
+      g_fprintf(where,"\targv[%d] %s\n",i,new_argv[i]);
+    }
+  }
+
+  ret = g_spawn_async_with_pipes(NULL,         /* working dir */
+				 new_argv,     /* argument vector */
+				 NULL,         /* env ptr */
+				 G_SPAWN_SEARCH_PATH |
+				 G_SPAWN_LEAVE_DESCRIPTORS_OPEN, /* flags */
+				 NULL,         /* setup func */
+				 NULL,         /* its arg */
+				 &new_pid,      /* new process' id */
+				 NULL,         /* dont watch stdin */
+				 NULL,         /* ditto stdout */
+				 NULL,         /* ditto stderr */
+				 &error);
+  if (error) {
+    g_warning("%s g_io_spawn_async_with_pipes %s %d %s\n",
+	      __func__,
+	      g_quark_to_string(error->domain),
+	      error->code,
+	      error->message);
+    g_clear_error(&error);
+  }
+  return(TRUE);
+}
+
+/* make a call to g_spawn_async_with_pipes to let us disconnect, at
+   least after a fashion, from the controlling terminal. we will
+   though remove the daemonze option from the argument vector used to
+   start the new process */
+
+gboolean
+daemonize(int argc, char *argv[]) {
+
+  int new_argc;
+  int i,j;
+  gboolean ret;
+  gboolean need_nodaemonize = TRUE;
+  char **new_argv;
+  GPid new_pid;
+  GError *error=NULL;
+
+  /* make sure we have room for the --nodeamonize option we will be adding */
+  new_argv = g_new(gchar *,argc+1);
+
+  /* it is slightly kludgy, but simply taking a --nodeamonize to the
+     end of the argument vector should suffice.  as things get more
+     sophisticated, we may want to strip certain options from the
+     vector. raj 2006-03-14 */
+
+  for (i = 0, j = 0, new_argc = 0; i < argc; i++) {
+    if (strcmp(argv[i], "--daemonize") == 0) {
+      if (need_nodaemonize) {
+	/* replace with --nodaemonize" */
+	new_argv[j++] = g_strdup("--nodaemonize");
+	new_argc++;
+	need_nodaemonize = FALSE;
+      }
+      continue;
+    }
+    /* I seriously doubt we'd ever hit this but still */
+    if (strcmp(argv[i],"--nodaemonize") == 0) {
+      if (need_nodaemonize) {
+	need_nodaemonize = FALSE;
+      }
+      else {
+	/* skip it */
+	continue;
+      }
     }
 
-  return optind;
+    /* otherwise, we just copy old to new */
+    new_argc++;
+    new_argv[j++] = g_strdup(argv[i]);
+  }
+  if (need_nodaemonize) {
+    new_argv[j++] = g_strdup("--nodaemonize");
+    new_argc++;
+  }
+  new_argv[j] = NULL;
+
+  if (debug) {
+    g_fprintf(where,"daemonizing with new_argc of %d and:\n",new_argc);
+    for (i = 0; i < new_argc; i++) {
+      g_fprintf(where,"\targv[%d] %s\n",i,new_argv[i]);
+    }
+  }
+
+  ret = g_spawn_async_with_pipes(NULL,         /* working dir */
+				 new_argv,     /* argument vector */
+				 NULL,         /* env ptr */
+				 G_SPAWN_SEARCH_PATH |
+				 G_SPAWN_LEAVE_DESCRIPTORS_OPEN, /* flags */
+				 NULL,         /* setup func */
+				 NULL,         /* its arg */
+				 &new_pid,      /* new process' id */
+				 NULL,         /* dont watch stdin */
+				 NULL,         /* ditto stdout */
+				 NULL,         /* ditto stderr */
+				 &error);
+  if (error) {
+    g_warning("%s g_io_spawn_async_with_pipes %s %d %s\n",
+	      __func__,
+	      g_quark_to_string(error->domain),
+	      error->code,
+	      error->message);
+    g_clear_error(&error);
+  }
+  exit(0);
 }
-
 
 
 int
@@ -369,141 +531,6 @@ find_netperf_in_hash(const xmlChar *id)
 
 
 
-static int
-instantiate_netperf( int sock )
-{
-  int rc=NPE_BAD_VERSION;
-  xmlChar  * from_nid;
-  xmlDocPtr  message;
-  xmlNodePtr msg;
-  xmlNodePtr cur;
-  server_t * netperf;
-
-  NETPERF_DEBUG_ENTRY(debug,where);
-
-  while (rc != NPE_SUCCESS) {
-    rc = recv_control_message(sock,&message);
-    if (rc > 0) { /* received a message */
-      if (debug) {
-        fprintf(where, "Received a control message to doc %p\n", message);
-        fflush(where);
-      }
-      msg = xmlDocGetRootElement(message);
-      if (msg == NULL) {
-        fprintf(stderr,"empty document\n");
-        xmlFreeDoc(message);
-        rc = NPE_EMPTY_MSG;
-      } else {
-        cur = msg->xmlChildrenNode;
-        if (xmlStrcmp(cur->name,(const xmlChar *)"version")!=0) {
-          if (debug) {
-            fprintf(where,
-                    "%s: Received an unexpected message\n", __func__);
-            fflush(where);
-          }
-          rc = NPE_UNEXPECTED_MSG;
-        } else {
-          /* require the caller to ensure the netperf isn't already around */
-          my_nid   = xmlStrdup(xmlGetProp(msg,(const xmlChar *)"tonid"));
-          from_nid = xmlStrdup(xmlGetProp(msg,(const xmlChar *)"fromnid"));
-
-          if ((netperf = (server_t *)malloc(sizeof(server_t))) == NULL) {
-            fprintf(where,"%s: malloc failed\n", __func__);
-            fflush(where);
-            exit(1);
-          }
-          memset(netperf,0,sizeof(server_t));
-          netperf->id        = from_nid;
-          netperf->sock      = sock;
-          netperf->state     = NSRV_CONNECTED;
-          netperf->state_req = NSRV_WORK;
-#ifdef WITH_GLIB
-	  netperf->thread_id       = NULL;
-#else
-          netperf->thread_id       = -1;
-#endif
-          netperf->next      = NULL;
-
-          /* check the version */
-          rc = ns_version_check(cur,message,netperf);
-        }
-      }
-    } 
-    else {
-      if (debug) {
-        fprintf(where,"%s: close connection remote close\n", __func__);
-        fflush(where);
-      }
-      close(sock);
-      exit(-1);
-    }
-    if (rc == NPE_SUCCESS) {
-      add_netperf_to_hash(netperf);
-    } else {
-      free(netperf);
-    }
-    xmlFreeDoc(message);
-  } /* end of while */
-  return(rc);
-}
-
-/* daemonize will fork a daemon into the background, freeing-up the
-   shell prompt for other uses. I suspect that for non-Unix OSes,
-   something other than fork() may be required? raj 2/98 */
-void
-daemonize()
-{
-  char filename[PATH_MAX];
-
-  /* fork off - only the client will return, the parent will exit */
-  
-  switch (fork()) {
-  case -1:
-    /* something went wrong */
-    perror("netserver fork error");
-    exit(-1);
-  case 0:
-    /* we are the child process. set ourselves up as the session
-       leader so we detatch from the parent, and then return to the
-       caller so he can do whatever it is he wants to do */
-
-    fclose(stdin);
-
-    snprintf(filename,
-	     PATH_MAX,
-	     "%s%s%d%s",
-	     NETPERF_DEBUG_LOG_DIR,
-	     NETPERF_DEBUG_LOG_PREFIX,
-	     getpid(),
-	     NETPERF_DEBUG_LOG_SUFFIX);
-    where = freopen(filename,"w",where);
-    if (NULL == where) {
-      fprintf(stderr,
-	      "ERROR netserver could not freopen where to %s errno %d\n",
-	      filename,
-	      errno);
-      fflush(stderr);
-      exit(-1);
-    }
-
-    /* at this point should I close stderr?!? */
-    setsid();
-
-    /* not all OSes have SIGCLD as SIGCHLD */
-#ifndef SIGCLD
-#define SIGCLD SIGCHLD
-#endif /* SIGCLD */
-    
-    signal(SIGCLD, SIG_IGN);
-
-    break;
-  default:
-    /* we are the parent process - the one invoked from the
-       shell. since the first child will detach itself, we can just go
-       ahead and slowly fade away */
-    exit(0);
-  }
-}
 
 
 static void
@@ -538,8 +565,14 @@ report_stuck_test_status(server_t *netperf)
   }
 }
 
-static void
-check_test_state()
+/* the periodic callback function that will check test states and
+   report back any changes.  it looks very much like the original
+   check_test_state() routine - for now anyway. it might be nice to
+   one day get this set such that state change notification was
+   immediate... raj 2006-03-23 */
+
+static gboolean
+check_test_state_callback(gpointer data)
 {
   int           i;
   uint32_t      orig;
@@ -549,12 +582,17 @@ check_test_state()
   test_hash_t  *h;
   xmlNodePtr    msg = NULL;
   xmlNodePtr    new_node;
-  xmlChar      *id;
+  xmlChar      *id = NULL;
   server_t     *netperf;
   char          code[8];
 
   netperf = netperf_hash[0].server;
 
+  if (debug) {
+    g_fprintf(where,
+              "%s Hickory Dickory Dock, Callback Ran Off The Clock\n",
+              __func__);
+  }
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
     /* mutex locking is not required because only one 
@@ -566,7 +604,7 @@ check_test_state()
       if (orig != new) {
         /* report change in test state */
         if (debug) {
-          fprintf(where,"%s:tid = %s  state %d  new_state %d\n",
+          g_fprintf(where,"%s:tid = %s  state %d  new_state %d\n",
                   __func__, test->id, orig, new);
           fflush(where);
         }
@@ -615,15 +653,19 @@ check_test_state()
         }
         test->state = new;
         if (msg) {
-          rc = send_control_message(netperf->sock, msg, netperf->id, my_nid);
+          rc = write_to_control_connection(netperf->source,
+					   msg,
+					   netperf->id,
+					   netperf->my_nid);
           if (rc != NPE_SUCCESS) {
             if (debug) {
-              fprintf(where,
-                      "%s: send_control_message failed\n", __func__);
+              g_fprintf(where,
+                      "%s: write_to_control_connection failed\n", __func__);
               fflush(where);
             }
           }
-        }
+	  xmlFreeNode(msg);
+	}
       }
       test = test->next;
       if (new == TEST_DEAD) {
@@ -633,190 +675,108 @@ check_test_state()
     /* mutex unlocking is not required because only one 
        netserver thread looks at these data structures sgb */
   }
+  NETPERF_DEBUG_EXIT(debug,where);
+  return(TRUE);
 }
+
 
 
+/* called when it is time to accept a new control connection off the
+   listen endpoint */
+gboolean  accept_connection(GIOChannel *source,
+			    GIOCondition condition,
+			    gpointer data) {
+  SOCKET control_socket;
+  SOCKET listen_socket;
+  gboolean ret;
+  GIOStatus  status;
+  GIOChannel *control_channel;
+  GError   *error=NULL;
+  global_state_t *global_state;
+  guint   watch_id;
 
-static void
-kill_all_tests()
-{
-  int           i;
-  int           empty_hash_buckets;
-  test_t       *test;
-  test_hash_t  *h;
+  g_fprintf(where,"accepting a new connection\n");
 
+  global_state = data;
 
-  for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
-    h = &test_hash[i];
-    /* mutex locking is not required because only one 
-       netserver thread looks at these data structures sgb */
-    test = h->test;
-    while (test != NULL) {
-      /* tell each test to die */
-      test->state_req = TEST_DEAD;
-      test = test->next;
-    }
-  }
-  empty_hash_buckets = 0;
-  while(empty_hash_buckets < TEST_HASH_BUCKETS) {
-    empty_hash_buckets = 0;
-    sleep(1);
-    check_test_state();
-    for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
-      if (test_hash[i].test == NULL) {
-        empty_hash_buckets++;
-      }
-    }
-  }
-}
-
+#ifdef G_OS_WIN32
+  listen_socket = g_io_channel_win32_get_fd(source);
+#else
+  listen_socket = g_io_channel_unix_get_fd(source);
+#endif
 
-static int
-close_netserver()
-{
-  int rc;
-  int loop;
-  server_t     *netperf;
-
-
-  netperf = netperf_hash[0].server;
-  if ((netperf->state_req == NSRV_CLOSE) ||
-      (netperf->state_req == NSRV_EXIT ) ||
-      (netperf->err_rc == NPE_REMOTE_CLOSE)) {
-    xmlNodePtr    msg = NULL;
-    kill_all_tests();
-    msg = xmlNewNode(NULL,(xmlChar *)"closed");
-    if (netperf->state_req == NSRV_CLOSE) {
-      xmlSetProp(msg,(xmlChar *)"flag",(const xmlChar *)"LOOPING");
-      loop = 1;
-    }
-    if (netperf->state_req == NSRV_EXIT) {
-      xmlSetProp(msg,(xmlChar *)"flag",(const xmlChar *)"GONE");
-      loop = 0;
-    }
-    if (msg) {
-      rc = send_control_message(netperf->sock, msg, netperf->id, my_nid);
-      if (rc != NPE_SUCCESS) {
-        if (debug) {
-          fprintf(where,
-                  "%s: send_control_message failed\n", __func__);
-          fflush(where);
-        }
-      }
-    }
-    delete_netperf(netperf->id);
-  } else {
-    /* we should never really get here   sgb  2005-12-06 */
-    fprintf(where, "%s entered through some unknown path!!!!\n", __func__);
-    fprintf(where, "netperf->state_req = %d \t netperf->err_rc = %d\n",
-            netperf->state_req, netperf->err_rc);
+  control_socket = accept(listen_socket,NULL,0);
+  if (control_socket == SOCKET_ERROR) {
+    g_fprintf(where,
+	      "%s: accept failed errno %d %s\n",
+	      __func__,
+	      errno,
+	      strerror(errno));
     fflush(where);
-    exit(-2);
+    exit(-1);
   }
-  return(loop);
-}
-
-
-static int
-handle_netperf_requests(int sock)
-{
-  int rc = NPE_SUCCESS;
-  struct pollfd fds;
-  xmlDocPtr     message;
-  server_t     *netperf;
-
-  NETPERF_DEBUG_ENTRY(debug,where);
-
-  rc = instantiate_netperf(sock);
-  if (rc != NPE_SUCCESS) {
-    fprintf(where,
-            "%s %s: instantiate_netperf  error %d\n",
-            program_name,
-            __func__,
-            rc);
+  if (debug) {
+    g_fprintf(where,
+	      "%s: accepted connection on sock %d\n",
+	      __func__,
+	      control_socket);
     fflush(where);
-    exit(rc);
   }
-  netperf = netperf_hash[0].server;
-  /* mutex locking is not required because only one 
-     netserver thread looks at these data structures sgb */
-  while(netperf->state != NSRV_ERROR) {
-
-    /* check the state of all tests */
-    check_test_state();
-
-    fds.fd      = netperf->sock;
-    fds.events  = POLLIN;
-    fds.revents = 0;
-    /* mutex unlocking is not required because only one 
-       netserver thread looks at these data structures sgb */
-    if (poll(&fds,1,5000) > 0) {
-      /* mutex locking is not required because only one 
-         netserver thread looks at these data structures sgb */
-      rc = recv_control_message(netperf->sock, &message);
-      /* mutex unlocking is not required because only one 
-         netserver thread looks at these data structures sgb */
-      if (rc > 0) {
-        rc = process_message(netperf, message);
-        if (rc) {
-          fprintf(where,"process_message returned %d  %s\n",
-                  rc, netperf_error_name(rc));
-          fflush(where);
-        }
-      } else {
-        netperf->state = NSRV_ERROR;
-        netperf->err_fn = (char *)__func__;
-        if (rc == 0) {
-          netperf->err_rc = NPE_REMOTE_CLOSE;
-        } else {
-          fprintf(where,"recv_control_message returned %d  %s\n",
-                  rc, netperf_error_name(rc));
-          fflush(where);
-          netperf->err_rc = rc;
-        }
-      }
-    } else {
-      if (debug) {
-        fprintf(where,"ho hum, nothing to do\n");
-        fflush(where);
-        report_servers_test_status(netperf);
-      }
-      report_stuck_test_status(netperf);
+    
+  if (spawn_on_accept) {
+    ret = spawn_new_netserver(orig_argc,orig_argv,
+			      control_socket,listen_socket);
+    CLOSE_SOCKET(control_socket);  /* don't want to leak descriptors */
+  }
+  else {
+    /* lets setup the glib event loop... */
+    g_fprintf(where,"accepted a connection but told not to spawn\n");
+#ifdef G_OS_WIN32
+    control_channel = g_io_channel_win32_new_socket(control_socket);
+#else
+    control_channel = g_io_channel_unix_new(control_socket);
+#endif
+    status = g_io_channel_set_flags(control_channel,G_IO_FLAG_NONBLOCK,&error);
+    if (error) {
+      g_warning("g_io_channel_set_flags %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
     }
-    /* mutex locking is not required because only one 
-       netserver thread looks at these data structures sgb */
-    if (rc != NPE_SUCCESS) {
-      netperf->state  = NSRV_ERROR;
-      netperf->err_rc = rc;
-      netperf->err_fn = (char *)__func__;
+    g_fprintf(where,"status after set flags %d control_channel %p\n",status,control_channel);
+    
+    status = g_io_channel_set_encoding(control_channel,NULL,&error);
+    if (error) {
+      g_warning("g_io_channel_set_encoding %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
     }
-    if ((netperf->state_req == NSRV_CLOSE) ||
-        (netperf->state_req == NSRV_EXIT ))  {
-      break;
-    }
+    
+    g_fprintf(where,"status after set_encoding %d\n",status);
+    
+    g_io_channel_set_buffered(control_channel,FALSE);
+    
+    watch_id = g_io_add_watch(control_channel, 
+			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+			      read_from_control_connection,
+			      data);
+    g_fprintf(where,"added watch id %d\n",watch_id);
   }
 
-  if (rc != NPE_SUCCESS) {
-    report_server_error(netperf);
-  }
-  /* mutex unlocking is not required because only one 
-     netserver thread looks at these data structures sgb */
-  return(close_netserver());
+  return(TRUE);
 }
 
 
-
-static void
+static SOCKET
 setup_listen_endpoint(char service[]) {
 
   struct sockaddr   name;
-  struct sockaddr  *peeraddr     = &name;
   int               namelen      = sizeof(name);
   netperf_socklen_t peerlen      = namelen;
-  int               sock;
-  int               listenfd     = 0;
-  int               loop         = 1;
-  char              filename[PATH_MAX];
+  SOCKET            listenfd     = 0;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -835,17 +795,21 @@ setup_listen_endpoint(char service[]) {
                                 &peerlen);
 
     if (listenfd == -1) {
-      fprintf(where,"%s: failed to open listen socket\n", __func__);
+      g_fprintf(where,"%s: failed to open listen socket\n", __func__);
       fflush(where);
       exit(1);
     }
-
+  return(listenfd);
+  }
+  return(-1);
+}
+#ifdef notdef
     if (peerlen > namelen) {
       peeraddr = (struct sockaddr *)malloc (peerlen);
     }
 
     if (!forground) {
-      daemonize();
+      daemonize(orig_argc, orig_argv);
     }
 
     /* loopdeloop */
@@ -853,7 +817,7 @@ setup_listen_endpoint(char service[]) {
     while (loop) {
       printf("about to accept on socket %d\n",listenfd);
       if ((sock = accept(listenfd,peeraddr,&peerlen)) == -1) {
-	fprintf(where,
+	g_fprintf(where,
 		"%s: accept failed errno %d %s\n",
                 __func__,
 		errno,
@@ -862,7 +826,7 @@ setup_listen_endpoint(char service[]) {
 	exit(1);
       }
       if (debug) {
-	fprintf(where,
+	g_fprintf(where,
 		"%s: accepted connection on sock %d\n",
                 __func__,
 		sock);
@@ -900,15 +864,16 @@ setup_listen_endpoint(char service[]) {
 	  /* switch-over to our own pid-specific logfile */
 	  snprintf(filename,
 		   PATH_MAX,
-		   "%s%s%d%s",
-		   NETPERF_DEBUG_LOG_DIR,
+		   "%s%c%s%d%s",
+		   g_get_tmp_dir(),
+		   G_DIR_SEPARATOR,
 		   NETPERF_DEBUG_LOG_PREFIX,
 		   getpid(),
 		   NETPERF_DEBUG_LOG_SUFFIX);
 	  
 	  where = freopen(filename,"w",where);
 	  if (NULL == where) {
-	    fprintf(stderr,
+	    g_fprintf(stderr,
 		    "ERROR netserver could not freopen where to %s errno %d\n",
 		    filename,
 		    errno);
@@ -930,119 +895,51 @@ setup_listen_endpoint(char service[]) {
     }
   }
 }
-
+#endif
 
 /* Netserver initialization */
 static void
 netserver_init()
 {
   int   i;
-  int   rc;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
 
   for (i = 0; i < NETPERF_HASH_BUCKETS; i++) {
     netperf_hash[i].server = NULL;
-#ifdef WITH_GLIB
     netperf_hash[i].hash_lock = g_mutex_new();
     if (NULL == netperf_hash[i].hash_lock) {
       /* not sure we will even get here */
-      fprintf(where, "%s: g_mutex_new error \n",__func__);
+      g_fprintf(where, "%s: g_mutex_new error \n",__func__);
       fflush(where);
       exit(-2);
     }
     netperf_hash[i].condition = g_cond_new();
     if (NULL == netperf_hash[i].condition) {
       /* not sure we will even get here */
-      fprintf(where, "%s: g_cond_new error \n",__func__);
+      g_fprintf(where, "%s: g_cond_new error \n",__func__);
       fflush(where);
       exit(-2);
     }
-#else
-    netperf_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == netperf_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(netperf_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "%s: server pthread_mutex_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-
-    netperf_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == netperf_hash[i].condition) {
-      fprintf(where, "%s: unable to malloc a pthread_cond_t \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-      
-    rc = pthread_cond_init(netperf_hash[i].condition, NULL);
-    if (rc) {
-      fprintf(where, "%s: server pthread_cond_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-#endif
   }
  
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     test_hash[i].test = NULL;
-#ifdef WITH_GLIB
     test_hash[i].hash_lock = g_mutex_new();
     if (NULL == test_hash[i].hash_lock) {
       /* not sure we will even get here */
-      fprintf(where, "%s: g_cond_new error \n",__func__);
+      g_fprintf(where, "%s: g_cond_new error \n",__func__);
       fflush(where);
       exit(-2);
     }
     test_hash[i].condition = g_cond_new();
     if (NULL == test_hash[i].condition) {
       /* not sure we will even get here */
-      fprintf(where, "%s: g_cond_new error \n",__func__);
+      g_fprintf(where, "%s: g_cond_new error \n",__func__);
       fflush(where);
       exit(-2);
     }
-#else
-    test_hash[i].hash_lock = 
-      (pthread_mutex_t *)malloc(sizeof(pthread_mutex_t));
-
-    if (NULL == test_hash[i].hash_lock) {
-      fprintf(where, "%s: unable to malloc a mutex \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_mutex_init(test_hash[i].hash_lock, NULL);
-    if (rc) {
-      fprintf(where, "%s: test pthread_mutex_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-    test_hash[i].condition = 
-      (pthread_cond_t *)malloc(sizeof(pthread_cond_t));
-
-    if (NULL == test_hash[i].condition) {
-      fprintf(where, "%s: unable to malloc a pthread_cond_t \n",__func__);
-      fflush(where);
-      exit(-2);
-    }
-
-    rc = pthread_cond_init(test_hash[i].condition, NULL);
-    if (rc) {
-      fprintf(where, "%s: test pthread_cond_init error %d\n", __func__, rc);
-      fflush(where);
-      exit(rc);
-    }
-#endif
   }
 
   netlib_init();
@@ -1050,38 +947,112 @@ netserver_init()
 }
 
 
+static GOptionEntry netserver_entries[] =
+  {
+    {"daemonize", 0, 0, G_OPTION_ARG_NONE, &want_daemonize, "When launched from a shell, disconnect from that shell (default)", NULL},
+    {"nodaemonize", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &want_daemonize, "When launched from a shell, do not disconnect from that shell", NULL},
+    {"spawn", 0, 0, G_OPTION_ARG_NONE, &spawn_on_accept, "Spawn a new process for each control connection (default)", NULL},
+    {"nospawn", 0, G_OPTION_FLAG_REVERSE, G_OPTION_ARG_NONE, &spawn_on_accept, "Do not spawn a new process for each control connection", NULL},
+    {"control", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_INT, &control_socket, "The FD that should be used for the control channel (internal)", NULL},
+    {"closesocket", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_CALLBACK, (void *)do_closesocket,"Close the specified socket", NULL},
+    {"local", 'L', 0, G_OPTION_ARG_CALLBACK, (void *)set_local_address, "Specify the local addressing for the control endpoint", NULL},
+    {"output", 'o', 0, G_OPTION_ARG_CALLBACK, (void *)set_output_destination, "Specify where misc. output should go", NULL},
+    {"port", 'p', 0, G_OPTION_ARG_CALLBACK, (void *)set_port_number, "Specify the port number for the control connection", NULL},
+    {"debug", 'd', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, (void *)set_debug, "Set the level of debugging",NULL},
+    {"version", 'V', G_OPTION_FLAG_NO_ARG, G_OPTION_ARG_CALLBACK, (void *)show_version, "Display the netserver version and exit", NULL},
+    {"verbose", 'v', G_OPTION_FLAG_OPTIONAL_ARG, G_OPTION_ARG_CALLBACK, (void *)set_verbose, "Set verbosity level for output", NULL},
+    {"brief", 'b', 0, G_OPTION_ARG_NONE, &want_brief, "Request brief output", NULL},
+    {"quiet", 'q', 0, G_OPTION_ARG_NONE, &want_quiet, "Display no test banners", NULL},
+    { NULL }
+  };
+
 
 int
-main (int argc, char **argv)
+main(int argc, char **argv)
 {
 
-  int sock;
+  int i;
   struct sockaddr name;
   netperf_socklen_t namelen = sizeof(name);
+  SOCKET sock, listen_sock;
 
+  guint  watch_id;
+  GOptionContext *option_context;
+  gboolean ret;
+  GError *error = NULL;
+  GIOStatus status;
+  GMainLoop *loop;
+  global_state_t *global_state_ptr;
+
+#ifdef G_OS_WIN32
+  WSADATA	wsa_data ;
+
+#endif
+  /* make sure that where points somewhere to begin with */
+  where = stderr;
+
+#ifdef G_OS_WIN32
+  /* Initialize the winsock lib ( version 2.2 ) */
+  if ( WSAStartup(MAKEWORD(2,2), &wsa_data) == SOCKET_ERROR ){
+    g_fprintf(where,"WSAStartup() failed : %d\n", GetLastError()) ;
+    return 1 ;
+  }
+#endif
+  
   program_name = argv[0];
 
-#ifdef WITH_GLIB
   g_thread_init(NULL);
-#endif
 
-  /* if netserver is invoked with any of the -L, -p or -f options it
-     will necessary to setup the listen endpoint.  similarly, if
-     standard in is not a socket, it will be necessary to setup the
-     listen endpoint.  otherwise, we assume we sprang-forth from inetd
-     or the like and should start processing requests. */
-
-  if (getsockname(0, &name, &namelen) == -1) {
-      /* we may not be a child of inetd */
-      if (CHECK_FOR_NOT_SOCKET) {
-	need_setup = 1;
-      }
+  /* save-off the initial command-line stuff in case we need it for
+     daemonizing or spawning after an accept */
+  orig_argc = argc;
+  orig_argv = g_new(gchar *,argc);
+  for (i = 0; i < argc; i++){
+    orig_argv[i] = g_strdup(argv[i]);
   }
 
-  decode_command_line(argc, argv);
+  option_context = g_option_context_new(" - netperf4 netserver options");
+  g_option_context_add_main_entries(option_context,netserver_entries, NULL);
+  ret = g_option_context_parse(option_context, &argc, &argv, &error);
+  if (error) {
+    /* it sure would be nice to know how to trigger the help output */
+    g_error("%s g_option_context_parse %s %d %s\nUse netserver --help for help\n",
+	      __func__,
+	      g_quark_to_string(error->domain),
+	      error->code,
+	      error->message);
+    g_clear_error(&error);
+  }
+
+  /* if we daemonize, we will not be returning, and we will be
+     starting a whole new instance of this binary, because that is what
+     g_spawn_async_with_pipes() does. */
+  if (want_daemonize) {
+    daemonize(orig_argc,orig_argv);
+  }
+
+  /* if neither stdin, nor control_socket are sockets, we need to
+     setup a listen endpoint and go from there, otherwise, we assume
+     we are a child of inetd or launched from a parent netserver raj
+     2006-03-16 */
+
+  if (getsockname(0, &name, &namelen) == 0) {
+    /* we are a child of inetd or the like */
+    need_setup = FALSE;
+    sock = 0;
+  }
+  else if (getsockname(control_socket, &name, &namelen) == 0) {
+    /* we were spawned by a parent netserver */
+    need_setup = FALSE;
+    sock = control_socket;
+  }
+  else {
+    need_setup = TRUE;
+  }
 
   if (ofile) {
-    /* send our stuff to wherever the user told us to */
+    /* send our stuff to wherever the user told us to. likely we need
+       to revisit this in the face of spawning processes... */
     where = ofile;
   }
   else {
@@ -1096,8 +1067,9 @@ main (int argc, char **argv)
 	 stderr. this needs to be made a bit more clean one of these days */
       char debugfile[PATH_MAX];
       sprintf(debugfile,
-	      "%s%s_%d%s",
-	      NETPERF_DEBUG_LOG_DIR,
+	      "%s%c%s%d%s",
+	      g_get_tmp_dir(),
+	      G_DIR_SEPARATOR,
 	      NETPERF_DEBUG_LOG_PREFIX,
 	      getpid(),
 	      NETPERF_DEBUG_LOG_SUFFIX);
@@ -1131,25 +1103,97 @@ main (int argc, char **argv)
      whether we are a child of inetd or not. raj 2005-10-11 */
   netserver_init();
 
-  /* if netserver is invoked with any of the -L, -p or -f options it
-     will necessary to setup the listen endpoint.  similarly, if
-     standard in is not a socket, it will be necessary to setup the
-     listen endpoint.  otherwise, we assume we sprang-forth from inetd
-     or the like and should start processing requests. */
+  loop = g_main_loop_new(NULL, FALSE);
 
-  if (getsockname(0, &name, &namelen) == -1) {
-      /* we may not be a child of inetd */
-      if (CHECK_FOR_NOT_SOCKET) {
-	need_setup = 1;
-      }
-  }
+  global_state_ptr                = g_malloc(sizeof(global_state_t));
+  global_state_ptr->server_hash   = netperf_hash;
+  global_state_ptr->test_hash     = test_hash;
+  global_state_ptr->message_state = g_malloc(sizeof(message_state_t));
+  global_state_ptr->is_netserver  = TRUE;
+  global_state_ptr->first_message = TRUE;
+  global_state_ptr->loop          = loop;
+  global_state_ptr->message_state->have_header     = FALSE;
+  global_state_ptr->message_state->bytes_received  = 0;
+  global_state_ptr->message_state->bytes_remaining = 4;
+  global_state_ptr->message_state->buffer          = NULL;
 
   if (need_setup) {
-    setup_listen_endpoint(listen_port);
+    listen_sock = setup_listen_endpoint(listen_port);
+#ifdef G_OS_WIN32
+    control_channel = g_io_channel_win32_new_socket(listen_sock);
+#else
+    control_channel = g_io_channel_unix_new(listen_sock);
+#endif
+    status = g_io_channel_set_flags(control_channel,G_IO_FLAG_NONBLOCK,&error);
+    if (error) {
+      g_warning("g_io_channel_set_flags %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    
+    status = g_io_channel_set_encoding(control_channel,NULL,&error);
+    if (error) {
+      g_warning("g_io_channel_set_encoding %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    
+    g_io_channel_set_buffered(control_channel,FALSE);
+    
+    /* loop is passed just to have something passed */
+    watch_id = g_io_add_watch(control_channel, 
+			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+			      accept_connection,
+			      global_state_ptr);
+
+    g_main_loop_run(loop);
+
   }
   else {
-    sock = 0;
-    handle_netperf_requests(sock);
+    /* we used to call handle_netperf_requests(sock); here, now we use
+       the loop, luke... */
+
+#ifdef G_OS_WIN32
+    control_channel = g_io_channel_win32_new_socket(control_socket);
+#else
+    control_channel = g_io_channel_unix_new(control_socket);
+#endif
+
+    status = g_io_channel_set_flags(control_channel,G_IO_FLAG_NONBLOCK,&error);
+    if (error) {
+      g_warning("g_io_channel_set_flags %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    
+    status = g_io_channel_set_encoding(control_channel,NULL,&error);
+    if (error) {
+      g_warning("g_io_channel_set_encoding %s %d %s\n",
+		g_quark_to_string(error->domain),
+		error->code,
+		error->message);
+      g_clear_error(&error);
+    }
+    
+    g_io_channel_set_buffered(control_channel,FALSE);
+    
+    /* loop is passed just to have something passed */
+    watch_id = g_io_add_watch(control_channel, 
+			      G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+			      read_from_control_connection,
+			      global_state_ptr);
+
+    g_timeout_add(1000,
+		  (GSourceFunc)check_test_state_callback,
+		  global_state_ptr);
+    g_main_loop_run(loop);
   }
+  return(0);
 }
 

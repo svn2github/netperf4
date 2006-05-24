@@ -60,8 +60,8 @@ typedef struct  bsd_test_data {
   struct addrinfo *locaddr;        /* local address informtion */
   struct addrinfo *remaddr;        /* remote address informtion */
 
-  int              s_listen;       /* listen sockets for catching type tests */
-  int              s_data;         /* data socket for executing tests */
+  SOCKET           s_listen;       /* listen sockets for catching type tests */
+  SOCKET           s_data;         /* data socket for executing tests */
 
   struct ring_elt *send_ring;      /* address of the send_ring */
   struct ring_elt *recv_ring;      /* address of the recv_ring */
