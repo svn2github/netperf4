@@ -167,7 +167,7 @@ char    nettest_id[]="\
       if (my_data->retry_array[retry] != NULL) { \
         /* a retransmission is needed a response was not received */ \
         buffer_ptr  = my_data->retry_array[retry]; \
-        my_data->stats.named.retransmits++;
+        my_data->stats.named.retransmits++; \
       } \
       buffer_ptr[0] = retry; \
     }
@@ -192,7 +192,7 @@ char    nettest_id[]="\
       } \
     }
 #define UDP_CHECK_BURST_RECV \
-    if (my_data->retry_array != NULL) {
+    if (my_data->retry_array != NULL) { \
       my_data->retry_array[buffer_ptr[0]] = NULL; \
       my_data->pending_responses--; \
     }
@@ -3272,7 +3272,7 @@ send_udp_rr_meas(test_t *test)
     HIST_TIMESTAMP(&time_one);
     /* send data for the test */
     buffer_ptr = my_data->send_ring->buffer_ptr;
-    UDP_CHECK_FOR_RETRANS(buffer_ptr);
+    UDP_CHECK_FOR_RETRANS;
     if((len=sendto(my_data->s_data,
                    buffer_ptr,
                    my_data->req_size,
