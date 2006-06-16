@@ -348,7 +348,6 @@ add_per_cpu_attributes(test_t *test,
       if (ap != NULL) {
         ap = set_counter_attribute(test, cpu_stats, "idle_count",  cpu[i].idle);
       }
-#ifndef EXTRA_COUNTERS_MISSING
       if (ap != NULL) {
         ap = set_counter_attribute(test, cpu_stats, "user_count",  cpu[i].user);
       }
@@ -361,7 +360,6 @@ add_per_cpu_attributes(test_t *test,
       if (ap != NULL) {
         ap = set_counter_attribute(test, cpu_stats, "other_count", cpu[i].other);
       }
-#endif
       xmlAddChild(stats,cpu_stats);
     } else {
       /* error xmlNewNode failed to allocate a new node for the next cpu */
@@ -431,7 +429,6 @@ sys_stats_get_stats(test_t *test)
       if (ap != NULL) {
         ap = set_counter_attribute(test, stats, "idle_count",  total_sys->idle);
       }
-#ifndef EXTRA_COUNTERS_MISSING
       if (ap != NULL) {
         ap = set_counter_attribute(test, stats, "user_count",  total_sys->user);
       }
@@ -444,7 +441,6 @@ sys_stats_get_stats(test_t *test)
       if (ap != NULL) {
         ap = set_counter_attribute(test, stats, "other_count", total_sys->other);
       }
-#endif
       ap = add_per_cpu_attributes(test,stats,total_cpu, tsd->num_cpus);
     }
     if (ap == NULL) {

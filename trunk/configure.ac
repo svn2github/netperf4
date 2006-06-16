@@ -646,6 +646,13 @@ case "$enable_cpuutil" in
 		     enable_cpuutil="pstatnew - auto"
 		     NETSYS_SOURCE="hpux"
 		     ;;
+		   *-*-hpux11.11)
+		     use_cpuutil=true
+		     AC_DEFINE([USE_PSTAT],,
+		     [Use HP-UX's pstat interface to measure CPU util.])
+		     enable_cpuutil="pstat - auto"
+		     NETSYS_SOURCE="hpux"
+		     ;;
 		   *-*-hpux11* | *-*-hpux10*)
 		     use_cpuutil=true
 		     AC_DEFINE([USE_PSTAT],,

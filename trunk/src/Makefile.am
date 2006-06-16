@@ -41,7 +41,7 @@ netserver_LDADD = @LIBOBJS@
 
 # so far, it does not appear we need this in netserver
 netperf_LDFLAGS = -rpath $(libdir) -export-dynamic
-netserver_LDFLAGS = -rpath $(libdir)
+netserver_LDFLAGS = -rpath $(libdir) -export-dynamic
 
 missing/getaddrinfo.o: $(srcdir)/missing/getaddrinfo.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getaddrinfo.c

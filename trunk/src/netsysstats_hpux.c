@@ -120,28 +120,29 @@ get_cpu_time_counters(cpu_time_counters_t *res,
       res[i].calibrate = (uint64_t)(elapsed * ticks * iticksperclktick);
       res[i].idle      = (((uint64_t)psp[i].psp_idlecycles.psc_hi << 32) +
 		          psp[i].psp_idlecycles.psc_lo);
-#ifndef EXTRA_COUNTERS_MISSING
+      res[i].user      = 0;
+      res[i].kernel    = 0;
+      res[i].interrupt = 0;
+#ifndef _PST_STATIC_CONSTANTS_DEFINED
       res[i].user      = (((uint64_t)psp[i].psp_usercycles.psc_hi << 32) +
 		          psp[i].psp_usercycles.psc_lo);
       res[i].kernel    = (((uint64_t)psp[i].psp_systemcycles.psc_hi << 32) +
 		          psp[i].psp_systemcycles.psc_lo);
       res[i].interrupt = (((uint64_t)psp[i].psp_interruptcycles.psc_hi << 32) +
 			  psp[i].psp_interruptcycles.psc_lo);
+#endif
       res[i].other     = res[i].calibrate;
       res[i].other    -= res[i].idle;
       res[i].other    -= res[i].user;
       res[i].other    -= res[i].kernel;
       res[i].other    -= res[i].interrupt;
-#endif
       
       if(test->debug) {
 	fprintf(test->where, "\tidle[%d] = %#llx", i, res[i].idle);
-#ifndef EXTRA_COUNTERS_MISSING
 	fprintf(test->where, "\tuser[%d] = %#llx", i, res[i].user);
 	fprintf(test->where, "\tkern[%d] = %#llx", i, res[i].kernel);
 	fprintf(test->where, "\tintr[%d] = %#llx", i, res[i].interrupt);
 	fprintf(test->where, "\tothr[%d] = %#llx", i, res[i].other);
-#endif
         fprintf(test->where, "\n");
 	fflush(test->where);
       }
