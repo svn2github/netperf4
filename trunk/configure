@@ -22855,6 +22855,16 @@ _ACEOF
 		     enable_cpuutil="pstatnew - auto"
 		     NETSYS_SOURCE="hpux"
 		     ;;
+		   *-*-hpux11.11)
+		     use_cpuutil=true
+
+cat >>confdefs.h <<\_ACEOF
+#define USE_PSTAT
+_ACEOF
+
+		     enable_cpuutil="pstat - auto"
+		     NETSYS_SOURCE="hpux"
+		     ;;
 		   *-*-hpux11* | *-*-hpux10*)
 		     use_cpuutil=true
 

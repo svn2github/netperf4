@@ -187,7 +187,7 @@ netserver_LDADD = @LIBOBJS@
 
 # so far, it does not appear we need this in netserver
 netperf_LDFLAGS = -rpath $(libdir) -export-dynamic
-netserver_LDFLAGS = -rpath $(libdir)
+netserver_LDFLAGS = -rpath $(libdir) -export-dynamic
 subdir = src
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
