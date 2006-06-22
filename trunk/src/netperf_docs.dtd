@@ -490,7 +490,20 @@
   recv_align	    CDATA    %default.align;
   send_offset       CDATA    %default.offset;
   recv_offset       CDATA    %default.offset;
+  burst_count       CDATA    #IMPLIED
+  interval_time     CDATA    #IMPLIED
 >
+
+<!-- burst_count
+     Will be set to zero if negative.
+     Maximum value of 255 for send_udp_rr test. 
+     send_udp_rr will set to 255 if burst_count > 255 -->
+
+<!-- interval_time
+     Will be set to zero if negative.
+     Minimum time in micro seconds to wait between the start of one burst
+     and the start of the next.  Actual time between start of bursts
+     will be longer and is dependent on OS implementation limits.  -->
 
 
 <!ELEMENT dns_args EMPTY >
