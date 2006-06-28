@@ -693,7 +693,7 @@ strtotype(char type_string[]){
 /* read the next line from the query_source stream, and build the
    query to send.  */
 static int
-get_next_dns_request(test_t *test, char *request_buffer, int buflen) {
+get_next_dns_request(test_t *test, unsigned char *request_buffer, int buflen) {
 
   dns_data_t *my_data = GET_TEST_DATA(test);
 
@@ -1341,7 +1341,7 @@ send_dns_requests(test_t *test)
     }
     /* go through and build the next request to send */
     req_size = get_next_dns_request(test, 
-				    (char *)request_buffer, 
+				    (unsigned char *)request_buffer, 
 				    sizeof(request_buffer));
       
     /* set the ID as apropriate since it is a uint16_t, we'll not
