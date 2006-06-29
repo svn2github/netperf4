@@ -1619,6 +1619,19 @@ launch_pad(void *data) {
     fprintf(where,"%s my thread id is %d\n",__func__,thread_self());
     fflush(where);
   }
+#elif defined(__sun)
+#include <sys/lwp.h>
+  /* well, bless _its_ heart, Solaris wants something other than a
+     pthread_id for its binding calls too.  isn't that special... raj
+     2006-06-28 */
+  test->native_thread_id_ptr = malloc(sizeof(lwpid_t));
+  if (test->native_thread_id_ptr) {
+    *(lwpid_t *)(test->native_thread_id_ptr) = _lwp_self();
+  }
+  if (debug) {
+    fprintf(where,"%s my thread id is %d\n",__func__,_lwp_self());
+    fflush(where);
+  }
 #else
   test->native_thread_id_ptr = malloc(sizeof(pthread_t));
   if (test->native_thread_id_ptr) {
@@ -1630,7 +1643,25 @@ launch_pad(void *data) {
   }
 #endif
 #else
+#ifdef __sun
+#include <sys/lwp.h>
+  /* well, bless _its_ heart, Solaris wants something other than a
+     pthread_id for its binding calls too.  isn't that special...  No,
+     your eyes are not deceiving you - this code is appearing in two
+     places because it would seem that glib-2.0 on Solaris may be
+     compiled using Sun's old threads stuff rather than pthreads. raj
+     2006-06-28 */
+  test->native_thread_id_ptr = malloc(sizeof(lwpid_t));
+  if (test->native_thread_id_ptr) {
+    *(lwpid_t *)(test->native_thread_id_ptr) = _lwp_self();
+  }
+  if (debug) {
+    fprintf(where,"%s my thread id is %d\n",__func__,_lwp_self());
+    fflush(where);
+  }
+#else
   test->native_thread_id_ptr = NULL;
+#endif
 #endif
   /* and now, call the routine we really want to run. at some point we
      should bring those values onto the stack so we can free the
