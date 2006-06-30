@@ -1089,26 +1089,31 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
   fprintf(dumploc, "port '%s' ", port);
   fprintf(dumploc, "family %d\n", family);
   while (temp) {
-    fprintf(dumploc,
-            "\tcannonical name: '%s'\n",temp->ai_canonname);
-    fprintf(dumploc,
-            "\tflags: %x family: %d: socktype: %d protocol %d addrlen %d\n",
-            temp->ai_flags,
-            temp->ai_family,
-            temp->ai_socktype,
-            temp->ai_protocol,
-            temp->ai_addrlen);
+    /* I was under the impression that g_fprintf would be kind with
+    things like NULL string pointers, but when porting to Solaris,
+    this started dumping core, so we start to workaround it. raj
+    2006-06-29 */
+    g_fprintf(dumploc,
+	      "\tcannonical name: '%s'\n",
+	      temp->ai_canonname ? temp->ai_canonname : "n/a");
+    g_fprintf(dumploc,
+	      "\tflags: %x family: %d: socktype: %d protocol %d addrlen %d\n",
+	      temp->ai_flags,
+	      temp->ai_family,
+	      temp->ai_socktype,
+	      temp->ai_protocol,
+	      temp->ai_addrlen);
     ai_addr = temp->ai_addr;
     if (ai_addr != NULL) {
-      fprintf(dumploc,
-              "\tsa_family: %d sadata: %d %d %d %d %d %d\n",
-              ai_addr->sa_family,
-              (u_char)ai_addr->sa_data[0],
-              (u_char)ai_addr->sa_data[1],
-              (u_char)ai_addr->sa_data[2],
-              (u_char)ai_addr->sa_data[3],
-              (u_char)ai_addr->sa_data[4],
-              (u_char)ai_addr->sa_data[5]);
+      g_fprintf(dumploc,
+		"\tsa_family: %d sadata: %d %d %d %d %d %d\n",
+		ai_addr->sa_family,
+		(u_char)ai_addr->sa_data[0],
+		(u_char)ai_addr->sa_data[1],
+		(u_char)ai_addr->sa_data[2],
+		(u_char)ai_addr->sa_data[3],
+		(u_char)ai_addr->sa_data[4],
+		(u_char)ai_addr->sa_data[5]);
     }
     temp = temp->ai_next;
   }
@@ -1301,10 +1306,15 @@ open_library_path(const gchar *library_name, const gchar *pathvar, gboolean path
   }
 
   if (debug) {
+    /* I _thought_ that g_fprintf was cool with NULL string pointers
+       until we got to the Solaris port at which point this started
+       dumping core like there was no tomorrow.  rather than await a
+       fix to g_fprintf that may never come, we'll work around it. raj
+       2006-06-29 */
     g_fprintf(where,
 	      "%s was given %s for envvar %s and pathvarispath %d\n",
 	      __func__,
-	      path,
+	      path ? path : "NULL",
 	      pathvar,
 	      pathvarispath);
     fflush(where);

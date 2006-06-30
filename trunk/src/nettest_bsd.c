@@ -130,6 +130,7 @@ char    nettest_id[]="\
 #endif
 
 #include "netperf.h"
+#include "netlib.h"
 
 #include "nettest_bsd.h"
 
@@ -305,6 +306,7 @@ wait_to_die(test_t *test)
 
 
 
+#ifdef notdef
 static void
 dump_addrinfo(FILE *dumploc, struct addrinfo *info,
               xmlChar *host, xmlChar *port, int family)
@@ -343,6 +345,7 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
   fflush(dumploc);
 }
 
+#endif
 
 static int
 strtofam(xmlChar *familystr)
@@ -3679,9 +3682,11 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = 0.0;
     }
     if (test_set->debug) {
+      unsigned char *string = NULL;
+      string = xmlGetProp(stats, (const xmlChar *)cntr_name[i]);
       fprintf(test_set->where,"\t%12s test_cntr[%2d] = %10g\t'%s'\n",
               cntr_name[i], i, test_cntr[i],
-              xmlGetProp(stats, (const xmlChar *)cntr_name[i]));
+	      string ? (char *)string : "n/a");
     }
   }
   elapsed_seconds = test_cntr[TST_E_SEC] + test_cntr[TST_E_USEC]/1000000.0;
@@ -3810,9 +3815,14 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = 0.0;
     }
     if (test_set->debug) {
-      fprintf(test_set->where,"\t%12s sys_stats[%d] = %10g '%s'\n",
-              sys_cntr_name[i], i, sys_cntr[i],
-              xmlGetProp(stats, (const xmlChar *)sys_cntr_name[i]));
+      unsigned char *string = NULL;
+      string = xmlGetProp(stats, (const xmlChar *)sys_cntr_name[i]);
+      fprintf(test_set->where,
+	      "\t%12s sys_stats[%d] = %10g '%s'\n",
+              sys_cntr_name[i],
+	      i,
+	      sys_cntr[i],
+	      string ? (char *) string : "n/a");
     }
   }
   local_cpus      = sys_cntr[NUM_CPU];
