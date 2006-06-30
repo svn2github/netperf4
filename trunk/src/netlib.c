@@ -1085,8 +1085,12 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
   struct addrinfo *temp;
   temp=info;
 
-  fprintf(dumploc, "getaddrinfo returned the following for host '%s' ", host);
-  fprintf(dumploc, "port '%s' ", port);
+  g_fprintf(dumploc,
+	  "getaddrinfo returned the following for host '%s' ",
+	  host ? (char *)host : "n/a");
+  g_fprintf(dumploc,
+	  "port '%s' ",
+	  port ? (char *)port : "n/a");
   fprintf(dumploc, "family %d\n", family);
   while (temp) {
     /* I was under the impression that g_fprintf would be kind with
@@ -1757,8 +1761,8 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
   if (debug) {
     fprintf(where,
 	    "establish_listen: host '%s' service '%s' af %d socklen %d\n",
-	    hostname,
-	    service,
+	    hostname ? hostname : "n/a",
+	    service ? service : "n/a",
 	    af,
 	    len);
     fflush(where);
