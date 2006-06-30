@@ -99,7 +99,7 @@ sys_cpu_util_init(test_t *test)
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
-  tsd->num_cpus = 1;
+  tsd->num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
   kc = kstat_open();
 
   if (kc == NULL) {
