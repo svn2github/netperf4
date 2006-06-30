@@ -66,10 +66,9 @@ delete this exception statement from your version.
 #include "netperf.h"
 #include "netsysstats.h"
 
-
-/* these probably need to be placed in some test-specific area */
-static kstat_ctl_t *kc = NULL;
-static kid_t kcid = 0;
+typedef struct netsysstat_kstat_info {
+  kstat_ctl_t *kc;
+} netsysstat_kstat_info_t;
 
 static void
 print_unexpected_statistic_warning(test_t *test, char *who, char *what, char *why)
@@ -97,12 +96,19 @@ sys_cpu_util_init(test_t *test)
 {
 
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
+  netsysstat_kstat_info_t *kstat_state;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
   tsd->num_cpus = sysconf(_SC_NPROCESSORS_ONLN);
-  kc = kstat_open();
 
-  if (kc == NULL) {
+  kstat_state = 
+    (netsysstat_kstat_info_t *)malloc(sizeof(netsysstat_kstat_info_t));
+
+  tsd->psd = kstat_state;
+
+  kstat_state->kc = kstat_open();
+
+  if (kstat_state->kc == NULL) {
     fprintf(test->where,
 	    "cpu_util_init: kstat_open: errno %d %s\n",
 	    errno,
@@ -118,16 +124,19 @@ static void
 get_cpu_counters(test_t *test, int cpu_num, cpu_time_counters_t *counters)
 {
 
+  netsysstat_kstat_info_t *kstat_state;
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
   kstat_t *ksp;
   int found=0;
   kid_t nkcid;
   kstat_named_t *knp;
   int i;
 
-  ksp = kstat_lookup(kc, "cpu", cpu_num, "sys");
+  kstat_state = tsd->psd;
+  ksp = kstat_lookup(kstat_state->kc, "cpu", cpu_num, "sys");
   if ((ksp) && (ksp->ks_type == KSTAT_TYPE_NAMED)) {
     /* happiness and joy, keep going */
-    nkcid = kstat_read(kc, ksp, NULL);
+    nkcid = kstat_read(kstat_state->kc, ksp, NULL);
     if (nkcid != -1) {
       /* happiness and joy, keep going. we could consider adding a
 	 "found < 3" to the end conditions, but then we wouldn't
@@ -204,18 +213,22 @@ get_cpu_counters(test_t *test, int cpu_num, cpu_time_counters_t *counters)
 static void
 get_interrupt_counters(test_t *test, int cpu_num, cpu_time_counters_t *counters)
 {
+  netsysstat_kstat_info_t *kstat_state;
+  netsysstat_data_t *tsd = GET_TEST_DATA(test);
   kstat_t *ksp;
   int found=0;
   kid_t nkcid;
   kstat_named_t *knp;
   int i;
 
-  ksp = kstat_lookup(kc, "cpu", cpu_num, "intrstat");
+  kstat_state = tsd->psd;
+
+  ksp = kstat_lookup(kstat_state->kc, "cpu", cpu_num, "intrstat");
 
   counters[cpu_num].interrupt = 0;
   if ((ksp) && (ksp->ks_type == KSTAT_TYPE_NAMED)) {
     /* happiness and joy, keep going */
-    nkcid = kstat_read(kc, ksp, NULL);
+    nkcid = kstat_read(kstat_state->kc, ksp, NULL);
     if (nkcid != -1) {
       /* happiness and joy, keep going. we could consider adding a
 	 "found < 15" to the end conditions, but then we wouldn't
