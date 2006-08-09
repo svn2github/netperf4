@@ -5,7 +5,7 @@
 
 #ifndef lint
 char    nettest_id[]="\
-@(#)nettest_vst.c (c) Copyright 2005 Hewlett-Packard Co. $Id: nettest_vst.c 161 2006-04-18 00:00:49Z raj $";
+@(#)nettest_vst.c (c) Copyright 2005 Hewlett-Packard Co. $Id: nettest_vst.c 193 2006-08-09 00:52:06Z burger $";
 #else
 #define DIRTY
 #define WANT_HISTOGRAM
@@ -475,116 +475,90 @@ convert(string,units)
  /* specified in fill_file. if fill_file is an empty string, then     */
  /* buffers will not be filled with any particular data.              */
 
-static void 
-allocate_fixed_buffers(test_t *test)
+static void
+allocate_vst_ring_elements(test_t *test, int send_size, int recv_size)
 {
   vst_data_t  *my_data;
   vst_ring_ptr temp_link;
   vst_ring_ptr prev_link;
   int          width;
   int          send_malloc_size;
-  int          send_size;
-  int          send_align;
-  int          send_offset;
   int          recv_malloc_size;
-  int          recv_size;
+  int          send_align;
   int          recv_align;
-  int          recv_offset;
-  int         *send_buf;
   int          i;
-  int          send = 0;
+
 
   my_data     = GET_TEST_DATA(test);
-
+  
   if (!xmlStrcmp(test->test_name,(const xmlChar *)"send_vst_rr")) {
-    send = 1;
-  }
-
-  if (send) {
     width       = my_data->send_width;
-    send_size   = my_data->req_size;
-    send_align  = my_data->send_align;
-    send_offset = my_data->send_offset;
-    recv_size   = my_data->rsp_size;
-    recv_align  = my_data->recv_align;
-    recv_offset = my_data->recv_offset;
     if (send_size < (sizeof(int)*4)) {
       send_size = sizeof(int) * 4;
     }
   }
   else {
     width       = my_data->recv_width;
-    send_size   = my_data->rsp_size;
-    send_align  = my_data->send_align;
-    send_offset = my_data->send_offset;
-    recv_size   = my_data->req_size;
-    recv_align  = my_data->recv_align;
-    recv_offset = my_data->recv_offset;
     if (recv_size < (sizeof(int)*4)) {
       recv_size = sizeof(int) * 4;
     }
   }
 
-  if (send_align < sizeof(int)) {
-    send_align = sizeof(int);
+  send_align = sizeof(int);
+  recv_align = sizeof(int);
+  if (sizeof(int) < my_data->send_align) {
+    send_align = (my_data->send_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
   }
-  else {
-    send_align = (send_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
+  if (sizeof(int) < my_data->recv_align) {
+    recv_align = (my_data->recv_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
   }
-  
-  if (recv_align < sizeof(int)) {
-    recv_align = sizeof(int);
-  }
-  else {
-    recv_align = (recv_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
-  }
-  
-  send_malloc_size = send_size + send_align + send_offset;
-  recv_malloc_size = recv_size + recv_align + recv_offset;
+
+  send_malloc_size = send_size + send_align + my_data->send_offset;
+  recv_malloc_size = recv_size + recv_align + my_data->recv_offset;
 
   prev_link = NULL;
   for (i = 0; i < width; i++) {
     temp_link = (vst_ring_ptr)malloc(sizeof(vst_ring_elt_t));
-        
+    if (temp_link == NULL) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          VSTE_MALLOC_FAILED,
+                          "error allocating vst ring element");
+      break;
+    }
     temp_link->send_buff_base = (char *)malloc(send_malloc_size);
     if (temp_link->send_buff_base == NULL) {
       report_test_failure(test,
                           (char *)__func__,
                           VSTE_MALLOC_FAILED,
                           "error allocating vst send buffer");
+      break;
     }
-    temp_link->send_buff_ptr  = temp_link->send_buff_base + send_offset;
+    temp_link->send_buff_ptr  = temp_link->send_buff_base +
+                                my_data->send_offset;
     temp_link->send_buff_ptr  = (char *)(
                               ( (long)(temp_link->send_buff_ptr)
                               + (long)send_align - 1)
                               & ~((long)send_align - 1));
-    temp_link->send_buff_size = send_malloc_size;
-    temp_link->send_size      = send_size;
-
+    temp_link->send_buff_size = recv_malloc_size;
+    temp_link->send_size      = recv_size;
     temp_link->recv_buff_base = (char *)malloc(recv_malloc_size);
-    if (temp_link->send_buff_base == NULL) {
+    if (temp_link->recv_buff_base == NULL) {
       report_test_failure(test,
                           (char *)__func__,
                           VSTE_MALLOC_FAILED,
                           "error allocating vst recv buffer");
+      break;
     }
-    temp_link->recv_buff_ptr  = temp_link->recv_buff_base + recv_offset;
+    temp_link->recv_buff_ptr  = temp_link->recv_buff_base +
+                                my_data->recv_offset;
     temp_link->recv_buff_ptr  = (char *)(
                               ( (long)(temp_link->recv_buff_ptr)
                               + (long)recv_align - 1)
                               & ~((long)recv_align - 1));
     temp_link->recv_buff_size = recv_malloc_size;
     temp_link->recv_size      = recv_size;
-   
-    if (send) {
-      memset(temp_link->send_buff_base, -1, send_malloc_size);
-      send_buf    = (int *)temp_link->send_buff_ptr;
-      send_buf[0] = send_size;
-      send_buf[1] = recv_size;
-    }
 
-    temp_link->distribution   = NULL;
-    
     if (i==0) {
       my_data->vst_ring = temp_link;
     }
@@ -594,186 +568,178 @@ allocate_fixed_buffers(test_t *test)
   my_data->vst_ring->next = temp_link;
 }
 
-
+
 static void 
-allocate_pattern_buffer(test_t *test)
+allocate_fixed_buffers(test_t *test)
 {
   vst_data_t  *my_data;
-  xmlNodePtr   wld;
-  xmlNodePtr   pattern;
-  xmlNodePtr   entry;
-  vst_ring_ptr pattern_start[MAX_PATTERNS];
-  dist_t      *dist[MAX_PATTERNS];
-  vst_ring_ptr temp_link;
-  vst_ring_ptr prev_link;
-  char        *string;
-  int          malloc_size;
   int          send_size;
-  int          send_align;
-  int          send_offset;
   int          recv_size;
-  int          recv_align;
-  int          recv_offset;
-  int          seed;
-  int          i;
-  int          p;
-  int          np;
-  int          num;
-  int         *send_buf;
-  
+
+
+  my_data     = GET_TEST_DATA(test);
+  if (!xmlStrcmp(test->test_name,(const xmlChar *)"send_vst_rr")) {
+    send_size   = my_data->req_size;
+    recv_size   = my_data->rsp_size;
+    if (send_size < (sizeof(int)*4)) {
+      send_size = sizeof(int) * 4;
+    }
+  }
+  else {
+    send_size   = my_data->rsp_size;
+    recv_size   = my_data->req_size;
+    if (recv_size < (sizeof(int)*4)) {
+      recv_size = sizeof(int) * 4;
+    }
+  }
+  allocate_vst_ring_elements(test, send_size, recv_size);
+}
+
+
+
+static void
+allocate_pattern_buffer(test_t *test)
+{
+  vst_data_t      *my_data;
+  xmlNodePtr       wld;
+  xmlNodePtr       pattern;
+  xmlNodePtr       entry;
+  int              max_pat;
+  int              max_entry;
+  int              max_dist;
+  int              max_dist_entry;
+  int              max_req_size;
+  int              max_rsp_size;
+  int             *pat_start;
+  pattern_entry_t *pat_entry;
+  dist_t          *dist;
+  dist_entry_t    *dist_entry;
+  int              p,e,d,de,num,seed;
+  char            *string;
 
   my_data = GET_TEST_DATA(test);
   wld     = my_data->wld;
 
-  seed        = 0;
-  send_align  = my_data->send_align;
-  send_offset = my_data->send_offset;
-  recv_align  = my_data->recv_align;
-  recv_offset = my_data->recv_offset;
-
-  if (send_align < sizeof(int)) {
-    send_align = sizeof(int);
-  }
-  else {
-    send_align = (send_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
-  }
-  
-  if (recv_align < sizeof(int)) {
-    recv_align = sizeof(int);
-  }
-  else {
-    recv_align = (recv_align + sizeof(int) - 1) & ~(sizeof(int) - 1);
-  }
-  
+  /* count the number of patterns */
+  max_pat        = 0;
+  max_entry      = 0;
+  max_dist       = 0;
+  max_dist_entry = 0;
+  seed           = 0;
   pattern = wld->xmlChildrenNode;
-
-  for (p=0;p < MAX_PATTERNS; p++) {
-    pattern_start[p] = NULL;
-    dist[p]          = NULL;
-  }
-
-  prev_link = NULL;
   while (pattern != NULL) {
     if (!xmlStrcmp(pattern->name,(const xmlChar *)"pattern")) {
-      /* build entries for this pattern */
-      string  =  (char *)xmlGetProp(pattern,(const xmlChar *)"index");
-      p       =  atoi(string);
-      i       =  0;
+      max_pat++;
       entry = pattern->xmlChildrenNode;
       while (entry != NULL) {
-        if (!xmlStrcmp(entry->name,(const xmlChar *)"pattern_entry")) {
-          temp_link = (vst_ring_ptr)malloc(sizeof(vst_ring_elt_t));
-          string    =  (char *)xmlGetProp(entry,(const xmlChar *)"req_size");
-          send_size =  atoi(string);
-          string    =  (char *)xmlGetProp(entry,(const xmlChar *)"rsp_size");
-          recv_size =  atoi(string);
-
-          if (send_size < (sizeof(int)*4)) {
-            send_size = sizeof(int) * 4;
-          }
-          malloc_size = send_size + send_align + send_offset;
-        
-          temp_link->send_buff_base = (char *)malloc(malloc_size);
-          if (temp_link->send_buff_base == NULL) {
-            report_test_failure(test,
-                                (char *)__func__,
-                                VSTE_MALLOC_FAILED,
-                                "error allocating vst send buffer");
-          }
-          temp_link->send_buff_ptr  = temp_link->send_buff_base + send_offset;
-          temp_link->send_buff_ptr  = (char *)(
-                                    ( (long)(temp_link->send_buff_ptr)
-                                    + (long)send_align - 1)
-                                    & ~((long)send_align - 1));
-          temp_link->send_buff_size = malloc_size;
-          temp_link->send_size      = send_size;
-
-          memset(temp_link->send_buff_base, -1, malloc_size);
-
-          malloc_size = recv_size + recv_align + recv_offset;
-
-          temp_link->recv_buff_base = (char *)malloc(malloc_size);
-          if (temp_link->send_buff_base == NULL) {
-            report_test_failure(test,
-                                (char *)__func__,
-                                VSTE_MALLOC_FAILED,
-                                "error allocating vst recv buffer");
-          }
-          temp_link->recv_buff_ptr  = temp_link->recv_buff_base + recv_offset;
-          temp_link->recv_buff_ptr  = (char *)(
-                                    ( (long)(temp_link->recv_buff_ptr)
-                                    + (long)recv_align - 1)
-                                    & ~((long)recv_align - 1));
-          temp_link->recv_buff_size = malloc_size;
-          temp_link->recv_size      = recv_size;
-        
-          send_buf    = (int *)temp_link->send_buff_ptr;
-          
-          send_buf[0] = send_size;
-          send_buf[1] = recv_size;
-          send_buf[2] = send_size;
-          send_buf[3] = recv_size;
-
-          temp_link->distribution   = NULL;
-
-          if (test->debug) {
-            fprintf(test->where,
-                    "%s: pattern[%2d,%3d]  send_size =%6d  recv_size =%6d\n",
-                    __func__, p, i, send_size, recv_size);
-            fflush(test->where);
-          }
-          if (i==0) {
-            pattern_start[p] = temp_link;
-          }
-          if (prev_link != NULL) {
-            prev_link->next = temp_link;
-          }
-          prev_link = temp_link;
-          i++;
+        if (!xmlStrcmp(pattern->name,(const xmlChar *)"pattern_entry")) {
+          max_entry++;
         }
         entry = entry->next;
       }
     }
     if (!xmlStrcmp(pattern->name,(const xmlChar *)"distribution")) {
-      /* build entry for the distribution after this pattern */
-      dist[p] = (dist_t *)malloc(sizeof(dist_t));
-      for (np=0; np<MAX_PATTERNS; np++) {
-        dist[p]->pattern[np]    = NULL;
-        dist[p]->dist_count[np] = -1;
-      }
-      string  = (char *)xmlGetProp(pattern,(const xmlChar *)"dist_key");
-      dist[p]->dist_key = atoi(string);
-      initstate(seed,dist[p]->random_state,VST_RAND_STATE_SIZE);
+      max_dist++;
       entry = pattern->xmlChildrenNode;
       while (entry != NULL) {
-        if (!xmlStrcmp(entry->name,(const xmlChar *)"distribution_entry")) {
-          string  =  (char *)xmlGetProp(entry,(const xmlChar *)"next_pattern");
-          np      =  atoi(string);
-          string  =  (char *)xmlGetProp(entry,(const xmlChar *)"number");
-          num     =  atoi(string);
-          dist[p]->dist_count[np] = num;
-          if (test->debug) {
-            fprintf(test->where,
-                    "%s: dist[%2d,%3d]  dist_number =%6d\n",
-                    __func__, p, np, num);
-            fflush(test->where);
-          }
+        if (!xmlStrcmp(pattern->name,(const xmlChar *)"distribution_entry")) {
+          max_dist_entry++;
         }
         entry = entry->next;
-      } 
-      temp_link->distribution = dist[p];
-    } 
+      }
+    }
     pattern = pattern->next;
   }
-  for (np=0; np < p; np++) {
-    dist[np]->num_patterns = p;
-    for (i=0; i < p; i++) {
-      dist[np]->pattern[i] = pattern_start[i];
+
+  /* allocate memory for patterns and distributions */
+  pat_entry = malloc( max_pat        * sizeof(int) + 
+                      max_entry      * sizeof(pattern_entry_t) +
+                      max_dist       * sizeof(dist_t) +
+                      max_dist_entry * sizeof(dist_entry_t)
+                    );
+  if (pat_start) {
+    dist                = (dist_t *)(&(pat_entry[max_entry]));
+    dist_entry          = (dist_entry_t *)(&(dist[max_dist]));
+    pat_start           = (int *)(&(dist_entry[max_dist_entry]));
+    my_data->start_pat  = pat_start;
+    my_data->pattern    = pat_entry;
+    my_data->dist       = dist;
+    my_data->dist_entry = dist_entry;
+
+    /* read and initialize all pattern structures */
+    p  = 0;
+    e  = -1;
+    d  = 0;
+    de = 0;
+    pattern = wld->xmlChildrenNode;
+    while (pattern != NULL) {
+      if (!xmlStrcmp(pattern->name,(const xmlChar *)"pattern")) {
+        pat_start[p] = e;
+        entry = pattern->xmlChildrenNode;
+        while (entry != NULL) {
+          if (!xmlStrcmp(entry->name,(const xmlChar *)"pattern_entry")) {
+            e++;
+            pat_entry[e].distribution = NULL;
+            string    =  (char *)xmlGetProp(entry,(const xmlChar *)"req_size");
+            pat_entry[e].req_size = atoi(string);
+            string    =  (char *)xmlGetProp(entry,(const xmlChar *)"rsp_size");
+            pat_entry[e].rsp_size = atoi(string);
+            string    =  (char *)xmlGetProp(entry,(const xmlChar *)"dup_cnt");
+            if (string) {
+              pat_entry[e].dup_cnt  = atoi(string);
+            } else {
+              pat_entry[e].dup_cnt  = 1;
+            }
+            if (pat_entry[e].req_size > max_req_size) {
+              max_req_size = pat_entry[e].req_size;
+            }
+            if (pat_entry[e].rsp_size > max_rsp_size) {
+              max_rsp_size = pat_entry[e].rsp_size;
+            }
+          }
+          entry = entry->next;
+        }
+        p++;
+      }
+      if (!xmlStrcmp(pattern->name,(const xmlChar *)"distribution")) {
+        num = 0;
+        pat_entry[e].distribution = &(dist[d]);
+        dist[d].dist_entry        = &(dist_entry[de]);
+        initstate(seed,dist[d].random_state,VST_RAND_STATE_SIZE);
+        string  = (char *)xmlGetProp(pattern,(const xmlChar *)"dist_key");
+        dist[d].dist_key = atoi(string);
+        entry = pattern->xmlChildrenNode;
+        while (entry != NULL) {
+          if (!xmlStrcmp(pattern->name,(const xmlChar *)"distribution_entry")) {
+            string = (char *)xmlGetProp(entry,(const xmlChar *)"next_pattern");
+            dist_entry[de].pattern_num = atoi(string);
+            string = (char *)xmlGetProp(entry,(const xmlChar *)"number");
+            dist_entry[de].dist_count  = atoi(string);
+            de++;
+            num++;
+          }
+          entry = entry->next;
+        }
+        dist[d].num_entries = num;
+        d++;
+      }
+      pattern = pattern->next;
     }
+    for (de = 0; de < max_dist_entry; de++) {
+      dist_entry[de].pat_entry = pat_start[dist_entry[de].pattern_num];
+    }
+
+    /* allocate a circular list of fixed buffers */
+    allocate_vst_ring_elements(test, max_req_size, max_rsp_size);
   }
-  temp_link->next   = pattern_start[0];
-  my_data->vst_ring = pattern_start[0];
+  else {
+    report_test_failure(test,
+                        (char *)__func__,
+                        VSTE_MALLOC_FAILED,
+                        "error allocating vst pattern buffer");
+  }
 }
+
 
 
 static void
@@ -854,6 +820,7 @@ parse_wld_file(test_t *test, char *fname)
   }
 }
 
+
 
  /* This routine reads and parses the work_load_description and sets up
     the buffer ring with two sets of buffers one for send and one for 
@@ -877,57 +844,80 @@ allocate_vst_buffers(test_t *test, char *fname)
   }
 }
 
+
 
 static void
 get_next_vst_transaction(test_t *test)
 {
-  vst_data_t  *my_data;
-  dist_t      *dist;
-  long         key;
-  int          value;
-  int          i;
-  int          loc_debug = 0;
+  vst_data_t      *my_data;
+  pattern_entry_t *pat;
+  int              p;
+  int              dup;
+  dist_t          *dist;
+  int              i;
+  long             key;
+  int              value;
+  int              loc_debug = 0;
 
   my_data = GET_TEST_DATA(test);
-  dist    = my_data->vst_ring->distribution;
+  pat     = my_data->pattern;
+  p       = my_data->cur_pat_entry;
+  dup     = my_data->cur_dup_cnt;
 
-  if (dist == NULL) {
-    my_data->vst_ring = my_data->vst_ring->next;
-  }
-  else {
-    /* we have reached the end of a pattern it is time to determine which
-       pattern should be next in the sequence sgb 2005/11/21 */
-    setstate(dist->random_state);
-    key   = random();
-    value = key %  dist->dist_key;
-    if (test->debug && loc_debug) {
-      fprintf(test->where, "**** end of pattern reached ******\n");
-      fprintf(test->where,
-              "%s:  value = %d  key = %ld\n",
-              (char *)__func__, value, key);
-      fflush(test->where);
-    }
-    for (i=0; i< dist->num_patterns; i++) {
-      value = value - dist->dist_count[i];
-      if (test->debug && loc_debug) {
-        fprintf(test->where,
-                "\tdist_count = %d  new_value = %d  pattern = %ld\n",
-                dist->dist_count[i], value, dist->pattern[i]);
-        fflush(test->where);
+  my_data->vst_ring = my_data->vst_ring->next;
+  if (pat) {
+    my_data->vst_ring->send_size = pat[p].req_size;
+    my_data->vst_ring->recv_size = pat[p].rsp_size;
+    dup--;
+    if (dup == 0) {
+      if (pat[p].distribution == NULL) {
+        p++;
+        if (p == my_data->max_pat_entry) p = 0;
+        my_data->cur_pat_entry = p;
+        my_data->cur_dup_cnt   = pat[p].dup_cnt;
       }
-      if (value < 0) {
-        my_data->vst_ring = dist->pattern[i];
-        break;
+      else {
+        /* we have reached the end of a pattern it is time to determine which
+         pattern should be next in the sequence sgb 2005/11/21 */
+        dist = pat[p].distribution;
+        setstate(dist->random_state);
+        key   = random();
+        value = key %  dist->dist_key;
+        if (test->debug && loc_debug) {
+          fprintf(test->where, "**** end of pattern reached ******\n");
+          fprintf(test->where,
+                  "%s:  value = %d  key = %d\n",
+                  (char *)__func__, value, key);
+          fflush(test->where);
+        }
+        for (i=0; i< dist->num_entries; i++) {
+          value = value - dist->dist_entry[i].dist_count;
+          if (test->debug && loc_debug) {
+            fprintf(test->where,
+                    "\tdist_count = %d  new_value = %d  pattern = %d\n",
+                    dist->dist_entry[i].dist_count, value,
+                    dist->dist_entry[i].pattern_num);
+            fflush(test->where);
+          }
+          if (value < 0) {
+            p = dist->dist_entry[i].pat_entry;
+            my_data->cur_pat_entry = p;
+            my_data->cur_dup_cnt   = pat[p].dup_cnt;
+            break;
+          }
+        }
+        if (test->debug && loc_debug) {
+          fprintf(test->where,
+                  "%s: new pattern values pat = %d  entry = %d  dup = %d\n",
+                  __func__, dist->dist_entry[i].pattern_num, 
+                  my_data->cur_pat_entry, my_data->cur_dup_cnt);
+          fflush(test->where);
+        }
       }
-    }
-    if (test->debug && loc_debug) {
-      fprintf(test->where,
-              "%s: new ring value %p\n",
-              __func__, my_data->vst_ring);
-      fflush(test->where);
     }
   }
 }
+
 
 
  /* This routine will create a data (listen) socket with the apropriate */
@@ -1173,11 +1163,11 @@ free_vst_test_data(test_t *test)
     /* free memory allocate for vst ring */
     free(curr->send_buff_base);
     free(curr->recv_buff_base);
-    free(curr->distribution);
     prev = curr;
     curr = curr->next;
     free(prev);
   }
+  free(my_data->pattern);
   free(my_data->locaddr);
   free(my_data->remaddr);
   fclose(my_data->fill_source);
@@ -1185,6 +1175,10 @@ free_vst_test_data(test_t *test)
   my_data->locaddr     = NULL;
   my_data->remaddr     = NULL;
   my_data->fill_source = NULL;
+  my_data->start_pat   = NULL;
+  my_data->pattern     = NULL;
+  my_data->dist        = NULL;
+  my_data->dist_entry  = NULL;
 }
 
 
@@ -1210,6 +1204,7 @@ vst_test_init(test_t *test, int type, int protocol)
   int               error;
   struct addrinfo   hints;
   struct addrinfo  *local_ai;
+  struct addrinfo  *local_temp;
 
   NETPERF_DEBUG_ENTRY(test->debug, test->where);
 
@@ -1308,6 +1303,20 @@ vst_test_init(test_t *test, int type, int protocol)
 
     string =  xmlGetProp(args,(const xmlChar *)"recv_offset");
     new_data->recv_offset = atoi((char *)string);
+
+    string =  xmlGetProp(args,(const xmlChar *)"burst_count");
+    if (string) {
+      count = atoi((char *)string);
+      new_data->burst_count = count;
+      if (count >= new_data->send_width) {
+        new_data->send_width  = count + 1;
+      }
+    }
+
+    string =  xmlGetProp(args,(const xmlChar *)"interval_time");
+    if (string) {
+      new_data->interval    = atoi((char *)string);
+    }
 
     /* now get and initialize the local addressing info */
     string   =  xmlGetProp(args,(const xmlChar *)"family");
@@ -1418,7 +1427,7 @@ vst_test_get_stats(test_t *test)
 {
   xmlNodePtr  stats = NULL;
   xmlAttrPtr  ap    = NULL;
-  int         i;
+  int         i,j;
   char        value[32];
   char        name[32];
   uint64_t    loc_cnt[VST_MAX_COUNTERS];
@@ -1438,7 +1447,7 @@ vst_test_get_stats(test_t *test)
     for (i = 0; i < VST_MAX_COUNTERS; i++) {
       loc_cnt[i] = my_data->stats.counter[i];
       if (test->debug) {
-        fprintf(test->where,"VST_COUNTER%X = %#"PRIx64"\n",i,loc_cnt[i]);
+        fprintf(test->where,"VST_COUNTER%X = %#llx\n",i,loc_cnt[i]);
       } 
     }
     if (GET_TEST_STATE == TEST_MEASURE) {
@@ -1483,7 +1492,7 @@ vst_test_get_stats(test_t *test)
         break;
       }
       if (loc_cnt[i]) {
-        sprintf(value,"%#"PRIx64,my_data->stats.counter[i]);
+        sprintf(value,"%#llx",my_data->stats.counter[i]);
         sprintf(name,"cntr%1X_value",i);
         ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value);
         if (test->debug) {
@@ -1998,6 +2007,7 @@ send_vst_rr_meas(test_t *test)
   int               len;
   int               send_len;
   int               bytes_left;
+  char             *req_ptr;
   char             *rsp_ptr;
   vst_data_t       *my_data;
   int              *send_buf;
@@ -2011,33 +2021,38 @@ send_vst_rr_meas(test_t *test)
     /* code to timestamp enabled by WANT_HISTOGRAM */
     HIST_TIMESTAMP(&time_one);
     /* send data for the test */
-    send_len = my_data->vst_ring->send_size;
-    bytes_left = my_data->vst_ring->recv_size;
+    send_len   = my_data->send_size;
+    bytes_left = my_data->vst_ring->send_size;
+    req_ptr    = my_data->vst_ring->send_buff_ptr;
     send_buf   = (int *)my_data->vst_ring->send_buff_ptr;
-    if ((send_len   != send_buf[0]) ||
-        (bytes_left != send_buf[1]) ||
-        (send_len   != send_buf[2]) ||
-        (bytes_left != send_buf[3])) {
-      fprintf(test->where,
-              "\n%s: Found corrupted buffer is %d,%d should be %d,%d\n\n",
-              __func__, send_buf[0], send_buf[1], send_len, bytes_left);
-      fflush(test->where);
-    }
-    if((len=send(my_data->s_data,
-                 my_data->vst_ring->send_buff_ptr,
-                 send_len,
-                 0)) != send_len) {
-      /* this macro hides windows differences */
-      if (CHECK_FOR_SEND_ERROR(len)) {
-        report_test_failure(test,
-                            (char *)__func__,
-                            VSTE_DATA_SEND_ERROR,
-                            "data send error");
+    send_buf[0] = htonl(send_len);
+    send_buf[1] = htonl(bytes_left);
+    send_buf[2] = htonl(send_len);
+    send_buf[3] = htonl(bytes_left);
+    while (bytes_left > 0) {
+      if (bytes_left < send_len) {
+        send_len = bytes_left;
       }
+      if((len=send(my_data->s_data,
+                   req_ptr,
+                   send_len,
+                   0)) != send_len) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_SEND_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              VSTE_DATA_SEND_ERROR,
+                              "data send error");
+          break;
+        }
+      }
+      my_data->stats.named.bytes_sent += len;
+      my_data->stats.named.send_calls++;
+      req_ptr    += len;
+      bytes_left -= len;
     }
-    my_data->stats.named.bytes_sent += len;
-    my_data->stats.named.send_calls++;
     /* recv the request for the test */
+    bytes_left = my_data->vst_ring->recv_size;
     rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
     while (bytes_left > 0) {
       if ((len=recv(my_data->s_data,
@@ -2092,6 +2107,7 @@ send_vst_rr_load(test_t *test)
   int               len;
   int               send_len;
   int               bytes_left;
+  char             *req_ptr;
   char             *rsp_ptr;
   vst_data_t       *my_data;
   int              *send_buf;
@@ -2102,31 +2118,36 @@ send_vst_rr_load(test_t *test)
     /* code to make data dirty macro enabled by DIRTY */
     MAKE_DIRTY(my_data,my_data->vst_ring);
     /* send data for the test */
-    send_len   = my_data->vst_ring->send_size;
-    bytes_left = my_data->vst_ring->recv_size;
+    send_len   = my_data->send_size;
+    bytes_left = my_data->vst_ring->send_size;
+    req_ptr    = my_data->vst_ring->send_buff_ptr;
     send_buf   = (int *)my_data->vst_ring->send_buff_ptr;
-    if ((send_len   != send_buf[0]) ||
-        (bytes_left != send_buf[1]) ||
-        (send_len   != send_buf[2]) ||
-        (bytes_left != send_buf[3])) {
-      fprintf(test->where,
-              "\n%s: Found corrupted buffer is %d,%d should be %d,%d\n\n",
-              __func__, send_buf[0], send_buf[1], send_len, bytes_left);
-      fflush(test->where);
-    }
-    if((len=send(my_data->s_data,
-                 my_data->vst_ring->send_buff_ptr,
-                 send_len,
-                 0)) != send_len) {
-      /* this macro hides windows differences */
-      if (CHECK_FOR_SEND_ERROR(len)) {
-        report_test_failure(test,
-                            (char *)__func__,
-                            VSTE_DATA_SEND_ERROR,
-                            "data send error");
+    send_buf[0] = htonl(send_len);
+    send_buf[1] = htonl(bytes_left);
+    send_buf[2] = htonl(send_len);
+    send_buf[3] = htonl(bytes_left);
+    while (bytes_left > 0) {
+      if (bytes_left < send_len) {
+        send_len = bytes_left;
       }
+      if((len=send(my_data->s_data,
+                   req_ptr,
+                   send_len,
+                   0)) != send_len) {
+        /* this macro hides windows differences */
+        if (CHECK_FOR_SEND_ERROR(len)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              VSTE_DATA_SEND_ERROR,
+                              "data send error");
+          break;
+        }
+      }
+      req_ptr    += len;
+      bytes_left -= len;
     }
     /* recv the request for the test */
+    bytes_left = my_data->vst_ring->recv_size;
     rsp_ptr    = my_data->vst_ring->recv_buff_ptr;
     while (bytes_left > 0) {
       if ((len=recv(my_data->s_data,
@@ -2450,7 +2471,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = strtod(value_str,NULL);
       if (test_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%"PRIx64,&x);
+        sscanf(value_str,"%llx",&x);
         test_cntr[i] = (double)x;
       }
     }
@@ -2458,10 +2479,9 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       test_cntr[i] = 0.0;
     }
     if (test_set->debug) {
-      unsigned char *string = xmlGetProp(stats, (const xmlChar *)cntr_name[i]);
       fprintf(test_set->where,"\t%12s test_cntr[%2d] = %10g\t'%s'\n",
               cntr_name[i], i, test_cntr[i],
-	      string ? (char *)string : "n/a");
+              xmlGetProp(stats, (const xmlChar *)cntr_name[i]));
     }
   }
   elapsed_seconds = test_cntr[TST_E_SEC] + test_cntr[TST_E_USEC]/1000000.0;
@@ -2533,6 +2553,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   FILE          *outfd;
   vst_results_t *rd;
   double         elapsed_seconds;
+  double         sys_util;
   double         calibration;
   double         local_idle;
   double         local_busy;
@@ -2575,7 +2596,7 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = strtod(value_str,NULL);
       if (sys_cntr[i] == 0.0) {
         uint64_t x;
-        sscanf(value_str,"%"PRIx64,&x);
+        sscanf(value_str,"%llx",&x);
         sys_cntr[i] = (double)x;
       }
     }
@@ -2583,11 +2604,9 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
       sys_cntr[i] = 0.0;
     }
     if (test_set->debug) {
-      unsigned char *string=NULL;
-      string =  xmlGetProp(stats, (const xmlChar *)sys_cntr_name[i]);
       fprintf(test_set->where,"\t%12s sys_stats[%d] = %10g '%s'\n",
               sys_cntr_name[i], i, sys_cntr[i],
-              string ? (char *) string : "n/a");
+              xmlGetProp(stats, (const xmlChar *)sys_cntr_name[i]));
     }
   }
   local_cpus      = sys_cntr[NUM_CPU];
@@ -2756,37 +2775,34 @@ update_results_and_confidence(tset_t *test_set)
   NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
 
   /* calculate confidence and summary result values */
-  confidence    = (test_set->get_confidence)(rd->xmit_results,
-					     &(test_set->confidence),
-					     &(rd->xmit_measured_mean),
-					     &(rd->xmit_interval));
+  confidence                    = get_confidence(rd->xmit_results,
+                                      &(test_set->confidence),
+                                      &(rd->xmit_measured_mean),
+                                      &(rd->xmit_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\txmit_results conf = %.2f%%\tmean = %10f +/- %8f\n",
             100.0 * confidence, rd->xmit_measured_mean, rd->xmit_interval);
     fflush(test_set->where);
   }
-
-  confidence     = (test_set->get_confidence)(rd->recv_results,
-					      &(test_set->confidence),
-					      &(rd->recv_measured_mean),
-					      &(rd->recv_interval));
+  confidence                    = get_confidence(rd->recv_results,
+                                      &(test_set->confidence),
+                                      &(rd->recv_measured_mean),
+                                      &(rd->recv_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\trecv_results conf = %.2f%%\tmean = %10f +/- %8f\n",
             100.0 * confidence, rd->recv_measured_mean, rd->recv_interval);
     fflush(test_set->where);
   }
-
-  confidence      = (test_set->get_confidence)(rd->run_time,
-					       &(test_set->confidence),
-					       &(rd->ave_time),
-					       &(temp));
-
-  rd->result_confidence  = (test_set->get_confidence)(rd->results,
-						      &(test_set->confidence),
-						      &(rd->result_measured_mean),
-						      &(rd->result_interval));
+  confidence                    = get_confidence(rd->run_time,
+                                      &(test_set->confidence),
+                                      &(rd->ave_time),
+                                      &(temp));
+  rd->result_confidence         = get_confidence(rd->results,
+                                      &(test_set->confidence),
+                                      &(rd->result_measured_mean),
+                                      &(rd->result_interval));
   if (test_set->debug || loc_debug) {
     fprintf(test_set->where, 
             "\tresults      conf = %.2f%%\tmean = %10f +/- %8f\n",
@@ -2794,7 +2810,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->result_measured_mean, rd->result_interval);
     fflush(test_set->where);
   }
-  rd->cpu_util_confidence       = (test_set->get_confidence)(rd->utilization,
+  rd->cpu_util_confidence       = get_confidence(rd->utilization,
                                       &(test_set->confidence),
                                       &(rd->cpu_util_measured_mean),
                                       &(rd->cpu_util_interval));
@@ -2805,7 +2821,7 @@ update_results_and_confidence(tset_t *test_set)
             rd->cpu_util_measured_mean, rd->cpu_util_interval);
     fflush(test_set->where);
   }
-  rd->service_demand_confidence = (test_set->get_confidence)(rd->servdemand,
+  rd->service_demand_confidence = get_confidence(rd->servdemand,
                                       &(test_set->confidence),
                                       &(rd->service_demand_measured_mean),
                                       &(rd->service_demand_interval));

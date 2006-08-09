@@ -9,12 +9,17 @@
 
 typedef struct vst_ring_elt *vst_ring_ptr;
 
+typedef struct distribution_entry {
+  int  pat_entry;
+  int  dist_count;
+  int  pattern_num;
+} dist_entry_t;
+
 typedef struct distribution_data {
-  int           num_patterns;
-  int           dist_key;
-  int           dist_count[MAX_PATTERNS];
-  vst_ring_ptr  pattern[MAX_PATTERNS];
+  dist_entry_t *dist_entry;
   char          random_state[VST_RAND_STATE_SIZE];
+  int           dist_key;
+  int           num_entries;
 } dist_t;
 
 typedef struct vst_ring_elt {
@@ -27,8 +32,15 @@ typedef struct vst_ring_elt {
   char            *send_buff_ptr;  /* the aligned and offset pointer */
   int              send_size;      /* size of response to place in the buffer */
   int              send_buff_size; /* the actual size of the physical buffer */
-  dist_t          *distribution;   /* pointer to a distribution structure */
 } vst_ring_elt_t;
+
+
+typedef struct pattern_element {
+  dist_t          *distribution;   /* pointer to a distribution structure */
+  int              req_size;       /* size of request to send or receive */
+  int              rsp_size;       /* size of response to send or receive */
+  int              dup_cnt;        /* number of times to duplicate entry */
+} pattern_entry_t;
 
 
 enum {
@@ -54,6 +66,17 @@ typedef struct  vst_test_data {
   FILE            *fill_source;    /* pointer to file for filling rings */
   xmlNodePtr       wld;            /* pointer to the work load description
                                       for this test */
+
+  /* pattern control information */
+  int             *start_pat;      /* first entry indices for each pattern */
+  pattern_entry_t *pattern;        /* pointer to pattern entry array */
+  dist_t          *dist;           /* pointer to distribution array */
+  dist_entry_t    *dist_entry;     /* pointer to distribution entry array */
+  int              max_pattern;    /* number of patterns used by this test */
+  int              max_pat_entry;  /* number of pattern entries allocated */
+  int              cur_pat_entry;  /* index into current pattern entry */
+  int              cur_dup_cnt;    /* dups left for current pattern entry */
+
   /* send parameters */
   int   sbuf_size_ret;  /* send socket buffer size returned on creation */
   int   send_buf_size;  /* send socket buffer size */
@@ -62,7 +85,8 @@ typedef struct  vst_test_data {
   int   send_align;     /* what is the alignment of the send buffer? */
   int   send_offset;    /* and at what offset from that alignment? */
   int   no_delay;       /* do we disable the nagle algorithm for send */
-  
+  int   burst_count;    /* number of sends in an interval or first burst */
+  int   interval;       /* minimum time from start to start of bursts */
 
   /* recv parameters */
   int   rbuf_size_ret;  /* receive socket buffer size returned on creation */
