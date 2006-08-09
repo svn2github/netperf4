@@ -582,6 +582,7 @@
 <!ATTLIST pattern_entry
   req_size          CDATA    #IMPLIED
   rsp_size          CDATA    #IMPLIED
+  dup_cnt           CDATA    #IMPLIED
 >
 
 
