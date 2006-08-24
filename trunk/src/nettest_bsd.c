@@ -347,6 +347,7 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
 
 #endif
 
+#ifdef notdef
 static int
 strtofam(xmlChar *familystr)
 {
@@ -366,6 +367,7 @@ strtofam(xmlChar *familystr)
     return(-1);
   }
 }
+#endif
 
 static void
 get_dependency_data(test_t *test, int type, int protocol)
