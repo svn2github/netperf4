@@ -194,7 +194,9 @@ gboolean do_closesocket(gchar *option_name, gchar *option_value, gpointer data, 
   SOCKET toclose;
 
   toclose = atoi(option_value);
-  g_fprintf(where,"was asked to close socket %d\n",toclose);
+  if (debug) {
+    g_fprintf(where,"was asked to close socket %d\n",toclose);
+  }
 #ifdef G_OS_WIN32
   closesocket(toclose);
 #else
@@ -695,7 +697,9 @@ gboolean  accept_connection(GIOChannel *source,
   global_state_t *global_state;
   guint   watch_id;
 
-  g_fprintf(where,"accepting a new connection\n");
+  if (debug) {
+    g_fprintf(where,"accepting a new connection\n");
+  }
 
   global_state = data;
 
@@ -974,7 +978,7 @@ main(int argc, char **argv)
   int i;
   struct sockaddr name;
   netperf_socklen_t namelen = sizeof(name);
-  SOCKET sock, listen_sock;
+  SOCKET listen_sock;
 
   guint  watch_id;
   GOptionContext *option_context;
@@ -1025,8 +1029,11 @@ main(int argc, char **argv)
   }
 
   /* if we daemonize, we will not be returning, and we will be
-     starting a whole new instance of this binary, because that is what
-     g_spawn_async_with_pipes() does. */
+     starting a whole new instance of this binary, because that is
+     what g_spawn_async_with_pipes() does. i'm rather confident that
+     this needs to be moved after the check for inetd - to make things
+     more robust when folks forget to add --nodaemonize to the
+     argument list in the inetd config file. raj 2006-08-24 */
   if (want_daemonize) {
     daemonize(orig_argc,orig_argv);
   }
@@ -1039,12 +1046,11 @@ main(int argc, char **argv)
   if (getsockname(0, &name, &namelen) == 0) {
     /* we are a child of inetd or the like */
     need_setup = FALSE;
-    sock = 0;
+    control_socket = 0;
   }
   else if (getsockname(control_socket, &name, &namelen) == 0) {
     /* we were spawned by a parent netserver */
     need_setup = FALSE;
-    sock = control_socket;
   }
   else {
     need_setup = TRUE;
@@ -1156,6 +1162,11 @@ main(int argc, char **argv)
   else {
     /* we used to call handle_netperf_requests(sock); here, now we use
        the loop, luke... */
+
+    if (debug) {
+      fprintf(where,"control_socket is %d\n",control_socket);
+      fflush(where);
+    }
 
 #ifdef G_OS_WIN32
     control_channel = g_io_channel_win32_new_socket(control_socket);
