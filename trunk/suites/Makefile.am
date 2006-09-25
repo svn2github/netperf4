@@ -7,6 +7,9 @@ endif
 if WANT_VST
   VST_OPT = vst
 endif
+if WANT_MULTI
+  MULTI_OPT = multi
+endif
 
-SUBDIRS =  $(DNS_OPT) $(DISK_OPT) $(VST_OPT)
+SUBDIRS =  $(DNS_OPT) $(DISK_OPT) $(VST_OPT) $(MULTI_OPT)
 

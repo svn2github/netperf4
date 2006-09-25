@@ -130,7 +130,6 @@ char    nettest_id[]="\
 #endif
 
 #include "netperf.h"
-#include "netlib.h"
 
 #include "nettest_bsd.h"
 
@@ -306,7 +305,6 @@ wait_to_die(test_t *test)
 
 
 
-#ifdef notdef
 static void
 dump_addrinfo(FILE *dumploc, struct addrinfo *info,
               xmlChar *host, xmlChar *port, int family)
@@ -345,7 +343,6 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
   fflush(dumploc);
 }
 
-#endif
 
 #ifdef notdef
 static int
@@ -3704,7 +3701,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(test_set->where,"\txmit_trans_rate = %7g\t%7g\n",
             xmit_trans_rate, test_cntr[TST_X_TRANS]);
     fprintf(test_set->where,"\trecv_trans_rate = %7g\t%7g\n",
-            recv_trans_rate, test_cntr[TST_X_TRANS]);
+            recv_trans_rate, test_cntr[TST_R_TRANS]);
     fflush(test_set->where);
   }
   if (rd->sd_denominator == 0.0) {

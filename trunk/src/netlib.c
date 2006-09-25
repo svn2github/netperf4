@@ -1776,9 +1776,9 @@ establish_listen(char *hostname, char *service, int af, netperf_socklen_t *addrl
   count = 0;
   do {
     error = getaddrinfo(hostname,
-                           service,
-                           &hints,
-                           &res);
+			service,
+			&hints,
+			&res);
     count += 1;
     if (error == EAI_AGAIN) {
       if (debug) {

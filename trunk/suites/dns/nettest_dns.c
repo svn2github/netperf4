@@ -143,11 +143,7 @@ char    nettest_dns_id[]="\
 #endif
 
 static void
-report_test_failure(test, function, err_code, err_string)
-  test_t *test;
-  char   *function;
-  int     err_code;
-  char   *err_string;
+report_test_failure(test_t *test, char *function, int err_code, char *err_string)
 {
   if (test->debug) {
     fprintf(test->where,"%s: called report_test_failure:",function);
@@ -2000,7 +1996,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(test_set->where,"\txmit_trans_rate = %7g\t%7g\n",
             xmit_trans_rate, test_cntr[TST_X_TRANS]);
     fprintf(test_set->where,"\trecv_trans_rate = %7g\t%7g\n",
-            recv_trans_rate, test_cntr[TST_X_TRANS]);
+            recv_trans_rate, test_cntr[TST_R_TRANS]);
     fflush(test_set->where);
   }
   if (rd->sd_denominator == 0.0) {

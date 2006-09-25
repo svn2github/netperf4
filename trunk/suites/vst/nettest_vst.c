@@ -2497,7 +2497,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(test_set->where,"\txmit_trans_rate = %7g\t%7g\n",
             xmit_trans_rate, test_cntr[TST_X_TRANS]);
     fprintf(test_set->where,"\trecv_trans_rate = %7g\t%7g\n",
-            recv_trans_rate, test_cntr[TST_X_TRANS]);
+            recv_trans_rate, test_cntr[TST_R_TRANS]);
     fflush(test_set->where);
   }
   if (rd->sd_denominator == 0.0) {

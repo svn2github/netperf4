@@ -130,6 +130,35 @@ AC_ARG_WITH(glib,
 	[AS_HELP_STRING([--with-glib],
 	[in the future will show where/how to include glib])])
 
+AM_PATH_GLIB_2_0(2.4.0,,AC_MSG_ERROR([
+*** GLIB >= 2.4 is required to build netperf4; please make sure you have
+*** the development headers installed. The latest version of GLIB is
+*** always available at ftp://ftp.gnome.org/pub/gnome/sources/glib/.]),
+   gthread gobject gmodule)
+
+if test ${no_glib}x = yesx
+then
+  AC_MSG_ERROR([Cannot find glib. Check config.log])
+fi
+
+### --------------------------------------------------------------------------
+### Gnome XML -- GNOME_XML_LIB is defined by GNOME_XML_CHECK
+#
+#GNOME_XML_CHECK
+#GNOME_XML_CFLAGS=`$GNOME_CONFIG --cflags xml`
+#AS_SCRUB_INCLUDE(GNOME_XML_CFLAGS)
+#
+#AC_SUBST(GNOME_XML_CFLAGS)
+#
+#oLIBS="$LIBS"
+#LIBS="$LIBS $GNOME_XML_LIB"
+#AC_CHECK_LIB(xml, xmlElemDump, [:], [
+#  AC_MSG_ERROR([libxml 1.8.3 or newer required])
+#  ])
+#LIBS="$oLIBS"
+
+
+
 pkg_config_cflags=""
 pkg_config_libs_l=""
 pkg_config_libs_L=""
@@ -224,7 +253,40 @@ fi
 
 AM_CONDITIONAL([WANT_DNS], [test "$use_dns" = true])
 
-# see if we should be enabling dns support
+# see if we should be enabling multi-connection support
+
+AC_MSG_CHECKING(whether to include multi-connection support)
+
+AC_ARG_ENABLE(multi,
+	[AS_HELP_STRING([--enable-multi],
+	[build the multiple connection performance test suite]) ])
+
+case "$enable_multi" in
+	yes)
+		use_multi=true
+		;;
+	no)
+		use_multi=false
+		;;
+	'')
+		# whatever
+		use_multi=false
+		;;
+	*)
+		AC_MSG_ERROR([--enable-multi takes yes or no])
+		;;
+esac
+
+if $use_multi
+then
+	AC_MSG_RESULT(yes)
+else
+	AC_MSG_RESULT(no)
+fi
+
+AM_CONDITIONAL([WANT_MULTI], [test "$use_multi" = true])
+
+# see if we should be enabling disk support
 
 AC_MSG_CHECKING(whether to include disk support)
 
@@ -747,6 +809,7 @@ AC_CONFIG_FILES([Makefile
 		 suites/dns/Makefile
 		 suites/disk/Makefile
 		 suites/vst/Makefile
+		 suites/multi/Makefile
 		 netperf-config])
 
 AC_OUTPUT
