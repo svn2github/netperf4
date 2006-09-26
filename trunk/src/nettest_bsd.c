@@ -630,7 +630,8 @@ create_data_socket(test)
 
   if (test->debug) {
     fprintf(test->where,
-            "%s: calling socket family = %d type = %d\n",
+            "%s:%s: calling socket family = %d type = %d\n",
+	    __FILE__,
             __func__, family, type);
     fflush(test->where);
   }
@@ -649,8 +650,10 @@ create_data_socket(test)
 
   if (test->debug) {
     fprintf(test->where,
-            "%s: socket %d obtained...\n",
-            __func__, temp_socket);
+            "%s:%s: socket %d obtained...\n",
+	    __FILE__,
+            __func__,
+	    temp_socket);
     fflush(test->where);
   }
 
@@ -679,7 +682,9 @@ create_data_socket(test)
     }
     if (test->debug > 1) {
       fprintf(test->where,
-              "nettest_bsd: create_data_socket: SO_SNDBUF of %d requested.\n",
+              "%s:%s: SO_SNDBUF of %d requested.\n",
+	      __FILE__,
+	      __func__,
               lss_size);
       fflush(test->where);
     }
@@ -696,7 +701,8 @@ create_data_socket(test)
     }
     if (test->debug > 1) {
       fprintf(test->where,
-              "nettest_bsd: %s: SO_RCVBUF of %d requested.\n",
+              "%s: %s: SO_RCVBUF of %d requested.\n",
+	      __FILE__,
               __func__, lsr_size);
       fflush(test->where);
     }
@@ -713,8 +719,9 @@ create_data_socket(test)
                  (char *)&lss_size,
                  &sock_opt_len) < 0) {
     fprintf(test->where,
-        "nettest_bsd: %s: getsockopt SO_SNDBUF: errno %d\n",
-        __func__, errno);
+	    "%s: %s: getsockopt SO_SNDBUF: errno %d\n",
+	    __FILE__,
+	    __func__, errno);
     fflush(test->where);
     lss_size = -1;
   }
@@ -724,14 +731,16 @@ create_data_socket(test)
                  (char *)&lsr_size,
                  &sock_opt_len) < 0) {
     fprintf(test->where,
-        "nettest_bsd: %s: getsockopt SO_RCVBUF: errno %d\n",
-        __func__, errno);
+	    "%s: %s: getsockopt SO_RCVBUF: errno %d\n",
+	    __FILE__,
+	    __func__, errno);
     fflush(test->where);
     lsr_size = -1;
   }
   if (test->debug) {
     fprintf(test->where,
-            "nettest_bsd: %s: socket sizes determined...\n",
+            "%s: %s: socket sizes determined...\n",
+	    __FILE__,
             __func__);
     fprintf(test->where,
             "                       send: %d recv: %d\n",
@@ -759,7 +768,8 @@ create_data_socket(test)
                    &loc_rcvavoid,
                    sizeof(int)) < 0) {
       fprintf(test->where,
-              "nettest_bsd: %s: Could not enable receive copy avoidance",
+              "%s: %s: Could not enable receive copy avoidance",
+	      __FILE__,
               __func__);
       fflush(test->where);
       loc_rcvavoid = 0;
@@ -778,7 +788,8 @@ create_data_socket(test)
                    &loc_sndavoid,
                    sizeof(int)) < 0) {
       fprintf(test->where,
-              "nettest_bsd: %s: Could not enable send copy avoidance\n",
+              "%s: %s: Could not enable send copy avoidance\n",
+	      __FILE__,
               __func__);
       fflush(test->where);
       loc_sndavoid = 0;
@@ -804,7 +815,8 @@ create_data_socket(test)
                   (char *)&one,
                   sizeof(one)) < 0) {
       fprintf(test->where,
-              "nettest_bsd: %s: nodelay: errno %d\n",
+              "%s: %s: nodelay: errno %d\n",
+	      __FILE__,
               __func__, errno);
       fflush(test->where);
     }
@@ -1053,7 +1065,7 @@ void
 bsd_test_decode_stats(xmlNodePtr stats,test_t *test)
 {
   if (test->debug) {
-    fprintf(test->where,"bsd_test_decode_stats: entered for %s test %s\n",
+    fprintf(test->where,"%s: entered for %s test %s\n",__func__,
             test->id, test->test_name);
     fflush(test->where);
   }
@@ -1072,7 +1084,9 @@ bsd_test_get_stats(test_t *test)
   bsd_data_t *my_data = GET_TEST_DATA(test);
 
   if (test->debug) {
-    fprintf(test->where,"bsd_test_get_stats: entered for %s test %s\n",
+    fprintf(test->where,
+	    "%s: entered for %s test %s\n",
+	    __func__,
             test->id, test->test_name);
     fflush(test->where);
   }
@@ -1450,7 +1464,8 @@ send_tcp_stream_preinit(test_t *test)
     my_data->s_data = create_data_socket(test);
   }
   else {
-    fprintf(test->where,"entered send_tcp_stream_preinit more than once\n");
+    fprintf(test->where,"entered %s more than once\n",
+	    __func__);
     fflush(test->where);
   }
 }
@@ -3548,7 +3563,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
   if (output) {
     if (test_set->debug) {
       fprintf(test_set->where,
-              "bsd_test_results_init: report going to file %s\n",
+              "%s: report going to file %s\n",
+	      __func__,
               output);
       fflush(test_set->where);
     }
@@ -3557,7 +3573,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
   else {
     if (test_set->debug) {
       fprintf(test_set->where,
-              "report_bsd_test_results: report going to file stdout\n");
+              "%s: report going to file stdout\n",
+	      __func__);
       fflush(test_set->where);
     }
     outfd = stdout;
@@ -3608,7 +3625,8 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
   else {
     /* could not allocate memory can't generate report */
     fprintf(outfd,
-            "bsd_test_results_init: malloc failed can't generate report\n");
+            "%s: malloc failed can't generate report\n",
+	    __func__);
     fflush(outfd);
     exit(-1);
   }
