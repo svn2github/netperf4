@@ -1,0 +1,15 @@
+# default: off
+# description: An netperf4 server. 
+# This is the tcp version.
+service netperf4
+{
+	disable		= no
+	socket_type	= stream
+	protocol	= tcp
+	user		= root
+	wait		= no
+	server		= /opt/netperf4/bin/netserver
+	server_args     = --nodaemonize --nospawn
+}                                                                               
+
+# There is no udp version.

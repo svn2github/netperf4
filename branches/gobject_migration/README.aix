@@ -1,0 +1,49 @@
+Pseudo-random things about netperf on AIX:
+
+Netperf4 can be compiled under AIX 5.3 at least, using rpms from:
+
+http://gnome.bullfreeware.com/new_index.html
+
+to satisfy the dependencies on pkg-config, libxml2 and glib.  The
+versions used were:
+
+pkg-config-0.19-2
+gettext-0.10.40-5
+glib2-2.8.1-2
+glib2-devel-2.8.1-2
+intltool-0.34.1-1
+zlib-1.2.3-1
+libxml2-2.6.21-1
+zlib-devel-1.2.3-1
+libxml2-devel-2.6.21-1
+
+To successfully compile netperf, one should set "CC" to xlc prior
+to running the configure script:
+
+CC=xlc ./configure
+
+otherwise, there will be problems with some of the glib include 
+files.  Also, it will be necessary to copy "netlib_none.c" and 
+"netsysstats_none.c" to "perfstat" versions or make will become cross.
+At least until AIX-specific versions of those files are produced.
+
+The version of the compiler used was:
+
+# what `which xlc`
+/usr/vac/bin/xlc:
+        61      1.14  src/bos/usr/ccs/lib/libc/__threads_init.c, libcthrd, bos510 7/11/00 12:04:14
+         IBM XL C/C++ Enterprise Edition V7.0 
+         5724-I11 
+         Licensed Materials - Property of IBM 
+         IBM XL C/C++ Enterprise Edition V7.0 
+         5724-I11 
+         (C) Copyright IBM Corp. 1990, 2004, and by others. All Rights Reserved. 
+         IBM is a trademark or registered trademark of International Business Machines Corp. in the U.S., 
+         other countries or both. 
+         US Government Users Restricted Rights - Use, duplication or disclosure 
+         restricted by GSA ADP Schedule Contract with IBM Corp. 
+         Version: 07.00.0000.0000  
+         Level: 040805, 2004/08/05 18:40:13 
+
+As of this writing, netperf was generating a core file when trying 
+to process the results of a BSD test.

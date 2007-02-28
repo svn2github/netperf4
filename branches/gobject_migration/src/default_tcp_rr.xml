@@ -1,0 +1,23 @@
+<?xml version="1.0" standalone="no" ?>
+<!DOCTYPE commands SYSTEM "http://www.netperf.org/netperf_docs.dtd/1.0" >
+<commands xmlns="http://www.netperf.org/ns/netperf">
+<!-- 20 second TCP_RR test -->
+  <create_test_set set_name="s0" tests_in_set="t0,t3,t4" />
+  <create_test_set set_name="s1" tests_in_set="t0,t3" />
+  <create_test_set set_name="s2" tests_in_set="t0,t4" />
+  <wait tid="s0" />
+  <load tid="s0" />
+  <wait tid="s0" />
+  <measure tid="s0" />
+  <wait tid="s0" seconds="20" />
+  <load tid="s0" />
+  <wait tid="s0" />
+  <get_stats tid="t0" />
+  <get_stats tid="t3" />
+  <get_stats tid="t4" />
+  <idle tid="s0" />
+  <wait tid="s0" />
+  <report_stats test_set="s1" 
+     library="nettest_bsd"
+     function="report_bsd_test_results" />
+</commands>

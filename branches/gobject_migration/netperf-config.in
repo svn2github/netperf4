@@ -1,0 +1,94 @@
+#! /bin/sh
+#
+# The idea to this kind of setup info script was stolen from numerous
+# other packages, such as neon, libxml, gnome and curl.
+#
+# $Id$
+#
+
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+includedir=@includedir@
+libdir=@libdir@
+
+usage()
+{
+    cat <<EOF
+Usage: netperf-config [OPTION]
+
+Known values for OPTION are:
+
+  --cc                  display the compiler used
+  --cflags		print pre-processor and compiler flags
+  --exec-prefix         display netperf exec prefix 
+  --help		display this help and exit
+  --libdir              display netperf's libdir
+  --libs		print library linking information
+  --modules		module support enabled (TBD)
+  --prefix              display the netperf prefix
+  --version		output version information
+EOF
+
+    exit $1
+}
+
+if test $# -eq 0; then
+    usage 1
+fi
+
+cflags=false
+libs=false
+
+while test $# -gt 0; do
+    case "$1" in
+    -*=*) optarg=`echo "$1" | sed 's/[-_a-zA-Z0-9]*=//'` ;;
+    *) optarg= ;;
+    esac
+
+    case "$1" in
+    --cc)
+        echo "@CC@"
+        ;;
+
+    --prefix)
+	echo $prefix
+	;;
+
+    --libdir)
+        echo $libdir
+	;;
+
+    --exec-prefix)
+      echo $exec_prefix
+      ;;
+
+    --version)
+	echo @VERSION@
+	exit 0
+	;;
+
+    --help)
+	usage 0
+	;;
+
+    --cflags)
+       	echo -I@includedir@ @CFLAGS@
+       	;;
+
+    --modules)
+       	echo @WITH_MODULES@
+       	;;
+
+    --libs)
+        echo -L@libdir@ @LDFLAGS@ @LIBS@
+        ;;
+
+    *)
+	usage
+	exit 1
+	;;
+    esac
+    shift
+done
+
+exit 0

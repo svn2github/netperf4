@@ -1,0 +1,33 @@
+TARGETNAME=netserver
+TARGETPATH=OBJ
+TARGETTYPE=PROGRAM
+
+LINKLIBS= \
+	$(SDK_LIB_PATH)\kernel32.lib \
+	$(SDK_LIB_PATH)\ws2_32.lib \
+	$(SDK_LIB_PATH)\wsock32.lib \
+	..\..\glib-2.8.6\lib\glib-2.0.lib \
+	..\..\glib-2.8.6\lib\gobject-2.0.lib \
+	..\..\glib-2.8.6\lib\gmodule-2.0.lib \
+	..\..\glib-2.8.6\lib\gthread-2.0.lib \
+	..\..\libxml2-2.6.23.win32\lib\libxml2.lib
+
+USE_CRTDLL=1
+UMTYPE=console
+
+INCLUDES=$(SDK_INC_PATH);.;..\..\include;..\..\libxml2-2.6.23.win32\include;..\..\iconv-1.9.1.win32\include;..\..\glib-2.8.6\include\glib-2.0;..\..\glib-2.8.6\lib\glib-2.0\include
+
+386_STDCALL=0
+
+MSC_WARNING_LEVEL=/W3 /WX
+
+C_DEFINES=$(C_DEFINES) -D_CONSOLE_ -DNETPERFDIR="\"foo\"" -DLIBDIR="\"bar\"" -DHAVE_CONFIG_H  -DHAVE_GETADDRINFO -DHAVE_GETNAMEINFO -DSTDC_HEADERS
+
+SOURCES= \
+        ..\netlib_windows.c \
+	..\netlib.c \
+	..\netconfidence.c \
+	..\netmsg.c \
+	inet_ntop.c \
+	..\netserver.c
+

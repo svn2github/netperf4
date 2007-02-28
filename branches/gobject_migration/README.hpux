@@ -1,0 +1,45 @@
+This version of netperf4 depends on libxml-2.0, glib-2.0 and
+pkg-config, and their dependencies.  Feel free to grab them from their
+respective homes and compile them on your system, or if you do not
+feel like spending the better part of a day compiling stuff, you can
+grab depots from http://hpux.connect.org.uk/ Be sure to grab all the
+dependencies.
+
+If you do not feel like spending an hour or so downloading individual
+depots from http://hpux.connect.org.uk/ and installing them piecemiel,
+as a convenience, a gzipped tar file of a directory depot with all the
+netperf4 dependencies, and their dependencies can be retrieved via:
+
+ftp://ftp.netperf.org/netperf/netperf4_hpux_dependencies.tar.gz
+
+or
+
+ftp://ftp.cup.hp.com/dist/networking/benchmarks/netperf/netperf4_hpux_dependencies.tar.gz
+
+You should unzip the tar file and extract it - a directory called
+netperf4_hpoux_dependencies will be created.  From swinstall, select
+the full path to that directory as the source and install everything.
+
+The versions in those tar files are "known to work" but you should
+feel free to try newer versions if you so choose.  However, the
+maintainers of netperf4 reserve the right to ask you to try
+back-reving those packages if you run into problems :)
+
+You will notice that a "libgcc" is one of the dependencies.  This
+stems from the folks at http://hpux.connect.org.uk/ deciding to
+compile the packages with gcc rather than HP ANSI C.  However, thanks
+to some workarounds in the neperf4 configure script, you can still use
+HP ANSI C to compile netperf4.  In fact, that is what is done inside
+HP.  Afterall, "portable" code is code that can be compiled by more
+than one compiler...
+
+If you consider it "odd" that software being ported to HP-UX would be
+compiled with gcc rather than the HP compilers, feel free to voice
+that to the librarian at http://hpux.connect.org.uk/
+
+The configure script will try to use a command called pkg-config to
+get the appropriate compiler and linker switches to include libxml2
+and glib. Often this is in /usr/local/bin and /usr/local/bin is not
+always in one's PATH variable.  So, it may be necessary to include
+/usr/local/lib in the PATH variable before running the configure
+script.

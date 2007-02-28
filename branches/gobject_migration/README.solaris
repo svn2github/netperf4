@@ -1,0 +1,31 @@
+An initial port of netperf to Solaris 10 has been completed, using
+the "null" files for CPU affinity and CPU utilization.  Later work
+will focus on getting "native" versions of those files into the mix.
+
+Netperf4's glib-2.0 dependency is not satisfied by the bits provided
+by Sun as they are old enough to not have the gstdio.h include.
+
+An attempt to use packages from sunfreeware was unsuccessful as their
+glib seems to be missing the glibconfig.h file, or puts it in some 
+obscure place.
+
+The attempt to use packages from blastwave.org was successful.  The
+glib-2.0, libxml2 and pkgconfig packages were used.  It is possible
+the libxml2 bits provided with the OS would suffice, but the author
+did not want to try to figure-out how to use glib-2.0 from one set of 
+packages and libxml2 from another.  One little issue though was the 
+gmodule-2.0.pc file from blastwave.org had a "blank" Cflags: entry which 
+appears to annoy pkg-config.  This was addressed by taking the Cflags:
+entry from glib-2.0.pc and sticking that into gmodule-2.0.pc (all in the CSW
+versions of course...)
+
+The configuration command used was:
+
+CC="cc" CFLAGS="-D_REENTRANT" ./configure --prefix=/opt/netperf4
+
+while the PATH was:
+
+/opt/csw/bin:/usr/sbin:/usr/bin:/usr/sfw/bin:/opt/SUNWspro/bin:/usr/ccs/bin
+
+cc was selected over gcc - an initial attempt to compile with gcc seems
+to have led to ld errors - perhaps not using the correct ld.
