@@ -140,6 +140,7 @@ extern FILE * where;
 extern test_hash_t test_hash[TEST_HASH_BUCKETS];
 extern tset_hash_t test_set_hash[TEST_SET_HASH_BUCKETS];
 
+extern GHashTable *server_hash;
 
 HIST
 HIST_new(void){
@@ -2179,13 +2180,12 @@ read_n_available_bytes(GIOChannel *source, gchar *data, gsize n, gsize *bytes_re
 /* given a buffer with a complete control message, XML parse it and
    then send it on its way. */
 gboolean
-xml_parse_control_message(gchar *message, gsize length, gpointer data, GIOChannel *source) {
+xml_parse_control_message(gchar *message, gsize length) {
   
   xmlDocPtr xml_message;
   int rc = NPE_SUCCESS;
   gboolean ret;
-  server_t *netperf;
-  global_state_t *global_state = data;
+  NetperfNetserver *netserver;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -2207,24 +2207,43 @@ xml_parse_control_message(gchar *message, gsize length, gpointer data, GIOChanne
 		message,
 		xml_message);
     }
+#ifdef notdef
+    /* we used to see if this was the first message on the control
+       connection, which was related to this routine being used only
+       by netserver.c and not netperf.c et al.  we will have to
+       figure-out something else to do in that case. */
     /* was this the first message on the control connection? */
     if (global_state->first_message) {
       allocate_netperf(source,xml_message,data);
       global_state->first_message = FALSE;
     }
+#endif
+    /* extract the netserver id from the to portion of the message */
+    key = xmlGetProp(xml_message, (const xmlChar *)"tonid");
 
-    /* lookup its destination and send it on its way. we are
-       ass-u-me-ing that there is only one netperf to be found, which
-       ultimately may not be correct so don't forget to come back here
-       then... */
-    netperf = global_state->server_hash[0].server;
-    /* mutex locking is not required because only one netserver thread
-       looks at these data structures per sgb */
-    rc = process_message(netperf,xml_message);
-    if (rc == NPE_SUCCESS) 
+    if (NULL != key) {
+      /* lookup its destination and send it on its way. we need to be
+	 certain that netserver.c has added a suitable entry to a
+	 netperf_netserver_hash like netperf.c does. */
+      
+      netserver = g_hash_table_lookup(server_hash,key);
+
+      /* should this be a signal sent to the netserver object, a
+	 method we invoke, or a property we attempt to set? I suspect
+	 just about any of those would actually work, question is
+	 which to use? if we start with either a signal or a property
+	 we won't be dereferencing anything from the object pointer
+	 here which I suppose is a good thing. REVISIT we used to call
+	 a routine called process_message with a pointer to the server
+	 structure and a pointer to the message */
+      g_signal_emit_by_name(netserver,"new-message",xml_message);
+      /* REVISIT this - should we have a return value from the signal?
+	 */
       ret = TRUE;
-    else
+    }
+    else {
       ret = FALSE;
+    }
   }
   else {
     if (debug) {

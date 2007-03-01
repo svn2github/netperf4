@@ -168,15 +168,15 @@ pkg_config_other_libs=""
     PKG_PROG_PKG_CONFIG()
 
     pkg_config_cflags=`$PKG_CONFIG --cflags-only-I \
-			libxml-2.0 glib-2.0 gmodule-2.0 gthread-2.0`
+		libxml-2.0 glib-2.0 gmodule-2.0 gthread-2.0 gobject-2.0`
     pkg_config_other_cflags=`$PKG_CONFIG --cflags-only-other \
-			libxml-2.0 glib-2.0 gmodule-2.0 gthread-2.0`
+		libxml-2.0 glib-2.0 gmodule-2.0 gthread-2.0 gobject-2.0`
     pkg_config_libs_L=`$PKG_CONFIG  --libs-only-L \
-			libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0`
+		libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0 gobject-2.0`
     pkg_config_libs_l=`$PKG_CONFIG  --libs-only-l \
-			libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0`
+		libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0 gobject-2.0`
     pkg_config_other_libs=`$PKG_CONFIG  --libs-only-other \
-			libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0`
+		libxml-2.0 glib-2.0 gmodule-2.0  gthread-2.0 gobject-2.0`
 
 echo
 echo "OTHER CFLAGS" $pkg_config_other_cflags
