@@ -1,6 +1,7 @@
 #SUBDIRS = suites
 
-bin_PROGRAMS = netperf4 netserver
+#bin_PROGRAMS = netperf4 netserver
+bin_PROGRAMS = netperf4
 
 AM_CFLAGS = $(NETPERF_CFLAGS)
 AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$(netperfdir)\""
@@ -17,10 +18,10 @@ EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd n
 
 # some of the other include files are actually up in include/
 COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
-FOO_SRC = netperf-netserver.c netperf-netserver.h netperf-control.h netperf-control.c netperf-test.c netperf-test.h
+FOO_SRC = netperf-netserver.c netperf-netserver.h netperf-control.h netperf-control.c netperf-test.c netperf-test.h netlib4.c
 
 netperf4_SOURCES = netperf4.c $(FOO_SRC) $(USE_NETLIB_SOURCE)
-netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
+#netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
 netperf4dir = @datadir@/netperf
 netperf4_DATA = netperf_docs.dtd default_commands.xml default_config.xml
@@ -38,11 +39,11 @@ netsysstats_la_LDFLAGS = -module
 
 # if there are any "missing" routines, the libobjs should cover it
 netperf4_LDADD = @LIBOBJS@
-netserver_LDADD = @LIBOBJS@
+#netserver_LDADD = @LIBOBJS@
 
 # so far, it does not appear we need this in netserver
 netperf4_LDFLAGS = -rpath $(libdir) -export-dynamic
-netserver_LDFLAGS = -rpath $(libdir) -export-dynamic
+#netserver_LDFLAGS = -rpath $(libdir) -export-dynamic
 
 missing/getaddrinfo.o: $(srcdir)/missing/getaddrinfo.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getaddrinfo.c

@@ -1,22 +1,29 @@
 #ifndef NETPERF_TEST_H
 #define NETPERF_TEST_H
+
+/* one school of thought says this should be up in all the .c's which
+   include this .h, another says this should be here. */
+#include <glib-object.h>
+
 /* declarations to provide us with a Test object to be used by
    netperf4's GObject conversion */
 
+/* there may be some conflicts with object macros if we spell-out
+   NETPERF_test so we shorten things a bit. */
 typedef enum netperf_test_state {
-  TEST_PREINIT,
-  TEST_INIT,
-  TEST_IDLE,
-  TEST_LOADED,
-  TEST_MEASURE,
-  TEST_ERROR,
-  TEST_DEAD
-} test_state_t;
+  NP_TST_PREINIT,
+  NP_TST_INIT,
+  NP_TST_IDLE,
+  NP_TST_LOADED,
+  NP_TST_MEASURE,
+  NP_TST_ERROR,
+  NP_TST_DEAD
+} netperf_test_state_t;
 
-typedef void      *(*TestFunc)(void *test_data);
-typedef void      *(*TestDecode)(void *statistics);
-typedef int        (*TestClear)(void *test_info);
-typedef void      *(*TestStats)(void *test_data);
+typedef void      *(*NetperfTestFunc)(void *test_data);
+typedef void      *(*NetperfTestDecode)(void *statistics);
+typedef int        (*NetperfTestClear)(void *test_info);
+typedef void      *(*NetperfTestStats)(void *test_data);
 
 /* first the instance structure. this will look remarkably like the
    old test_t structure. */
@@ -43,29 +50,29 @@ typedef struct _NetperfTest {
 
   FILE   *where;     /* where should that output go? */
 
-  test_state_t  state;     /* the state netperf or netserver believes
+  netperf_test_state_t  state;     /* the state netperf or netserver believes
 			      the test instance to be in at the
 			      moment.  only changed by netperf or
 			      netserver  */
 
-  test_state_t  new_state; /* the state the test is currently in.
+  netperf_test_state_t  new_state; /* the state the test is currently in.
 			      this field is modified by the test when
 			      it has transitioned to a new state. */
 
-  test_state_t  state_req; /* the state to which the test has been
+  netperf_test_state_t  state_req; /* the state to which the test has been
 			      requested to transition. this field is
 			      monitored by the the test thread and
 			      when the field is changed the test takes
 			      action and changes its state. */
 
   gint          err_rc;    /* error code received which caused this
-			      server to enter the TEST_ERROR state */
+			      server to enter the NETPERF_TEST_ERROR state */
 
   gchar        *err_fn;    /* name of the routine which placed this
-			     server into the TEST_ERROR state*/
+			     server into the NETPERF_TEST_ERROR state*/
 
   char        *err_str;     /* character string which reports the
-			       error causing entry to the TEST_ERROR
+			       error causing entry to the NETPERF_TEST_ERROR
 			       state. */
 
   int        err_no;        /* The errno returned by the failing
@@ -92,25 +99,25 @@ typedef struct _NetperfTest {
                                   test-specific routines was
                                   opened. */
 
-  TestFunc   test_func;        /* the function pointer returned by
+  NetperfTestFunc   test_func;        /* the function pointer returned by
                                   dlsym for the test_name
                                   function. This function is launched
                                   as a thread to initialize the
                                   test. */
   
-  TestClear  test_clear;       /* the function pointer returned by
+  NetperfTestClear  test_clear;       /* the function pointer returned by
                                   dlsym for the test_clear
                                   function. the function clears all
                                   statistics counters. */
   
-  TestStats  test_stats;       /* the function pointer returned by
+  NetperfTestStats  test_stats;       /* the function pointer returned by
                                   dlsym for the test_stats
                                   function. this function reads all
                                   statistics counters for the test and
                                   returns an xml statistics node for
                                   the test. */
   
-  TestDecode test_decode;      /* the function pointer returned by
+  NetperfTestDecode test_decode;      /* the function pointer returned by
                                   dlsym for the test_decode
                                   function. this function is called by
                                   netperf to decode, accumulate, and
@@ -136,7 +143,11 @@ typedef struct _NetperfTest {
 
   /* we probably need/want some sort of list of test objects which
      depend upon us so we will be able to signal them that their
-     dependecies have been met */
+     dependecies have been met. probably need to use some sort of
+     "weak" object pointer rather than just the object pointer and a
+     strong object reference? */
+
+  GList *dependent_tests;
 
 } NetperfTest;
 

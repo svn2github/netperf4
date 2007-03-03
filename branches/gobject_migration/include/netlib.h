@@ -69,11 +69,13 @@ delete this exception statement from your version.
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+#include "netperf-test.h"
+#include "netperf-netserver.h"
 
 extern  void delete_test(const xmlChar *id);
 extern  test_t * find_test_in_hash(const xmlChar *id);
-extern  void report_test_status(test_t *test);
-extern  void report_servers_test_status(server_t *server);
+extern  void report_test_status(NetperfTest *test);
+extern  void report_servers_test_status(NetperfNetserver *server);
 extern  GenReport get_report_function(xmlNodePtr cmd);
 extern  const char * netperf_error_name(int rc);
 extern  char * npe_to_str(int npe_error);
@@ -108,14 +110,14 @@ extern void dump_addrinfo(FILE *dumploc, struct addrinfo *info,
 			  xmlChar *host, xmlChar *port, int family);
 extern SOCKET establish_control(xmlChar *hostname,  xmlChar *port, int remfam,
 			     xmlChar *localhost, xmlChar *localport, int locfam);
-extern int get_test_function(test_t *test, const xmlChar *func);
-extern int add_test_to_hash(test_t *new_test);
+extern int get_test_function(NetperfTest *test, const xmlChar *func);
+extern int add_test_to_hash(NetperfTest *new_test);
 extern int write_to_control_connection(GIOChannel *channel, 
 				       xmlNodePtr body,
 				       xmlChar *nid,
 				       const xmlChar *fromnid);
 extern int32_t recv_control_message(SOCKET control_sock, xmlDocPtr *message);
-extern void report_server_error(server_t *server);
+extern void report_server_error(NetperfNetserver *server);
 extern int launch_thread(GThread **tid, void *(*start_routine)(void *), void *data);
 extern void break_args_explicit(char *s, char *arg1, char *arg2);
 extern int parse_address_family(char family_string[]);

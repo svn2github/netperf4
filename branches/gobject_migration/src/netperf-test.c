@@ -10,7 +10,9 @@ enum {
   TEST_PROP_TEST_FUNC,
   TEST_PROP_TEST_CLEAR,
   TEST_PROP_TEST_STATS,
-  TEST_PROP_TEST_DECODE
+  TEST_PROP_TEST_DECODE,
+  TEST_PROP_TEST_ADD_DEPENDANT,
+  TEST_PROP_TEST_DEL_DEPENDANT
 };
 
 /* some forward declarations to make the compiler happy regardless of
@@ -34,14 +36,14 @@ enum {
   CONTROL_CLOSED,     /* this would be the control connection object
 			 telling us the controll connection died. */
   DEPENDENCY_MET,     /* we receive this when the test on which we are
-			 dependent has finished initializing */
+			 dependant has finished initializing */
   LAST_SIGNAL         /* this should always be the last in the list so
 			 we can use it to size the array correctly. */
 };
 
 static void netperf_test_new_message(NetperfTest *test, gpointer message);
 static void netperf_test_control_closed(NetperfTest *test);
-static void netperf_test_dependcy_met(NetperfTest *test);
+static void netperf_test_dependency_met(NetperfTest *test);
 
 /* a place to stash the id's returned by g_signal_new should we ever
    need to refer to them by their ID. */ 
@@ -85,6 +87,8 @@ static void netperf_test_class_init(NetperfTestClass *klass)
   GParamSpec *test_clear_param;
   GParamSpec *test_stats_param;
   GParamSpec *test_decode_param;
+  GParamSpec *test_add_dependant_param;
+  GParamSpec *test_del_dependant_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -92,23 +96,23 @@ static void netperf_test_class_init(NetperfTestClass *klass)
   g_object_class = G_OBJECT_CLASS(klass);
 
   /* we might create GParamSpec descriptions for properties here */
+  req_state_param = 
+    g_param_spec_uint("req-state", /* identifier */
+		      "requested state", /* longer name */
+		      "desired state of the test", /* description */
+		      NP_TST_PREINIT, /* min value */
+		      NP_TST_DEAD,    /* max value */
+		      NP_TST_PREINIT, /* def value */
+		      G_PARAM_READWRITE); 
+
   state_param = 
     g_param_spec_uint("state", /* identifier */
 		      "test state", /* longer name */
 		      "currentstate of the test",
-		      TEST_PREINIT, /* min value */
-		      TEST_DEAD,    /* max value */
-		      TEST_PREINIT, /* dev value */
+		      NP_TST_PREINIT, /* min value */
+		      NP_TST_DEAD,    /* max value */
+		      NP_TST_PREINIT, /* def value */
 		      G_PARAM_READABLE); /* should this be read only? */
-  req_state_param = 
-    g_param_spec_uint("req-state", /* identifier */
-		      "requested state", /* longer name */
-		      "desired state of the test", /* description
-							   */
-		      TEST_PREINIT, /* min value */
-		      TEST_DEAD,    /* max value */
-		      TEST_PREINIT, /* def value */
-		      G_PARAM_READWRITE); 
 
   id_param = 
     g_param_spec_string("id",         /* identifier */
@@ -141,6 +145,24 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 			 "the function which decode, accumulate and report stats",
 			 G_PARAM_READWRITE);
 
+  test_add_dependant_param =
+    g_param_spec_pointer("add_dependant",
+			 "add dependant test",
+			 "add this test object to the list of dependant tests",
+			 G_PARAM_READWRITE); /* should this be just
+						WRITABLE? */
+
+  /* if we go with a weak pointer reference then we probably don't
+     need/want a delete property, but if we simply keep a pointer to
+     the test instance then we do */
+  test_del_dependant_param =
+    g_param_spec_pointer("del_dependant",
+			 "delete dependant test",
+			 "delete this test object from the list of dependant tests",
+			 G_PARAM_READWRITE); /* should this be just
+						WRITABLE? */
+
+  
   /* overwrite the base object methods with our own get and set
      property routines */
 
@@ -176,12 +198,21 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 				  TEST_PROP_TEST_DECODE,
 				  test_decode_param);
 
+  g_object_class_install_property(g_object_class,
+				  TEST_PROP_TEST_ADD_DEPENDANT,
+				  test_add_dependant_param);
+
+  g_object_class_install_property(g_object_class,
+				  TEST_PROP_TEST_DEL_DEPENDANT,
+				  test_del_dependant_param);
+
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
      perhaps the cotnrol connection going down or somesuch. */
 
   klass->new_message = netperf_test_new_message;
   klass->control_closed = netperf_test_control_closed;
+  klass->dependency_met = netperf_test_dependency_met;
 
   netperf_test_signals[NEW_MESSAGE] = 
     g_signal_new("new_message",            /* signal name */
@@ -245,7 +276,7 @@ static void netperf_test_control_closed(NetperfTest *test)
   return;
 }
 
-/* we are sent this signal when the test on whichwe are dependent has
+/* we are sent this signal when the test on which we are dependant has
    finished its initialization, which means we can get our dependency
    data */ 
 static void netperf_test_dependency_met(NetperfTest *test)
@@ -300,6 +331,14 @@ static void netperf_test_set_property(GObject *object,
     test->test_decode = g_value_get_pointer(value);
     break;
 
+  case TEST_PROP_TEST_ADD_DEPENDANT:
+    g_print("Yo, add the code to add a dependant!\n");
+    break;
+
+  case TEST_PROP_TEST_DEL_DEPENDANT:
+    g_print("Yo, add the code to delete a dependant!\n");
+    break;
+
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;
@@ -345,6 +384,12 @@ static void netperf_test_get_property(GObject *object,
     g_value_set_pointer(value, test->test_decode);
     break;
 
+    /* it doesn't seem to make much sense to have "get" for add/del a
+       dependant test so we will let those fall-through to the default
+       case */
+
+  case TEST_PROP_TEST_ADD_DEPENDANT:
+  case TEST_PROP_TEST_DEL_DEPENDANT:
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;

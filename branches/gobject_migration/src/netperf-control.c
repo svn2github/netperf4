@@ -293,6 +293,22 @@ handle_control_connection_eof(GIOChannel *source, NetperfControl *control_object
   return(FALSE);
 }
 
+gboolean
+handle_control_connection_error(GIOChannel *source, gpointer data) {
+  /* not sure exactly how to handle things here - a simple
+     g_main_loop_quit() may not be indicated */
+#ifdef notdef
+  global_state_t *global_state;
+
+  global_state = data;
+
+  /* for now, it is rather simple - cause the mainloop to exit which
+     may take quite a bit with it... */
+  g_main_loop_quit(global_state->loop);
+#endif
+
+  return(FALSE);
+}
 
 gboolean
 read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data) {

@@ -157,7 +157,8 @@ target_cpu = @target_cpu@
 target_os = @target_os@
 target_vendor = @target_vendor@
 
-bin_PROGRAMS = netperf4 netserver
+#bin_PROGRAMS = netperf4 netserver
+bin_PROGRAMS = netperf4
 
 AM_CFLAGS = $(NETPERF_CFLAGS)
 AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$(netperfdir)\""
@@ -174,11 +175,11 @@ EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd n
 
 # some of the other include files are actually up in include/
 COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
-FOO_SRC = netperf-netserver.c netperf-netserver.h netperf-control.h netperf-control.c netperf-test.c netperf-test.h
+FOO_SRC = netperf-netserver.c netperf-netserver.h netperf-control.h netperf-control.c netperf-test.c netperf-test.h netlib4.c
 
 netperf4_SOURCES = netperf4.c $(FOO_SRC) $(USE_NETLIB_SOURCE)
-netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
+#netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 netperf4dir = @datadir@/netperf
 netperf4_DATA = netperf_docs.dtd default_commands.xml default_config.xml
 
@@ -195,11 +196,10 @@ netsysstats_la_LDFLAGS = -module
 
 # if there are any "missing" routines, the libobjs should cover it
 netperf4_LDADD = @LIBOBJS@
-netserver_LDADD = @LIBOBJS@
+#netserver_LDADD = @LIBOBJS@
 
 # so far, it does not appear we need this in netserver
 netperf4_LDFLAGS = -rpath $(libdir) -export-dynamic
-netserver_LDFLAGS = -rpath $(libdir) -export-dynamic
 subdir = src
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -214,35 +214,27 @@ netsysstats_la_OBJECTS = $(am_netsysstats_la_OBJECTS)
 nettest_bsd_la_LIBADD =
 am_nettest_bsd_la_OBJECTS = nettest_bsd.lo
 nettest_bsd_la_OBJECTS = $(am_nettest_bsd_la_OBJECTS)
-bin_PROGRAMS = netperf4$(EXEEXT) netserver$(EXEEXT)
+bin_PROGRAMS = netperf4$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
 
 am__objects_2 = netperf-netserver.$(OBJEXT) netperf-control.$(OBJEXT) \
-	netperf-test.$(OBJEXT)
+	netperf-test.$(OBJEXT) netlib4.$(OBJEXT)
 am__objects_3 = netlib_@NETSYS_SOURCE@.$(OBJEXT)
 am_netperf4_OBJECTS = netperf4.$(OBJEXT) $(am__objects_2) \
 	$(am__objects_3)
 netperf4_OBJECTS = $(am_netperf4_OBJECTS)
 netperf4_DEPENDENCIES = @LIBOBJS@
-am__objects_4 = netlib.$(OBJEXT) netmsg.$(OBJEXT) \
-	netconfidence.$(OBJEXT)
-am_netserver_OBJECTS = netserver.$(OBJEXT) $(am__objects_4) \
-	$(am__objects_3)
-netserver_OBJECTS = $(am_netserver_OBJECTS)
-netserver_DEPENDENCIES = @LIBOBJS@
 
 DEFAULT_INCLUDES =  -I. -I$(srcdir) -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 @AMDEP_TRUE@DEP_FILES = $(DEPDIR)/missing/getaddrinfo.Po \
 @AMDEP_TRUE@	$(DEPDIR)/missing/inet_ntop.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netconfidence.Po ./$(DEPDIR)/netlib.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/netlib4.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netmsg.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netperf-control.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netperf-netserver.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netperf-test.Po ./$(DEPDIR)/netperf4.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netserver.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_common.Plo \
 @AMDEP_TRUE@	./$(DEPDIR)/nettest_bsd.Plo
@@ -254,12 +246,12 @@ CCLD = $(CC)
 LINK = $(LIBTOOL) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
 DIST_SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) \
-	$(netperf4_SOURCES) $(netserver_SOURCES)
+	$(netperf4_SOURCES)
 DATA = $(netperf4_DATA)
 
 DIST_COMMON = $(srcdir)/Makefile.in Makefile.am missing/getaddrinfo.c \
 	missing/inet_ntop.c
-SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(netperf4_SOURCES) $(netserver_SOURCES)
+SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(netperf4_SOURCES)
 
 all: all-am
 
@@ -334,9 +326,6 @@ clean-binPROGRAMS:
 netperf4$(EXEEXT): $(netperf4_OBJECTS) $(netperf4_DEPENDENCIES) 
 	@rm -f netperf4$(EXEEXT)
 	$(LINK) $(netperf4_LDFLAGS) $(netperf4_OBJECTS) $(netperf4_LDADD) $(LIBS)
-netserver$(EXEEXT): $(netserver_OBJECTS) $(netserver_DEPENDENCIES) 
-	@rm -f netserver$(EXEEXT)
-	$(LINK) $(netserver_LDFLAGS) $(netserver_OBJECTS) $(netserver_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT) core *.core
@@ -346,15 +335,12 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getaddrinfo.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/inet_ntop.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netconfidence.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib4.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netmsg.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf-control.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf-netserver.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf4.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netserver.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_bsd.Plo@am__quote@
@@ -602,6 +588,7 @@ uninstall-am: uninstall-binPROGRAMS uninstall-info-am \
 	uninstall-am uninstall-binPROGRAMS uninstall-info-am \
 	uninstall-libLTLIBRARIES uninstall-netperf4DATA
 
+#netserver_LDFLAGS = -rpath $(libdir) -export-dynamic
 
 missing/getaddrinfo.o: $(srcdir)/missing/getaddrinfo.c
 	$(COMPILE) -o $@ -c $(srcdir)/missing/getaddrinfo.c

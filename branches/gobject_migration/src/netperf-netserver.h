@@ -1,5 +1,8 @@
 #ifndef NETPERF_NETSERVER_H
 #define NETPERF_NETSERVER_H
+
+#include <glib-object.h>
+
 /* declarations to provide us with a Netserver object to be used by
    netperf4's GObject conversion */
 
