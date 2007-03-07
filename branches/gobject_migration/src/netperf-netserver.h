@@ -3,6 +3,10 @@
 
 #include <glib-object.h>
 
+#include <libxml/xmlmemory.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+
 /* declarations to provide us with a Netserver object to be used by
    netperf4's GObject conversion */
 
@@ -17,10 +21,23 @@ typedef enum netperf_netserver_state {
   NETSERVER_EXIT
 } netserver_state_t;
 
+/* state machine data structure for process message */
+
+typedef struct _NetperfNetserver NetperfNetserver;
+typedef struct _NetperfNetserverClass NetperfNetserverClass;
+
+typedef int (*netperf_msg_func_t)(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server);
+
+struct netperf_msgs {
+  char *msg_name;
+  netperf_msg_func_t msg_func;
+  unsigned int valid_states;
+};
+
 /* first the instance structure. this will look remarkably like the
    old netserver_t structure. */
 
-typedef struct _NetperfNetserver {
+struct _NetperfNetserver {
   /* the parent object - in this case a GObject object */
   GObject parent_instance;
 
@@ -51,14 +68,24 @@ typedef struct _NetperfNetserver {
   char        *err_fn;   /* name of the routine which placed this
 			    server into the NETSERVER_ERROR state*/
 
+  struct netperf_msgs *message_state_table; /* a pointer to the table
+					      of the various messages,
+					      the routine to call and
+					      the states in which
+					      that message is
+					      valid. there will be one
+					      main one for a netperf
+					      and one for a netserver
+					      */
+
   /* do we need to have references to the test instances associated
      with this netserver instance? */
-} NetperfNetserver;
+};
 
 /* second, the class structure, which is where we will put any method
    functions we wish to have and any signals we wish to define */
 
-typedef struct _NetperfNetserverClass {
+struct _NetperfNetserverClass {
   /* the parent class, matching what we do with the instance */
   GObjectClass parent_class;
 
@@ -67,7 +94,7 @@ typedef struct _NetperfNetserverClass {
   void (*control_closed)(NetperfNetserver *netserver);
 
   /* methods */
-} NetperfNetserverClass;
+};
 
 
 GType netperf_netserver_get_type (void);
