@@ -42,4 +42,17 @@ get the appropriate compiler and linker switches to include libxml2
 and glib. Often this is in /usr/local/bin and /usr/local/bin is not
 always in one's PATH variable.  So, it may be necessary to include
 /usr/local/lib in the PATH variable before running the configure
-script.
+script. Also PKG_CONFIG_PATH may need to be set so pkg-config knows
+where to search for dependency *.pc files.  These files are located
+in the /usr/local/lib/hpux32/pkgconfig directory on HPUX.
+
+glib-2.0 will generate compile errors because GNUC was used to generate it.
+The file /usr/local/lib/hpux32/glib-2.0/include/glibconfig.h must be modified
+undefine G_HAVE_INLINE  and  undefine G_HAVE___INLINE__
+or several glib include files will not compile correctly with the HPUX ansiC
+compiler.  glibconfig.h is included by gtypes.h which is included by many
+different glib include files.
+
+libxml2.so has 2 unresolved symbols __divsi3 and __modsi3.
+
+
