@@ -2033,7 +2033,9 @@ establish_control(xmlChar *hostname,
     } else {
       /* the connect call failed */
       if (debug) {
-        fprintf(where, "establish_control: connect failed, errno %d\n",errno);
+        fprintf(where,
+                "establish_control: connect failed, errno %d\n",
+                GET_ERRNO);
         fprintf(where, "    trying next address combination\n");
         fflush(where);
       }
@@ -2652,8 +2654,9 @@ recv_control_message(SOCKET control_sock, xmlDocPtr *message)
 			  &timeout)) != 1) {
       if (debug) {
         fprintf(where,
-                "recv_control_message: select error or timeout. errno %d counter %d\n",
-                errno,
+                "%s: select error or timeout. errno %d counter %d\n",
+                __func__,
+                GET_ERRNO,
                 counter);
         fflush(where);
       }
@@ -2666,9 +2669,10 @@ recv_control_message(SOCKET control_sock, xmlDocPtr *message)
                        0);
     if (bytes_recvd < 0) {
       fprintf(where,
-              "Unexpected byte count on control message of %d errno %d\n",
+              "%s: Unexpected byte count on control message of %d errno %d\n",
+              __func__,
               bytes_recvd,
-              errno);
+              GET_ERRNO);
       fflush(where);
       return(NPE_NEG_MSG_BYTES);
     }
@@ -2728,8 +2732,9 @@ recv_control_message(SOCKET control_sock, xmlDocPtr *message)
 			  &timeout)) != 1) {
       if (debug) {
         fprintf(where,
-                "recv_control_message: select error or timeout on message body. errno %d counter %d\n",
-                errno,
+                "%s: select error or timeout on message body. errno %d counter %d\n",
+                __func__,
+                GET_ERRNO,
                 counter);
         fflush(where);
       }
@@ -2742,9 +2747,10 @@ recv_control_message(SOCKET control_sock, xmlDocPtr *message)
     if (bytes_recvd < 0) {
       if (debug) {
         fprintf(where,
-                "Unexpected byte count on control message of %d errno %d\n",
+                "%s: Unexpected byte count on control message of %d errno %d\n",
+                __func__,
                 bytes_recvd,
-                errno);
+                GET_ERRNO);
         fflush(where);
       }
       return(NPE_NEG_MSG_BYTES);

@@ -102,6 +102,7 @@ typedef struct  bsd_test_data {
   int   recv_width;
   int   req_size;
   int   rsp_size;
+  int   multi_queue;
 
   /* data structures for UDP RR packet loss detection and retransmission. */
   int    retry_index;

@@ -714,8 +714,8 @@ gboolean  accept_connection(GIOChannel *source,
     g_fprintf(where,
 	      "%s: accept failed errno %d %s\n",
 	      __func__,
-	      errno,
-	      strerror(errno));
+	      GET_ERRNO,
+	      strerror(GET_ERRNO));
     fflush(where);
     exit(-1);
   }
@@ -768,6 +768,9 @@ gboolean  accept_connection(GIOChannel *source,
 			      read_from_control_connection,
 			      data);
     g_fprintf(where,"added watch id %d\n",watch_id);
+    g_timeout_add(1000,
+                  (GSourceFunc)check_test_state_callback,
+                  data);
   }
 
   return(TRUE);

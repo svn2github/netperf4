@@ -897,6 +897,7 @@ static void *initialize_test(void *data);
 static int
 resolve_dependency(xmlChar *id, xmlNodePtr *data)
 {
+  int              loop_count;
   int              rc = NPE_DEPENDENCY_NOT_PRESENT;
   int              hash_value;
   test_t          *test;
@@ -937,13 +938,16 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
       } /* end of test initilization */
 #endif
       /* wait for test to initialize */
+      loop_count = 0;
       while (test->state == TEST_PREINIT) {
         NETPERF_MUTEX_UNLOCK(h->hash_lock);
-        if (debug > 1) {
+        if ((debug) && (loop_count == 0)) {
           fprintf(where,
-                  "resolve_dependency: waiting on test %s\n",
+                  "%s: waiting on test %s\n",
+                  (char *)__func__,
                   (char *)id);
           fflush(where);
+          loop_count++;
         }
 
         NETPERF_MUTEX_LOCK(h->hash_lock);
@@ -952,6 +956,13 @@ resolve_dependency(xmlChar *id, xmlNodePtr *data)
 	g_time_val_add(&abstime,1000);
 	g_cond_timed_wait(h->condition, h->hash_lock, &abstime);
       }  /* end wait */
+      if ((debug) && (loop_count > 0)) {
+        fprintf(where,
+                "%s: nolonger waiting on test %s\n",
+                (char *)__func__,
+                (char *)id);
+        fflush(where);
+      }
       
       /* test has reached at least the TEST_INIT state */
       if (test->state != TEST_ERROR) {

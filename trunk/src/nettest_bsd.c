@@ -139,10 +139,14 @@ char    nettest_id[]="\
 #define CHECK_FOR_INVALID_SOCKET (temp_socket == INVALID_SOCKET)
 #define CHECK_FOR_RECV_ERROR(len) (len == SOCKET_ERROR)
 #define GET_ERRNO WSAGetLastError()
+#define CHECK_FOR_EADDRINUSE (GET_ERRNO == WSAEADDRINUSE)
+#define CHECK_FOR_EADDRNOTAVAIL (GET_ERRNO == WSAEADDRNOTAVAIL)
 #else
 #define CHECK_FOR_INVALID_SOCKET (temp_socket < 0)
 #define CHECK_FOR_RECV_ERROR(len) (len < 0)
 #define GET_ERRNO errno
+#define CHECK_FOR_EADDRINUSE (GET_ERRNO == EADDRINUSE)
+#define CHECK_FOR_EADDRNOTAVAIL (GET_ERRNO == EADDRNOTAVAIL)
 #endif
 
 
@@ -195,6 +199,32 @@ char    nettest_id[]="\
     if (my_data->retry_array != NULL) { \
       my_data->retry_array[buffer_ptr[0]] = NULL; \
       my_data->pending_responses--; \
+    }
+#endif
+
+#if !defined(WANT_SET_QUEUE)
+  #define SET_QUEUE   /* multiqueue binding goes here */
+#else
+  #define SET_QUEUE \
+    if (test) { \
+      /* code to establish HPUX multiqueue binding */ \
+      int          len; \
+      bsd_data_t  *my_data; \
+      my_data = GET_TEST_DATA(test); \
+      if (my_data->multi_queue) { \
+        if ((len=send(my_data->s_data, \
+                      my_data->recv_ring->buffer_ptr, \
+                      1, \
+                      0)) != 1) { \
+          /* this macro hides windows differences */ \
+          if (CHECK_FOR_SEND_ERROR(len)) { \
+            report_test_failure(test, \
+                                (char *)__func__, \
+                                BSDE_DATA_SEND_ERROR, \
+                                "data send_error"); \
+          } \
+        } \
+      } \
     }
 #endif
 
@@ -344,6 +374,58 @@ dump_addrinfo(FILE *dumploc, struct addrinfo *info,
 }
 
 
+static int
+get_port_number(struct addrinfo *res)
+{
+ int port;
+ switch(res->ai_family) {
+  case AF_INET: {
+    struct sockaddr_in *foo = (struct sockaddr_in *)res->ai_addr;
+    port = ntohs(foo->sin_port);
+    break;
+  }
+#if defined(AF_INET6)
+  case AF_INET6: {
+    struct sockaddr_in6 *foo = (struct sockaddr_in6 *)res->ai_addr;
+    port = ntohs(foo->sin6_port);
+    break;
+  }
+#endif
+  default:
+    port = -1;
+    break;
+  }
+  return (port);
+}
+
+/* this routine will set the port number of the sockaddr in the
+   addrinfo to the specified value, based on the address family */
+void
+set_port_number(test_t *test, struct addrinfo *res, unsigned short port)
+{
+  switch(res->ai_family) {
+  case AF_INET: {
+    struct sockaddr_in *foo = (struct sockaddr_in *)res->ai_addr;
+    foo->sin_port = htons(port);
+    break;
+  }
+#if defined(AF_INET6)
+  case AF_INET6: {
+    struct sockaddr_in6 *foo = (struct sockaddr_in6 *)res->ai_addr;
+    foo->sin6_port = htons(port);
+    break;
+  }
+#endif
+  default:
+    fprintf(test->where,
+            "%s: Unexpected Address Family of %u\n",
+            __func__,
+            res->ai_family);
+    fflush(test->where);
+  }
+}
+
+
 #ifdef notdef
 static int
 strtofam(xmlChar *familystr)
@@ -365,6 +447,7 @@ strtofam(xmlChar *familystr)
   }
 }
 #endif
+
 
 static void
 get_dependency_data(test_t *test, int type, int protocol)
@@ -721,7 +804,7 @@ create_data_socket(test)
     fprintf(test->where,
 	    "%s: %s: getsockopt SO_SNDBUF: errno %d\n",
 	    __FILE__,
-	    __func__, errno);
+	    __func__, GET_ERRNO);
     fflush(test->where);
     lss_size = -1;
   }
@@ -733,7 +816,7 @@ create_data_socket(test)
     fprintf(test->where,
 	    "%s: %s: getsockopt SO_RCVBUF: errno %d\n",
 	    __FILE__,
-	    __func__, errno);
+	    __func__, GET_ERRNO);
     fflush(test->where);
     lsr_size = -1;
   }
@@ -817,7 +900,7 @@ create_data_socket(test)
       fprintf(test->where,
               "%s: %s: nodelay: errno %d\n",
 	      __FILE__,
-              __func__, errno);
+              __func__, GET_ERRNO);
       fflush(test->where);
     }
 
@@ -923,6 +1006,14 @@ bsd_test_init(test_t *test, int type, int protocol)
     }
     else {
       new_data->port_max = -1;
+    }
+
+    string =  xmlGetProp(args,(const xmlChar *)"multi_queue");
+    if (string) {
+      new_data->multi_queue = atoi((char *)string);
+    }
+    else {
+      new_data->multi_queue = 0;
     }
     
     string =  xmlGetProp(args,(const xmlChar *)"send_width");
@@ -1200,7 +1291,7 @@ recv_tcp_stream_preinit(test_t *test)
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            __func__, rc, errno);
+            __func__, rc, GET_ERRNO);
     fflush(test->where);
   }
   if (rc == -1) {
@@ -1694,6 +1785,9 @@ recv_tcp_stream(test_t *test)
       if (new_state == TEST_IDLE) {
         g_usleep(1000000);
       }
+      if (new_state == TEST_LOADED) {
+        SET_QUEUE;
+      }
       break;
     case TEST_MEASURE:
       new_state = recv_tcp_stream_meas(test);
@@ -1795,7 +1889,7 @@ recv_tcp_rr_preinit(test_t *test)
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            __func__, rc, errno);
+            __func__, rc, GET_ERRNO);
     fflush(test->where);
   }
   if (rc == -1) {
@@ -2471,6 +2565,843 @@ send_tcp_rr(test_t *test)
   } /* end of while */
   wait_to_die(test);
 } /* end of send_tcp_rr */
+
+
+
+#define BSD_TCP_CRR_TESTS
+#ifdef BSD_TCP_CRR_TESTS
+static void
+recv_tcp_crr_preinit(test_t *test)
+{
+  int               rc;
+  SOCKET           s_listen;
+  bsd_data_t       *my_data;
+  struct sockaddr   myaddr;
+  netperf_socklen_t mylen;
+
+  my_data   = GET_TEST_DATA(test);
+
+  mylen     = sizeof(myaddr);
+
+  my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
+                                            my_data->req_size,
+                                            my_data->recv_align,
+                                            my_data->recv_offset,
+                                            my_data->fill_source);
+  my_data->send_ring = allocate_buffer_ring(my_data->send_width,
+                                            my_data->rsp_size,
+                                            my_data->send_align,
+                                            my_data->send_offset,
+                                            my_data->fill_source);
+  s_listen = create_data_socket(test);
+  my_data->s_listen = s_listen;
+  if (test->debug) {
+    dump_addrinfo(test->where, my_data->locaddr,
+                  (xmlChar *)NULL, (xmlChar *)NULL, -1);
+    fprintf(test->where, 
+            "%s:create_data_socket returned %d\n", 
+            __func__, s_listen);
+    fflush(test->where);
+  }
+  rc = bind(s_listen, my_data->locaddr->ai_addr, my_data->locaddr->ai_addrlen);
+  if (test->debug) {
+    fprintf(test->where, 
+            "%s:bind returned %d  errno=%d\n", 
+            __func__, rc, GET_ERRNO);
+    fflush(test->where);
+  }
+  if (rc == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_BIND_FAILED,
+                        "data socket bind failed");
+  } 
+  else if (listen(s_listen,5) == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_LISTEN_FAILED,
+                        "data socket listen failed");
+  }
+  else if (getsockname(s_listen,&myaddr,&mylen) == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_GETSOCKNAME_FAILED,
+                        "getting the listen socket name failed");
+  } 
+  else {
+    memcpy(my_data->locaddr->ai_addr,&myaddr,mylen);
+    my_data->locaddr->ai_addrlen = mylen;
+    set_dependent_data(test);
+  }
+}
+
+static uint32_t
+recv_tcp_crr_init(test_t *test)
+{
+  SOCKET             s_data;
+  bsd_data_t       *my_data;
+  struct sockaddr   peeraddr;
+  netperf_socklen_t peerlen;
+
+  my_data   = GET_TEST_DATA(test);
+
+  peerlen   = sizeof(peeraddr);
+
+  if (test->debug) {
+    fprintf(test->where, "%s:waiting in accept\n", __func__);
+    fflush(test->where);
+  }
+  if ((s_data = accept(my_data->s_listen,
+                      &peeraddr,
+                      &peerlen)) == -1) {
+    report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_ACCEPT_FAILED,
+                        "listen socket accept failed");
+  } 
+  else {
+    if (test->debug) {
+      fprintf(test->where, 
+              "%s:accept returned successfully %d\n", 
+              __func__, s_data);
+      fflush(test->where);
+    }
+    my_data->s_data = s_data;
+  }
+  return(TEST_IDLE);
+}
+
+
+static uint32_t
+recv_tcp_crr_meas(test_t *test)
+{
+  SOCKET             s_data;
+  int                len = -1;
+  int                bytes_left;
+  char              *req_ptr;
+  uint32_t           new_state;
+  bsd_data_t        *my_data;
+  struct sockaddr    peeraddr;
+  netperf_socklen_t  peerlen;
+
+
+  HISTOGRAM_VARS;
+  my_data   = GET_TEST_DATA(test);
+
+
+  while (NO_STATE_CHANGE(test)) {
+    /* accept a connection from the remote */
+    if ((s_data = accept(my_data->s_listen,
+                        &peeraddr,
+                        &peerlen)) == -1) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_ACCEPT_FAILED,
+                          "listen socket accept failed");
+      continue;
+    }
+    else {
+      if (test->debug) {
+        fprintf(test->where,
+                "%s:accept returned successfully %d\n",
+                __func__, s_data);
+        fflush(test->where);
+      }
+      my_data->s_data = s_data;
+    }
+    /* receive the request from the other side */
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_one);
+    /* recv the request for the test */
+    req_ptr    = my_data->recv_ring->buffer_ptr;
+    bytes_left = my_data->req_size;
+    while (bytes_left > 0) {
+      len=recv(s_data,
+               req_ptr,
+               bytes_left,
+               0);
+      if (len > 0) {
+        req_ptr    += len;
+        bytes_left -= len;
+        continue;
+      }
+      else {
+        break;
+      }
+    }
+    /* this macro hides windows differences */
+    if (CHECK_FOR_RECV_ERROR(len)) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_RECV_ERROR,
+                          "data_recv_error");
+      continue;
+    }
+    if (len == 0) {
+      /* just got a data connection close break out of while loop */
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_CONNECTION_CLOSED_ERROR,
+                          "data_connection_closed_early");
+      continue;
+    }
+    /* Now, send the response to the remote */
+    if ((len=send(s_data,
+                  my_data->send_ring->buffer_ptr,
+                  my_data->rsp_size,
+                  0)) != my_data->rsp_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data_send_error");
+        continue;
+      }
+    }
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
+    my_data->stats.named.trans_received++;
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+    /* close the connection. the server will likely do a graceful */
+    /* close of the connection, insuring that all data has arrived at */
+    /* the client. for this it will call shutdown(), and then recv() and */
+    /* then close(). I'm reasonably confident that this is the */
+    /* appropriate sequence of calls - I would like to hear of */
+    /* examples in web servers to the contrary. raj 10/95*/
+#ifdef TCP_CRR_SHUTDOWN
+    shutdown(s_data, SHUT_WR);
+    recv(s_data,
+         recv_message_ptr,
+         1,
+         0);
+    close(s_data);
+#else
+    close(s_data);
+#endif /* TCP_CRR_SHUTDOWN */
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_LOADED) {
+    /* transitioning to loaded state from measure state
+       set current timestamp and update elapsed time */
+    gettimeofday(&(my_data->curr_time), NULL);
+    update_elapsed_time(my_data);
+    my_data->s_data = -1;
+  }
+  return(new_state);
+}
+
+static uint32_t
+recv_tcp_crr_load(test_t *test)
+{
+  SOCKET             s_data;
+  int                len=-1;
+  int                bytes_left;
+  char              *req_ptr;
+  uint32_t           new_state;
+  bsd_data_t        *my_data;
+  struct sockaddr    peeraddr;
+  netperf_socklen_t  peerlen;
+  int                ready;
+  fd_set             readfds;
+  struct timeval     timeout;
+
+
+  my_data   = GET_TEST_DATA(test);
+
+  FD_ZERO(&readfds);
+  FD_SET(my_data->s_listen, &readfds);
+  timeout.tv_sec  = 1;
+  timeout.tv_usec = 0;
+
+  s_data    = my_data->s_data;
+  while (NO_STATE_CHANGE(test)) {
+    if (s_data == -1) {
+      /* do a select call to ensure that the accept will not block    */
+      /* if the accept blocks the test may hang on state transitions  */
+      ready = select(my_data->s_listen+1, &readfds, NULL, NULL, &timeout);
+      if (ready == 0) {
+        FD_SET(my_data->s_listen, &readfds);
+        continue;
+      }
+      /* accept a connection from the remote */
+      if ((s_data = accept(my_data->s_listen,
+                          &peeraddr,
+                          &peerlen)) == -1) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_ACCEPT_FAILED,
+                            "listen socket accept failed");
+        continue;
+      }
+      else {
+        if (test->debug) {
+          fprintf(test->where,
+                  "%s:accept returned successfully %d\n",
+                  __func__, s_data);
+          fflush(test->where);
+        }
+      }
+    }
+    /* receive the request from the other side */
+    req_ptr    = my_data->recv_ring->buffer_ptr;
+    bytes_left = my_data->req_size;
+    while (bytes_left > 0) {
+      len=recv(s_data,
+               req_ptr,
+               bytes_left,
+               0);
+      if (len > 0) {
+        req_ptr    += len;
+        bytes_left -= len;
+        continue;
+      }
+      else {
+        break;
+      }
+    }
+    /* this macro hides windows differences */
+    if (CHECK_FOR_RECV_ERROR(len)) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_RECV_ERROR,
+                          "data_recv_error");
+      continue;
+    }
+    if (len == 0) {
+      /* just got a data connection close break out of while loop */
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_CONNECTION_CLOSED_ERROR,
+                          "data_connection_closed_early");
+      continue;
+    }
+    /* Now, send the response to the remote */
+    if ((len=send(s_data,
+                  my_data->send_ring->buffer_ptr,
+                  my_data->rsp_size,
+                  0)) != my_data->rsp_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data_send_error");
+        continue;
+      }
+    }
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+    /* close the connection. the server will likely do a graceful */
+    /* close of the connection, insuring that all data has arrived at */
+    /* the client. for this it will call shutdown(), and then recv() and */
+    /* then close(). I'm reasonably confident that this is the */
+    /* appropriate sequence of calls - I would like to hear of */
+    /* examples in web servers to the contrary. raj 10/95*/
+#ifdef TCP_CRR_SHUTDOWN
+    shutdown(s_data, SHUT_WR);
+    recv(s_data,
+         recv_message_ptr,
+         1,
+         0);
+    close(s_data);
+#else
+    close(s_data);
+#endif /* TCP_CRR_SHUTDOWN */
+    s_data = -1;
+  }
+  /* check for state transition */
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_MEASURE) {
+    /* transitioning to measure state from loaded state
+       set previous timestamp */
+    gettimeofday(&(my_data->prev_time), NULL);
+  } 
+  return(new_state);
+}
+
+
+static void
+send_tcp_crr_preinit(test_t *test)
+{
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  if (my_data->port_min == -1) {
+    my_data->port_min = 5000;
+  }
+
+  if (my_data->port_max == -1) {
+    my_data->port_max = 65535;
+  }
+
+  my_data->recv_ring = allocate_buffer_ring(my_data->recv_width,
+                                            my_data->rsp_size,
+                                            my_data->recv_align,
+                                            my_data->recv_offset,
+                                            my_data->fill_source);
+  my_data->send_ring = allocate_buffer_ring(my_data->send_width,
+                                            my_data->req_size,
+                                            my_data->send_align,
+                                            my_data->send_offset,
+                                            my_data->fill_source);
+
+  get_dependency_data(test, SOCK_STREAM, IPPROTO_TCP);
+  my_data->s_data = create_data_socket(test);
+}
+
+static uint32_t
+send_tcp_crr_init(test_t *test)
+{
+  bsd_data_t       *my_data;
+  int               myport;
+  int               rc;
+
+  my_data   = GET_TEST_DATA(test);
+
+  if (test->debug) {
+    fprintf(test->where,"%s: in INIT state making connect call\n",__func__);
+    fflush(test->where);
+  }
+
+  myport = my_data->port_min;
+  srand(getpid());
+  if (my_data->port_max - my_data->port_min) {
+    myport = my_data->port_min + 
+             (rand() % (my_data->port_max - my_data->port_min));
+  }
+  for (;;) {
+    my_data->s_data = create_data_socket(test);
+    myport++;
+    if (myport >= my_data->port_max) {
+      myport = my_data->port_min;
+    }
+    set_port_number(test, my_data->locaddr, myport);
+    rc = bind(my_data->s_data,
+              my_data->locaddr->ai_addr,
+              my_data->locaddr->ai_addrlen);
+    if (rc < 0) {
+      if (!(CHECK_FOR_EADDRINUSE || CHECK_FOR_EADDRNOTAVAIL)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_BIND_FAILED,
+                            "data socket bind failed");
+        
+        break;
+      }
+      close(my_data->s_data);
+      my_data->s_data = -1;
+      continue;
+    }
+    else {
+      rc = connect(my_data->s_data,
+                   my_data->remaddr->ai_addr,
+                   my_data->remaddr->ai_addrlen);
+      if (rc < 0) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_CONNECT_FAILED,
+                            "data socket connect failed");
+        close(my_data->s_data);
+        my_data->s_data = -1;
+      }
+      else if (test->debug) {
+        fprintf(test->where,"%s: connected and moving to IDLE\n",__func__);
+        fflush(test->where);
+      }
+      break;
+    }
+  }
+  return(TEST_IDLE);
+}
+
+
+static uint32_t
+send_tcp_crr_meas(test_t *test)
+{
+  uint32_t          new_state;
+  int               bytes_left;
+  int               len;
+  int               myport;
+  int               rc;
+  char             *rsp_ptr;
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  myport    = get_port_number(my_data->locaddr);
+
+  while (NO_STATE_CHANGE(test)) {
+    HISTOGRAM_VARS;
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    /* change the port number and get a new socket */
+    my_data->s_data = create_data_socket(test);
+    myport++;
+    if (myport >= my_data->port_max) {
+      myport = my_data->port_min;
+    }
+    set_port_number(test, my_data->locaddr, myport);
+    rc = bind(my_data->s_data,
+              my_data->locaddr->ai_addr, 
+              my_data->locaddr->ai_addrlen);
+    if (rc < 0) {
+      if (!(CHECK_FOR_EADDRINUSE || CHECK_FOR_EADDRNOTAVAIL)) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_BIND_FAILED,
+                            "data socket bind failed");
+      }
+      continue;
+    }
+    HIST_TIMESTAMP(&time_one);
+    if (connect(my_data->s_data,
+                my_data->remaddr->ai_addr,
+                my_data->remaddr->ai_addrlen) < 0) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_CONNECT_FAILED,
+                          "data socket connect failed");
+      continue;
+    }
+    /* send data for the test */
+    if((len=send(my_data->s_data,
+                 my_data->send_ring->buffer_ptr,
+                 my_data->req_size,
+                 0)) != my_data->req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                           (char *)__func__,
+                           BSDE_DATA_SEND_ERROR,
+                           "data send error");
+        continue;
+      }
+    }
+    /* recv the request for the test */
+    rsp_ptr    = my_data->recv_ring->buffer_ptr;
+    bytes_left = my_data->rsp_size;
+    while (bytes_left > 0) {
+      len = recv(my_data->s_data,
+                 rsp_ptr,
+                 bytes_left,
+                 0);
+      if (len > 0) {
+        rsp_ptr    += len;
+        bytes_left -= len;
+        continue;
+      }
+      else {
+        break;
+      }
+    }
+    /* this macro hides windows differences */
+    if (CHECK_FOR_RECV_ERROR(len)) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_RECV_ERROR,
+                          "data_recv_error");
+      continue;
+    }
+    if (len == 0) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_CONNECTION_CLOSED_ERROR,
+                          "data_connection_closed_early");
+      continue;
+    }
+    len = recv(my_data->s_data,
+               rsp_ptr,
+               1,
+               0);
+    if (CHECK_FOR_RECV_ERROR(len)) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_RECV_ERROR,
+                          "data_recv_error");
+      continue;
+    }
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    HIST_TIMESTAMP(&time_two);
+    HIST_ADD(my_data->time_hist,&time_one,&time_two);
+    my_data->stats.named.trans_sent++;
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+    CLOSE_SOCKET(my_data->s_data);
+    my_data->s_data = -1;
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_LOADED) {
+    /* transitioning to loaded state from measure state
+       set current timestamp and update elapsed time */
+    gettimeofday(&(my_data->curr_time), NULL);
+    update_elapsed_time(my_data);
+  }
+  return(new_state);
+}
+
+
+static uint32_t
+send_tcp_crr_load(test_t *test)
+{
+  uint32_t          new_state;
+  int               bytes_left;
+  int               len;
+  int               myport;
+  int               rc;
+  char             *rsp_ptr;
+  bsd_data_t       *my_data;
+
+  my_data   = GET_TEST_DATA(test);
+
+  myport    = get_port_number(my_data->locaddr);
+
+  while (NO_STATE_CHANGE(test)) {
+    /* code to make data dirty macro enabled by DIRTY */
+    MAKE_DIRTY(my_data,my_data->send_ring);
+    /* code to timestamp enabled by WANT_HISTOGRAM */
+    /* change the port number and get a new socket */
+    if (my_data->s_data == -1) {
+      my_data->s_data = create_data_socket(test);
+      myport++;
+      if (myport >= my_data->port_max) {
+        myport = my_data->port_min;
+      }
+      set_port_number(test, my_data->locaddr, myport);
+      rc = bind(my_data->s_data,
+                my_data->locaddr->ai_addr, 
+                my_data->locaddr->ai_addrlen);
+      if (rc < 0) {
+        if (!(CHECK_FOR_EADDRINUSE || CHECK_FOR_EADDRNOTAVAIL)) {
+          report_test_failure(test,
+                              (char *)__func__,
+                              BSDE_BIND_FAILED,
+                              "data socket bind failed");
+        }
+        close(my_data->s_data);
+        my_data->s_data = -1;
+        continue;
+      }
+      if (connect(my_data->s_data,
+                  my_data->remaddr->ai_addr,
+                  my_data->remaddr->ai_addrlen) < 0) {
+        report_test_failure(test,
+                            (char *)__func__,
+                            BSDE_CONNECT_FAILED,
+                            "data socket connect failed");
+        close(my_data->s_data);
+        my_data->s_data = -1;
+        continue;
+      }
+    }
+    /* send data for the test */
+    if((len=send(my_data->s_data,
+                 my_data->send_ring->buffer_ptr,
+                 my_data->req_size,
+                 0)) != my_data->req_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(test,
+                           (char *)__func__,
+                           BSDE_DATA_SEND_ERROR,
+                           "data send error");
+        continue;
+      }
+    }
+    /* recv the request for the test */
+    rsp_ptr    = my_data->recv_ring->buffer_ptr;
+    bytes_left = my_data->rsp_size;
+    while (bytes_left > 0) {
+      len = recv(my_data->s_data,
+                 rsp_ptr,
+                 bytes_left,
+                 0);
+      if (len > 0) {
+        rsp_ptr    += len;
+        bytes_left -= len;
+        continue;
+      }
+      else {
+        break;
+      }
+    }
+    /* this macro hides windows differences */
+    if (CHECK_FOR_RECV_ERROR(len)) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_RECV_ERROR,
+                          "data_recv_error");
+      continue;
+    }
+    if (len == 0) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_CONNECTION_CLOSED_ERROR,
+                          "data_connection_closed_early");
+      continue;
+    }
+    len = recv(my_data->s_data,
+               rsp_ptr,
+               1,
+               0);
+    if (CHECK_FOR_RECV_ERROR(len)) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_DATA_RECV_ERROR,
+                          "data_recv_error");
+      continue;
+    }
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+    CLOSE_SOCKET(my_data->s_data);
+    my_data->s_data = -1;
+  }
+  new_state = CHECK_REQ_STATE;
+  if (new_state == TEST_MEASURE) {
+    /* transitioning to measure state from loaded state
+       set previous timestamp */
+    gettimeofday(&(my_data->prev_time), NULL);
+  }
+  return(new_state);
+}
+
+int
+recv_tcp_crr_clear_stats(test_t *test)
+{
+  return(bsd_test_clear_stats(GET_TEST_DATA(test)));
+}
+
+
+xmlNodePtr
+recv_tcp_crr_get_stats(test_t *test)
+{
+  return( bsd_test_get_stats(test));
+}
+
+void
+recv_tcp_crr_decode_stats(xmlNodePtr stats,test_t *test)
+{
+  bsd_test_decode_stats(stats,test);
+}
+
+
+int
+send_tcp_crr_clear_stats(test_t *test)
+{
+  return(bsd_test_clear_stats(GET_TEST_DATA(test)));
+}
+
+xmlNodePtr
+send_tcp_crr_get_stats(test_t *test)
+{
+  return( bsd_test_get_stats(test));
+}
+
+void
+send_tcp_crr_decode_stats(xmlNodePtr stats,test_t *test)
+{
+  bsd_test_decode_stats(stats,test);
+}
+
+
+/* This routine implements the server-side of the TCP request/response */
+/* test (a.k.a. rr) for the sockets interface. It receives its  */
+/* parameters via the xml node contained in the test structure. */
+/* results are collected by the procedure recv_tcp_crr_get_stats */
+
+void
+recv_tcp_crr(test_t *test)
+{
+  uint32_t state, new_state;
+  bsd_test_init(test, SOCK_STREAM, IPPROTO_TCP);
+  state = GET_TEST_STATE;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+    switch(state) {
+    case TEST_PREINIT:
+      recv_tcp_crr_preinit(test);
+      new_state = TEST_INIT;
+      break;
+    case TEST_INIT:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        new_state = recv_tcp_crr_init(test);
+      }
+      break;
+    case TEST_IDLE:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        g_usleep(1000000);
+      }
+      break;
+    case TEST_MEASURE:
+      new_state = recv_tcp_crr_meas(test);
+      break;
+    case TEST_LOADED:
+      new_state = recv_tcp_crr_load(test);
+      break;
+    default:
+      break;
+    } /* end of switch */
+    set_test_state(test, new_state);
+    state = GET_TEST_STATE;
+  } /* end of while */
+  wait_to_die(test);
+} /* end of recv_tcp_crr */
+
+
+/* This routine implements the TCP request/response test */
+/* (a.k.a. rr) for the sockets interface. It receives its */
+/* parameters via the xml node contained in the test structure */
+/* output to the standard output. */
+/* results are collected by the procedure send_tcp_crr_get_stats */
+
+void
+send_tcp_crr(test_t *test)
+{
+  uint32_t state, new_state;
+  bsd_test_init(test, SOCK_STREAM, IPPROTO_TCP);
+  state = GET_TEST_STATE;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+    switch(state) {
+    case TEST_PREINIT:
+      send_tcp_crr_preinit(test);
+      new_state = TEST_INIT;
+      break;
+    case TEST_INIT:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        new_state = send_tcp_crr_init(test);
+      }
+      break;
+    case TEST_IDLE:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        g_usleep(1000000);
+      }
+      break;
+    case TEST_MEASURE:
+      new_state = send_tcp_crr_meas(test);
+      break;
+    case TEST_LOADED:
+      new_state = send_tcp_crr_load(test);
+      break;
+    default:
+      break;
+    } /* end of switch */
+    set_test_state(test, new_state);
+    state = GET_TEST_STATE;
+  } /* end of while */
+  wait_to_die(test);
+} /* end of send_tcp_crr */
+
+#endif
+/* end of BSD_TCP_CRR_TESTS */
 
 
 #define BSD_UDP_STREAM_TESTS
@@ -2508,7 +3439,7 @@ recv_udp_stream_preinit(test_t *test)
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            __func__, rc, errno);
+            __func__, rc, GET_ERRNO);
     fflush(test->where);
   }
   if (rc == -1) {
@@ -2708,7 +3639,7 @@ send_udp_stream_init(test_t *test)
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            __func__, rc, errno);
+            __func__, rc, GET_ERRNO);
     fflush(test->where);
   }
   if (rc == -1) {
@@ -2979,7 +3910,7 @@ recv_udp_rr_preinit(test_t *test)
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            __func__, rc, errno);
+            __func__, rc, GET_ERRNO);
     fflush(test->where);
   }
   if (rc == -1) {
@@ -3219,7 +4150,7 @@ send_udp_rr_init(test_t *test)
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            __func__, rc, errno);
+            __func__, rc, GET_ERRNO);
     fflush(test->where);
   }
   if (rc == -1) {
