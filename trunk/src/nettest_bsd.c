@@ -130,6 +130,7 @@ char    nettest_id[]="\
 #endif
 
 #include "netperf.h"
+#include "netlib.h"
 
 #include "nettest_bsd.h"
 
@@ -335,43 +336,6 @@ wait_to_die(test_t *test)
 
 
 
-static void
-dump_addrinfo(FILE *dumploc, struct addrinfo *info,
-              xmlChar *host, xmlChar *port, int family)
-{
-  struct sockaddr *ai_addr;
-  struct addrinfo *temp;
-  temp=info;
-
-  fprintf(dumploc, "getaddrinfo returned the following for host '%s' ", host);
-  fprintf(dumploc, "port '%s' ", port);
-  fprintf(dumploc, "family %d\n", family);
-  while (temp) {
-    fprintf(dumploc,
-            "\tcannonical name: '%s'\n",temp->ai_canonname);
-    fprintf(dumploc,
-            "\tflags: %d family: %d: socktype: %d protocol %d addrlen %d\n",
-            temp->ai_flags,
-            temp->ai_family,
-            temp->ai_socktype,
-            temp->ai_protocol,
-            temp->ai_addrlen);
-    ai_addr = temp->ai_addr;
-    if (ai_addr != NULL) {
-      fprintf(dumploc,
-              "\tsa_family: %d sadata: %d %d %d %d %d %d\n",
-              ai_addr->sa_family,
-              (u_char)ai_addr->sa_data[0],
-              (u_char)ai_addr->sa_data[1],
-              (u_char)ai_addr->sa_data[2],
-              (u_char)ai_addr->sa_data[3],
-              (u_char)ai_addr->sa_data[4],
-              (u_char)ai_addr->sa_data[5]);
-    }
-    temp = temp->ai_next;
-  }
-  fflush(dumploc);
-}
 
 
 static int
@@ -3971,8 +3935,6 @@ static uint32_t
 recv_udp_rr_meas(test_t *test)
 {
   int               len;
-  int               bytes_left;
-  char             *req_ptr;
   uint32_t          new_state;
   bsd_data_t       *my_data;
   struct sockaddr   peeraddr;
