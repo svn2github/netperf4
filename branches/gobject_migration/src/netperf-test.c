@@ -1,3 +1,47 @@
+/*
+   netperf - network-oriented performance benchmarking
+
+This file is part of netperf4.
+
+Netperf4 is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version.
+
+Netperf4 is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+USA.
+
+In addition, as a special exception, the copyright holders give
+permission to link the code of netperf4 with the OpenSSL project's
+"OpenSSL" library (or with modified versions of it that use the same
+license as the "OpenSSL" library), and distribute the linked
+executables.  You must obey the GNU General Public License in all
+respects for all of the code used other than "OpenSSL".  If you modify
+this file, you may extend this exception to your version of the file,
+but you are not obligated to do so.  If you do not wish to do so,
+delete this exception statement from your version.
+
+*/
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#ifdef HAVE_STDIO_H
+#include <stdio.h>
+#endif
+
+#ifdef HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
+
 #include <glib-object.h>
 #include <stdio.h>
 #include "netperf-test.h"
@@ -37,6 +81,8 @@ enum {
 			 telling us the controll connection died. */
   DEPENDENCY_MET,     /* we receive this when the test on which we are
 			 dependant has finished initializing */
+  LAUNCH_THREAD,      /* ask the object to launch a thread to run the
+			 actual test code */
   LAST_SIGNAL         /* this should always be the last in the list so
 			 we can use it to size the array correctly. */
 };
@@ -44,11 +90,12 @@ enum {
 static void netperf_test_new_message(NetperfTest *test, gpointer message);
 static void netperf_test_control_closed(NetperfTest *test);
 static void netperf_test_dependency_met(NetperfTest *test);
+static void netperf_test_launch_thread(NetperfTest *test);
 
 /* a place to stash the id's returned by g_signal_new should we ever
    need to refer to them by their ID. */ 
 
-static guint netperf_test_signals[LAST_SIGNAL] = {0,0};
+static guint netperf_test_signals[LAST_SIGNAL] = {0,0,0,0};
 
 GType netperf_test_get_type(void) {
   static GType netperf_test_type = 0;
@@ -213,6 +260,7 @@ static void netperf_test_class_init(NetperfTestClass *klass)
   klass->new_message = netperf_test_new_message;
   klass->control_closed = netperf_test_control_closed;
   klass->dependency_met = netperf_test_dependency_met;
+  klass->launch_thread = netperf_test_launch_thread;
 
   netperf_test_signals[NEW_MESSAGE] = 
     g_signal_new("new_message",            /* signal name */
@@ -252,6 +300,16 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 		 G_TYPE_NONE,
 		 0);
 
+  netperf_test_signals[LAUNCH_THREAD] =
+    g_signal_new("launch_thread",
+		 TYPE_NETPERF_TEST,
+		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+		 G_STRUCT_OFFSET(NetperfTestClass, launch_thread),
+		 NULL,
+		 NULL,
+		 g_cclosure_marshal_VOID__VOID,
+		 G_TYPE_NONE,
+		 0);
 }
 
 /* signal handler for new message */
@@ -287,6 +345,105 @@ static void netperf_test_dependency_met(NetperfTest *test)
 
   return;
 }
+
+
+/* this routine exists because there is no architected way to get a
+   "native" thread id out of a GThread.  we need a native thread ID to
+   allow the main netserver thread to bind a test thread to a
+   specified CPU/processor set/locality domain. so, we use the
+   launch_pad routine to allow the newly created thread to store a
+   "pthread_self" into the test structure. the netserver thread, when
+   it see's the test thread is in the idle state can then assign the
+   affinity to the thread. raj 2006-03-30 */
+
+void *
+netperf_test_launch_pad(NetperfTest *test) {
+
+  NETPERF_DEBUG_ENTRY(test->debug,test->where);
+
+#ifdef G_THREADS_IMPL_POSIX
+  /* hmm, I wonder if I have to worry about alignment */
+#ifdef _AIX
+  /* bless its heart, AIX wants its CPU binding routine to be given a
+     kernel thread ID and not a pthread id.  isn't that special. */
+  test->native_thread_id_ptr = malloc(sizeof(tid_t));
+  if (test->native_thread_id_ptr) {
+    *(tid_t *)(test->native_thread_id_ptr) = thread_self();
+  }
+  if (debug) {
+    fprintf(where,"%s my thread id is %d\n",__func__,thread_self());
+    fflush(where);
+  }
+#elif defined(__sun)
+#include <sys/lwp.h>
+  /* well, bless _its_ heart, Solaris wants something other than a
+     pthread_id for its binding calls too.  isn't that special... raj
+     2006-06-28 */
+  test->native_thread_id_ptr = malloc(sizeof(lwpid_t));
+  if (test->native_thread_id_ptr) {
+    *(lwpid_t *)(test->native_thread_id_ptr) = _lwp_self();
+  }
+  if (test->debug) {
+    fprintf(where,"%s my thread id is %d\n",__func__,_lwp_self());
+    fflush(where);
+  }
+#else
+#include <pthread.h>
+  test->native_thread_id_ptr = malloc(sizeof(pthread_t));
+  if (test->native_thread_id_ptr) {
+    *(pthread_t *)(test->native_thread_id_ptr) = pthread_self();
+  }
+  if (test->debug) {
+    fprintf(test->where,"%s my thread id is %ld\n",__func__,pthread_self());
+    fflush(test->where);
+  }
+#endif
+#else
+#ifdef __sun
+#include <sys/lwp.h>
+  /* well, bless _its_ heart, Solaris wants something other than a
+     pthread_id for its binding calls too.  isn't that special...  No,
+     your eyes are not deceiving you - this code is appearing in two
+     places because it would seem that glib-2.0 on Solaris may be
+     compiled using Sun's old threads stuff rather than pthreads. raj
+     2006-06-28 */
+  test->native_thread_id_ptr = malloc(sizeof(lwpid_t));
+  if (test->native_thread_id_ptr) {
+    *(lwpid_t *)(test->native_thread_id_ptr) = _lwp_self();
+  }
+  if (test->debug) {
+    fprintf(test->where,"%s my thread id is %d\n",__func__,_lwp_self());
+    fflush(test->where);
+  }
+#else
+  test->native_thread_id_ptr = NULL;
+#endif
+#endif
+  /* and now, call the routine we really want to run. at some point we
+     should bring those values onto the stack so we can free the
+     thread_launch_state_t I suppose. */
+  return (test->test_func)(test);
+}
+
+/* I would have used the NETPERF_THREAD_T abstraction, but that would
+   make netlib.h dependent on netperf.h and I'm not sure I want to do
+   that. raj 2006-03-02 */
+static void netperf_test_launch_thread(NetperfTest *test)
+{
+
+  g_thread_create_full(netperf_test_launch_pad,   /* what to run */
+		       test, /* what it should use */
+		       0,    /* default stack size */
+		       FALSE, /* not joinable */
+		       TRUE,  /* bound - make it system scope */
+		       G_THREAD_PRIORITY_NORMAL,
+		       NULL);
+
+  /* REVISIT we really should be checking return values here and
+     possibly setting corresponding values in the test structure on
+     failure etc. */
+}
+
 
 /* get and set property routines */
 static void netperf_test_set_property(GObject *object,

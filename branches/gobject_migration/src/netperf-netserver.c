@@ -1,11 +1,55 @@
+/*
+   netperf - network-oriented performance benchmarking
+
+This file is part of netperf4.
+
+Netperf4 is free software; you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation; either version 2 of the License, or (at your
+option) any later version.
+
+Netperf4 is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307,
+USA.
+
+In addition, as a special exception, the copyright holders give
+permission to link the code of netperf4 with the OpenSSL project's
+"OpenSSL" library (or with modified versions of it that use the same
+license as the "OpenSSL" library), and distribute the linked
+executables.  You must obey the GNU General Public License in all
+respects for all of the code used other than "OpenSSL".  If you modify
+this file, you may extend this exception to your version of the file,
+but you are not obligated to do so.  If you do not wish to do so,
+delete this exception statement from your version.
+
+*/
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <glib-object.h>
+
+#ifdef HAVE_STDIO_H
 #include <stdio.h>
+#endif
+
+#include "netperf.h"
+#include "netlib.h"
 #include "netperf-netserver.h"
+#include "netperf-test.h"
 
 /* perhaps one of these days, these should become properties of a
    NetperfNetserver? */
 extern int debug;
 extern FILE *where;
+extern GHashTable *test_hash;
 
 static int clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server);
 static int clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server);
@@ -82,7 +126,8 @@ enum {
   NETSERVER_PROP_DUMMY_0,    /* GObject does not like a zero value for a property id */
   NETSERVER_PROP_ID,
   NETSERVER_PROP_STATE,
-  NETSERVER_PROP_REQ_STATE
+  NETSERVER_PROP_REQ_STATE,
+  NETSERVER_PROP_CONTROL_CONNECTION
 };
 
 /* some forward declarations to make the compiler happy regardless of
@@ -106,7 +151,10 @@ enum {
   CONTROL_CLOSED,     /* this would be the control connection object
 			 telling us the controll connection died. */
   LAST_SIGNAL         /* this should always be the last in the list so
-			 we can use it to size the array correctly. */
+			 we can use it to size the array correctly. of
+			 course, we may never actually use the array,
+			 but the tutorial code from which we are
+			 working happened to do so... */
 };
 
 static void netperf_netserver_new_message(NetperfNetserver *netserver, gpointer message);
@@ -150,6 +198,7 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   GParamSpec *state_param;
   GParamSpec *req_state_param;
   GParamSpec *id_param;
+  GParamSpec *control_connection_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -182,6 +231,15 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
 			"unnamed",    /* default value */
 			G_PARAM_READWRITE);
 
+  control_connection_param =
+    g_param_spec_pointer("control_connection", /* used to setup a weak
+						  pointer to the
+						  control connection
+						  object */
+			 "control connection",
+			 "the control connection this netserver should use",
+			 G_PARAM_READWRITE);
+
   /* overwrite the base object methods with our own get and set
      property routines */
 
@@ -200,6 +258,10 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   g_object_class_install_property(g_object_class,
 				  NETSERVER_PROP_ID,
 				  id_param);
+
+  g_object_class_install_property(g_object_class,
+				  NETSERVER_PROP_CONTROL_CONNECTION,
+				  control_connection_param);
 
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
@@ -246,7 +308,7 @@ process_message(NetperfNetserver *server, xmlDocPtr doc)
   xmlChar *fromnid;
   xmlNodePtr msg;
   xmlNodePtr cur;
-  struct msgs *which_msg;
+  struct netperf_msgs *which_msg;
 
   NETPERF_DEBUG_ENTRY(debug,where);
 
@@ -270,7 +332,7 @@ process_message(NetperfNetserver *server, xmlDocPtr doc)
     fflush(where);
   }
   for (cur = msg->xmlChildrenNode; cur != NULL; cur = cur->next) {
-    which_msg = np_msg_handler_base;
+    which_msg = server->message_state_table;
     while (which_msg->msg_name != NULL) {
       if (xmlStrcmp(cur->name,(xmlChar *)which_msg->msg_name)) {
         which_msg++;
@@ -283,11 +345,14 @@ process_message(NetperfNetserver *server, xmlDocPtr doc)
                   rc, which_msg->msg_name);
           fflush(where);
           server->state = NSRV_ERROR;
-          if (server->sock != -1) {
-            CLOSE_SOCKET(server->sock);
+	  /* REVISIT this is where we would likely tell the control
+	     connection object that it should go away */
+	  /* some sort of object signal to the control connection, or
+	     perhaps a property set or a method invokation off of
+	     server->control_connection - after making sure it is
+	     non-NULL of course... */
             /* should we delete the server from the server_hash ? sgb */
-            break;
-          }
+	  break;
         }
       } else {
         if (debug || loc_debug) {
@@ -436,20 +501,33 @@ die_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
+  /* since this is not really the test object file, it really
+     shouldn't be accessing some of these things directly? */
   if (test != NULL) {
     if (debug) {
+      gint state,state_req = -1;
+      g_object_get(test,
+		   "state", &state,
+		   "req-state", &state_req,
+		   NULL);
       fprintf(where,"%s: tid = %s  prev_state_req = %d ",
-              __func__, testid, test->state_req);
+              __func__, testid, state_req);
       fflush(where);
     }
     test->state_req = TEST_DEAD;
+    g_object_set(test,
+		 "req-state", TEST_DEAD,
+		 NULL);
     if (debug) {
-      fprintf(where," new_state_req = %d\n",test->state_req);
+      fprintf(where,
+	      "%s requested tid %s to enter TEST_DEAD\n",
+	      __func__,
+	      testid);
       fflush(where);
     }
   }
@@ -461,11 +539,11 @@ int
 dead_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   xmlChar    *testid;
-  test_t     *test;
+  NetperfTest    *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"%s: tid = %s  prev_state_req = %d ",
@@ -488,11 +566,11 @@ error_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
   int loc_debug = 0;
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug || loc_debug) {
       fprintf(where,"error_message: prev_state_req = %d ",test->state_req);
@@ -502,7 +580,12 @@ error_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
     test->err_fn  = (char *)xmlGetProp(msg,(const xmlChar *)"err_fn");
     test->err_str = (char *)xmlGetProp(msg,(const xmlChar *)"err_str");
     test->err_no  = atoi((char *)xmlGetProp(msg,(const xmlChar *)"err_no"));
-    test->state   = TEST_ERROR;
+    /* test->state   = TEST_ERROR; the stuff above should probably be
+       using a property set too...*/
+    g_object_set(test,
+		 "req-state", TEST_ERROR,
+		 NULL);
+
     if (debug || loc_debug) {
       fprintf(where," new_state_req = %d\n",test->state_req);
       fprintf(where,"\terr in test function %s  rc = %d\n",
@@ -521,11 +604,11 @@ clear_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
-  test_t      *test;
+  NetperfTest     *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,
@@ -552,11 +635,11 @@ clear_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
-  test_t      *test;
+  NetperfTest     *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,
@@ -584,12 +667,12 @@ get_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
-  test_t      *test;
+  NetperfTest     *test;
   xmlNodePtr  stats;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"get_stats_message: test_state = %d\n",test->state);
@@ -618,12 +701,12 @@ get_sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
-  test_t      *test;
+  NetperfTest     *test;
   xmlNodePtr  sys_stats;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"%s: test_state = %d ",
@@ -653,45 +736,30 @@ np_idle_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
-  int        hash_value;
-
+  NetperfTest   *test;
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
 
-  hash_value = TEST_HASH_VALUE(testid);
+  test = g_hash_table_lookup(test_hash,(gchar *) testid);
 
-  /* don't forget to add error checking one day */
-  if (debug) {
-    fprintf(where,"np_idle_message: waiting for mutex\n");
-    fflush(where);
-  }
-  NETPERF_MUTEX_LOCK(test_hash[hash_value].hash_lock);
-
-  test = test_hash[hash_value].test;
-  while (test != NULL) {
-    if (!xmlStrcmp(test->id,testid)) {
-      /* we have a match */
-      break;
-    }
-    test = test->next;
-  }
-
+  /* REVISIT - this should use netperftest object property calls */
   if (test != NULL) {
+    gint prev_state = -1;
+    g_object_get(test,
+		 "state", &prev_state,
+		 NULL);
     if (debug) {
-      fprintf(where,"np_idle_message: prev_state = %d ",test->state);
+      fprintf(where,"%s: prev_state = %d ",__func__,test->state);
       fflush(where);
     }
-    test->state = TEST_IDLE;
-    /* I'd have liked to have abstracted this with the NETPERF_mumble
-       macros, but the return values differ. raj 2006-03-02 */
-    g_cond_broadcast(test_hash[hash_value].condition);
+    /* when we set the state to TEST_IDLE, we expect that the property
+       setting code will walk a list of dependent tests to inform them
+       of the state change of this test. */
+    g_object_set(test,
+		 "state", TEST_IDLE,
+		 NULL);
   }
-  if (debug) {
-    fprintf(where,"np_idle_message: unlocking mutex\n");
-    fflush(where);
-  }
-  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
+
   return(rc);
 }
 
@@ -700,20 +768,26 @@ idle_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"idle_message: tid = %s  prev_state_req = %d ",
               testid, test->state_req);
       fflush(where);
     }
-    test->state_req = TEST_IDLE;
+    g_object_set(test,
+		 "req-state", TEST_IDLE,
+		 NULL);
+
     if (debug) {
-      fprintf(where," new_state_req = %d\n",test->state_req);
+      fprintf(where,
+	      "%s has set the state of test %p to TEST_IDLE\n",
+	      __func__,
+	      test);
       fflush(where);
     }
   }
@@ -725,20 +799,33 @@ idled_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
-      fprintf(where,"idled_message: tid = %s  prev_state_req = %d ",
-              testid, test->state_req);
+      gint state_req = -1;
+      g_object_get(test,
+		   "req-state", &state_req,
+		   NULL);
+      fprintf(where,
+	      "%s: tid = %s  prev_state_req = %d ",
+	      __func__,
+              testid,
+	      state_req);
       fflush(where);
     }
+    g_object_set(test,
+		 "state", TEST_IDLE,
+		 NULL);
     test->state = TEST_IDLE;
     if (debug) {
-      fprintf(where," new_state_req = %d\n",test->state_req);
+      fprintf(where,
+	      "%s requested test %p enter TEST_IDLE\n",
+	      __func__,
+	      test);
       fflush(where);
     }
   }
@@ -796,7 +883,7 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
   int        rc = NPE_SUCCESS;
   xmlNodePtr dependency_data;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
   int        hash_value;
 
 
@@ -809,19 +896,7 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
     }
   }
   
-  hash_value = TEST_HASH_VALUE(testid);
-
-  /* don't forget to add error checking one day */
-  NETPERF_MUTEX_LOCK(test_hash[hash_value].hash_lock);
-
-  test = test_hash[hash_value].test;
-  while (test != NULL) {
-    if (!xmlStrcmp(test->id,testid)) {
-      /* we have a match */
-      break;
-    }
-    test = test->next;
-  }
+  test = g_hash_table_lookup(test_hash, (gchar *)testid);
 
   if (test != NULL) {
     if (debug) {
@@ -831,28 +906,40 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
     if (dependency_data != NULL) {
       test->dependent_data = xmlCopyNode(dependency_data,1);
       if (test->dependent_data != NULL) {
-        test->state = TEST_INIT;
+	g_object_set(test,
+		     "state", TEST_INIT,
+		     NULL);
       } else {
-        test->state = TEST_ERROR;
+	g_object_set(test,
+		     "state", TEST_ERROR,
+		     NULL);
         /* add additional error information later */
       }
     } else {
-      test->state = TEST_INIT;
+      g_object_set(test,
+		   "state", TEST_INIT,
+		   NULL);
     }
 
-    /* since the different cond broadcast calls return different
-       things, we cannot use the nice NETPERF_mumble abstractions. */
-
-    g_cond_broadcast(test_hash[hash_value].condition);
-
+    /* this is where there would be a netperftest property setting
+       call - above to set the state, and so no more condition
+       variable stuff */
 
     if (debug) {
-      fprintf(where," new_state = %d rc = %d\n",test->state,rc);
+      gint state = -1;
+      g_object_get(test,
+		   "state",&state,
+		   NULL);
+      fprintf(where,"%s test %p new_state = %d rc = %d\n",
+	      __func__,
+	      test,
+	      state,
+	      rc);
       fflush(where);
     }
 
   }
-  NETPERF_MUTEX_UNLOCK(test_hash[hash_value].hash_lock);
+
   return(rc);
 }
 
@@ -862,20 +949,24 @@ load_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"load_message: tid = %s  prev_state_req = %d ",
               testid, test->state_req);
       fflush(where);
     }
-    test->state_req = TEST_LOADED;
+    g_object_set(test,
+		 "req-state",TEST_LOADED,
+		 NULL);
     if (debug) {
-      fprintf(where," new_state_req = %d\n",test->state_req);
+      fprintf(where,"%s requested test %p enter state TEST_LOADED\n",
+	      __func__,
+	      test);
       fflush(where);
     }
   }
@@ -887,19 +978,23 @@ loaded_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"loaded_message: prev_state = %d ",test->state);
       fflush(where);
     }
-    test->state = TEST_LOADED;
+    g_object_set(test,
+		 "state", TEST_LOADED,
+		 NULL);
     if (debug) {
-      fprintf(where," new_state = %d\n",test->state);
+      fprintf(where,"%s requested test %p enter TEST_LOADED\n",
+	      __func__,
+	      test);
       fflush(where);
     }
   }
@@ -912,19 +1007,23 @@ measure_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"measure_message: prev_state_req = %d ",test->state_req);
       fflush(where);
     }
-    test->state_req = TEST_MEASURE;
+    g_object_set(test,
+		 "req-state", TEST_MEASURE,
+		 NULL);
     if (debug) {
-      fprintf(where," new_state_req = %d\n",test->state_req);
+      fprintf(where,"%s requested test %p enter TEST_MEASURE\n",
+	      __func__,
+	      test);
       fflush(where);
     }
   }
@@ -936,18 +1035,22 @@ measuring_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   xmlChar   *testid;
-  test_t    *test;
+  NetperfTest   *test;
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
     if (debug) {
       fprintf(where,"measuring_message: prev_state = %d ",test->state);
       fflush(where);
     }
-    test->state = TEST_MEASURE;
+    g_object_set(test,
+		 "state", TEST_MEASURE,
+		 NULL);
     if (debug) {
-      fprintf(where," new_state = %d\n",test->state);
+      fprintf(where,"%s test %p entered TEST_MEASURE state\n",
+	      __func__,
+	      test);
       fflush(where);
     }
   }
@@ -960,7 +1063,7 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int        rc = NPE_SUCCESS;
   int        rc2;
-  test_t    *new_test;
+  NetperfTest   *new_test;
   xmlNodePtr test_node;
   xmlChar   *testid;
   xmlChar   *loc_type = NULL;
@@ -985,18 +1088,18 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
       continue;
     }
     testid = xmlGetProp(test_node,(const xmlChar *)"tid");
-    new_test = (test_t *)malloc(sizeof(test_t));
-    if (new_test != NULL) { /* we have a new test_t structure */
-      memset(new_test,0,sizeof(test_t));
-      new_test->node      = test_node;
-      new_test->id        = testid;
-      new_test->server_id = server->id;
-      new_test->state     = TEST_PREINIT;
-      new_test->new_state = TEST_PREINIT;
-      new_test->state_req = TEST_IDLE;
-      new_test->debug     = debug;
-      new_test->where     = where;
-      rc = get_test_function(new_test,(const xmlChar *)"test_name");
+    new_test = g_object_new(TYPE_NETPERF_TEST,
+			    "node", test_node,
+			    "id", testid,
+			    "server_id", server->id,
+			    "state", NP_TST_PREINIT,
+			    "new_state", NP_TST_PREINIT,
+			    "req-state", NP_TST_IDLE,
+			    "debug", debug,
+			    "where", where,
+			    NULL);
+    if (new_test != NULL) { /* we have a new test_t object */
+      /* REVISIT we need to set the function pointers too */
       if (rc == NPE_SUCCESS) {
         rc = get_test_function(new_test,(const xmlChar *)"test_clear");
       }
@@ -1011,12 +1114,15 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
       rc = NPE_MALLOC_FAILED2;
     }
     if (rc == NPE_SUCCESS) {
-      rc = add_test_to_hash(new_test);
+      g_hash_table_replace(test_hash,
+			   testid,
+			   new_test);
     }
     if (rc == NPE_SUCCESS) {
       if (debug) {
         fprintf(where,
-                "test_message: launching test thread using func %p\n",
+                "%s: launching test thread using func %p\n",
+		__func__,
                 new_test->test_func);
         fflush(where);
       }
@@ -1043,10 +1149,14 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 				 where);
 	}
 
-	rc = launch_thread(&new_test->thread_id,launch_pad,launch_state);
+	/* signal the test object it is time to launch the test thread */
+	g_signal_emit_by_name(new_test,
+			      "launch_thread");
 	if (debug) {
 	  fprintf(where,
-		  "test_message: launched test thread\n");
+		  "%s: requested launch of the  test thread for test %p\n",
+		  __func__,
+		  new_test);
 	  fflush(where);
 	}
 	/* having launched the test thread, we really aught to unbind
@@ -1058,19 +1168,24 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
     }
 
     /* wait for test to initialize, then we will know that it's native
-       thread id has been set in the test_t */
+       thread id has been set in the NetperfTest. the sleep is
+       something of a kludge we should probably revisit the
+       notification mechanism at some point. perhaps we will use a
+       signal from the test object back to the netserver object. */
     if (rc == NPE_SUCCESS) {
       while (new_test->new_state == TEST_PREINIT) {
         if (debug) {
           fprintf(where,
-                  "test_message: waiting on thread\n");
+                  "%s: waiting on thread\n",
+		  __func__);
           fflush(where);
         }
         g_usleep(1000000);
       }  /* end wait */
       if (debug) {
         fprintf(where,
-                "test_message: test initialization finished on thread\n");
+                "%s: test initialization finished on thread\n",
+		__func__);
         fflush(where);
       }
     }
@@ -1085,7 +1200,25 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 	/* we use rc2 because we aren't going to fail the run if the
 	   affinity didn't work, but eventually we should emit some
 	   sort of warning */
-        rc2 = set_test_locality(new_test, (char *)loc_type, (char *)loc_value);
+	/* what sort of mechanism should we use here?  we want to have
+	   the test thread bound to a specific CPU, and the
+	   netlib_mumble.c set_thread_locality routine will want to
+	   know about the test's debug and where settings. should we
+	   set loc_type and loc_value as properties, should we pass
+	   them as a signal, or should we invoke a method? too many
+	   choices. for now we will use g_object_set to set the
+	   loc_type and loc_value, and once both those are set the
+	   test object code will make the call to
+	   set_thread_locality. however, the logic might actually be
+	   cleaner if we were to use a signal - we could pass both of
+	   them at the same time rather than the one at a time setting
+	   of a property. */
+	g_object_set(new_test,
+		     "loc_type", loc_type,
+		     "loc_value", loc_value,
+		     NULL);
+	/* and now we as the launching thread, want to go back to
+	   where we were before. */
 	rc2 = clear_own_locality((char *)loc_type,debug,where);
       }
       /* however, at this point we need to be sure to free loc_type
@@ -1103,9 +1236,12 @@ test_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
     }
 
     if (rc != NPE_SUCCESS) {
-      new_test->state  = TEST_ERROR;
-      new_test->err_rc = rc;
-      new_test->err_fn = (char *)__func__;
+      /* REVISIT - what culls this test later? */
+      g_object_set(new_test,
+		   "state", NP_TST_ERROR,
+		   "err_rc", rc,
+		   "err_fn", (char *)__func__,
+		   NULL);
       rc = NPE_TEST_INIT_FAILED;
       break;
     }
@@ -1124,11 +1260,11 @@ sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
   int          loc_debug = 0;
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
-  test_t      *test;
+  NetperfTest     *test;
   xmlNodePtr  stats = NULL;
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (debug || loc_debug) {
     fprintf(where,"sys_stats_message: test = %p\n",test);
     fflush(where);
@@ -1146,12 +1282,14 @@ sys_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
       stats = xmlCopyNode(msg,1);
       xmlAddChild(test->received_stats, stats);
       if (debug || loc_debug) {
-        fprintf(where,"sys_stats_message: stats to list %p\n",
+        fprintf(where,"%s: stats to list %p\n",
+		__func__,
                 test->received_stats->xmlChildrenNode);
         fflush(where);
       }
     }
     if (stats == NULL) {
+      /* REVISIT - this needs some g_object_set() magic */
       test->state  = TEST_ERROR;
       test->err_rc = NPE_SYS_STATS_DROPPED;
       test->err_fn = (char *)__func__;
@@ -1165,13 +1303,14 @@ test_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
 {
   int          rc = NPE_SUCCESS;
   xmlChar     *testid;
-  test_t      *test;
+  NetperfTest     *test;
   xmlNodePtr  stats = NULL;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
-  test   = find_test_in_hash(testid);
+  test   = g_hash_table_lookup(test_hash,(gchar *)testid);
   if (test != NULL) {
+    /* REVISIT this needs some g_object_get() magic */
     if (debug) {
       fprintf(where,"test_stats_message: test_state = %d\n",test->state);
       fflush(where);
@@ -1184,6 +1323,7 @@ test_stats_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
       xmlAddChild(test->received_stats, stats);
     }
     if (stats == NULL) {
+      /* REVISIT - this needs some g_object_set() magic */
       test->state  = TEST_ERROR;
       test->err_rc = NPE_TEST_STATS_DROPPED;
       test->err_fn = (char *)__func__;
@@ -1234,6 +1374,7 @@ static void netperf_netserver_set_property(GObject *object,
 					   GParamSpec *pspec) {
   NetperfNetserver *netserver;
   guint req_state;
+  void *temp_ptr;
 
   netserver = NETPERF_NETSERVER(object);
 
@@ -1250,6 +1391,11 @@ static void netperf_netserver_set_property(GObject *object,
 
   case NETSERVER_PROP_ID:
     netserver->id = g_value_dup_string(value);
+    break;
+
+  case NETSERVER_PROP_CONTROL_CONNECTION:
+    temp_ptr = g_value_get_pointer(value);
+    g_object_add_weak_pointer(temp_ptr,&(netserver->control_connection));
     break;
 
   default:
@@ -1279,6 +1425,10 @@ static void netperf_netserver_get_property(GObject *object,
 
   case NETSERVER_PROP_ID:
     g_value_set_string(value, netserver->id);
+    break;
+
+  case NETSERVER_PROP_CONTROL_CONNECTION:
+    g_value_set_pointer(value, netserver->control_connection);
     break;
 
   default:
