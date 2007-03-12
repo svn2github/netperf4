@@ -75,7 +75,7 @@ typedef struct _NetperfTest {
 			     [strong|weak] object reference  to the
 			     netserver object? */
 
-  gchar  *node;      /* the XML document node containing the servers
+  xmlNodePtr  node;      /* the XML document node containing the servers
 			configuration data */
 
   guint32  debug;    /* should the test generate debug output? */
@@ -156,17 +156,17 @@ typedef struct _NetperfTest {
                                   report statistics nodes returned by
                                   tests from this library. */
 
-  void  *received_stats;   /* a node to which all test_stats received
-			      by netperf from this test are appended
-			      as children */
+  xmlNodePtr  received_stats;   /* a node to which all test_stats
+				   received by netperf from this test
+				   are appended as children */
 
-  void  *dependent_data;   /* a pointer to test-specific things to
-			      return to the test which depends on this
-			      test */
+  xmlNodePtr  dependent_data;   /* a pointer to test-specific things
+				   to return to the test which depends
+				   on this test */
 
-  void  *dependency_data;  /* a pointer to test-specific things
-			      returned by the test on which this test
-			      is dependent */
+  xmlNodePtr  dependency_data;  /* a pointer to test-specific things
+				   returned by the test on which this
+				   test is dependent */
 
   void *test_specific_data;    /* a pointer to test-specific things -
                                   config settings for the test, places

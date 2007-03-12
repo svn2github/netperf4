@@ -42,8 +42,13 @@ delete this exception statement from your version.
 #include <stdlib.h>
 #endif
 
+#include <libxml/xmlmemory.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+
 #include <glib-object.h>
-#include <stdio.h>
+
+#include "netperf.h"
 #include "netperf-test.h"
 
 enum {
@@ -357,7 +362,9 @@ static void netperf_test_dependency_met(NetperfTest *test)
    affinity to the thread. raj 2006-03-30 */
 
 void *
-netperf_test_launch_pad(NetperfTest *test) {
+netperf_test_launch_pad(void *arg) {
+
+  NetperfTest *test = arg;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
@@ -425,9 +432,6 @@ netperf_test_launch_pad(NetperfTest *test) {
   return (test->test_func)(test);
 }
 
-/* I would have used the NETPERF_THREAD_T abstraction, but that would
-   make netlib.h dependent on netperf.h and I'm not sure I want to do
-   that. raj 2006-03-02 */
 static void netperf_test_launch_thread(NetperfTest *test)
 {
 
@@ -508,7 +512,6 @@ static void netperf_test_get_property(GObject *object,
 					   GParamSpec *pspec) {
 
   NetperfTest *test;
-  guint state;
 
   test = NETPERF_TEST(object);
 

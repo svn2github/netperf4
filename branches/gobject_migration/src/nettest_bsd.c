@@ -131,6 +131,8 @@ char    nettest_id[]="\
 
 #include "netperf.h"
 
+#include "netlib.h"
+
 #include "nettest_bsd.h"
 
 #include "netconfidence.h"
@@ -305,66 +307,6 @@ wait_to_die(test_t *test)
 
 
 
-static void
-dump_addrinfo(FILE *dumploc, struct addrinfo *info,
-              xmlChar *host, xmlChar *port, int family)
-{
-  struct sockaddr *ai_addr;
-  struct addrinfo *temp;
-  temp=info;
-
-  fprintf(dumploc, "getaddrinfo returned the following for host '%s' ", host);
-  fprintf(dumploc, "port '%s' ", port);
-  fprintf(dumploc, "family %d\n", family);
-  while (temp) {
-    fprintf(dumploc,
-            "\tcannonical name: '%s'\n",temp->ai_canonname);
-    fprintf(dumploc,
-            "\tflags: %d family: %d: socktype: %d protocol %d addrlen %d\n",
-            temp->ai_flags,
-            temp->ai_family,
-            temp->ai_socktype,
-            temp->ai_protocol,
-            temp->ai_addrlen);
-    ai_addr = temp->ai_addr;
-    if (ai_addr != NULL) {
-      fprintf(dumploc,
-              "\tsa_family: %d sadata: %d %d %d %d %d %d\n",
-              ai_addr->sa_family,
-              (u_char)ai_addr->sa_data[0],
-              (u_char)ai_addr->sa_data[1],
-              (u_char)ai_addr->sa_data[2],
-              (u_char)ai_addr->sa_data[3],
-              (u_char)ai_addr->sa_data[4],
-              (u_char)ai_addr->sa_data[5]);
-    }
-    temp = temp->ai_next;
-  }
-  fflush(dumploc);
-}
-
-
-#ifdef notdef
-static int
-strtofam(xmlChar *familystr)
-{
-  if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET")) {
-    return(AF_INET);
-  } 
-  else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_UNSPEC")) {
-    return(AF_UNSPEC);
-#ifdef AF_INET6
-  }
-  else if (!xmlStrcmp(familystr,(const xmlChar *)"AF_INET6")) {
-    return(AF_INET6);
-#endif /* AF_INET6 */
-  }
-  else {
-    /* we should never get here if the validator is doing its thing */
-    return(-1);
-  }
-}
-#endif
 
 static void
 get_dependency_data(test_t *test, int type, int protocol)
@@ -3040,8 +2982,6 @@ static uint32_t
 recv_udp_rr_meas(test_t *test)
 {
   int               len;
-  int               bytes_left;
-  char             *req_ptr;
   uint32_t          new_state;
   bsd_data_t       *my_data;
   struct sockaddr   peeraddr;

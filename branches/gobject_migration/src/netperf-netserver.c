@@ -40,6 +40,10 @@ delete this exception statement from your version.
 #include <stdio.h>
 #endif
 
+#include <libxml/xmlmemory.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+
 #include "netperf.h"
 #include "netlib.h"
 #include "netperf-netserver.h"
@@ -884,7 +888,6 @@ initialized_message(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
   xmlNodePtr dependency_data;
   xmlChar   *testid;
   NetperfTest   *test;
-  int        hash_value;
 
 
   testid = xmlGetProp(msg,(const xmlChar *)"tid");
@@ -1410,7 +1413,6 @@ static void netperf_netserver_get_property(GObject *object,
 					   GParamSpec *pspec) {
 
   NetperfNetserver *netserver;
-  guint state;
 
   netserver = NETPERF_NETSERVER(object);
 

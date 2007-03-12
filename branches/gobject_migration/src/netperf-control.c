@@ -34,6 +34,12 @@ delete this exception statement from your version.
 #include "config.h"
 #endif
 
+#ifdef HAVE_STRING_H
+#include <string.h>
+#endif
+
+#include <arpa/inet.h>
+
 #include <glib-object.h>
 #include <stdio.h>
 #include "netperf-control.h"
@@ -252,7 +258,6 @@ static void netperf_control_get_property(GObject *object,
 					   GParamSpec *pspec) {
 
   NetperfControl *control;
-  guint state;
 
   control = NETPERF_CONTROL(object);
 
