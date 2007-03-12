@@ -1029,7 +1029,7 @@ create_data_socket(test_t *test)
                  &sock_opt_len) < 0) {
     fprintf(test->where,
         "%s: %s: getsockopt SO_SNDBUF: errno %d\n",
-        __FILE__, __func__, errno);
+        __FILE__, __func__, GET_ERRNO);
     fflush(test->where);
     lss_size = -1;
   }
@@ -1040,7 +1040,7 @@ create_data_socket(test_t *test)
                  &sock_opt_len) < 0) {
     fprintf(test->where,
         "%s: %s: getsockopt SO_RCVBUF: errno %d\n",
-        __FILE__, __func__, errno);
+        __FILE__, __func__, GET_ERRNO);
     fflush(test->where);
     lsr_size = -1;
   }
@@ -1120,7 +1120,7 @@ create_data_socket(test_t *test)
                   sizeof(one)) < 0) {
       fprintf(test->where,
               "%s: %s: nodelay: errno %d\n",
-              __FILE__, __func__, errno);
+              __FILE__, __func__, GET_ERRNO);
       fflush(test->where);
     }
 
@@ -1541,7 +1541,7 @@ recv_vst_rr_preinit(test_t *test)
   if (test->debug) {
     fprintf(test->where, 
             "%s:bind returned %d  errno=%d\n", 
-            __func__, rc, errno);
+            __func__, rc, GET_ERRNO);
     fflush(test->where);
   }
   if (rc == -1) {

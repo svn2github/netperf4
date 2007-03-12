@@ -534,7 +534,7 @@ create_data_socket(test)
                  &sock_opt_len) < 0) {
     fprintf(test->where,
         "nettest_dns: create_data_socket: getsockopt SO_SNDBUF: errno %d\n",
-        errno);
+        GET_ERRNO);
     fflush(test->where);
     lss_size = -1;
   }
@@ -545,7 +545,7 @@ create_data_socket(test)
                  &sock_opt_len) < 0) {
     fprintf(test->where,
         "nettest_dns: create_data_socket: getsockopt SO_RCVBUF: errno %d\n",
-        errno);
+        GET_ERRNO);
     fflush(test->where);
     lsr_size = -1;
   }
@@ -587,7 +587,7 @@ create_data_socket(test)
                   sizeof(one)) < 0) {
       fprintf(test->where,
               "netperf: create_data_socket: nodelay: errno %d\n",
-              errno);
+              GET_ERRNO);
       fflush(test->where);
     }
 
@@ -1110,7 +1110,7 @@ send_dns_rr_init(test_t *test)
               my_data->remaddr->ai_addr,
               my_data->remaddr->ai_addrlen) < 0) {
     report_test_failure(test,
-                        __func__,
+                        (char *)__func__,
                         DNSE_CONNECT_FAILED,
                         "data socket connect failed");
   } else {
@@ -1149,7 +1149,7 @@ send_dns_rr_idle_link(test_t *test, int last_len)
        connection in TIME_WAIT when TCP connections are being used. */
     if (close(my_data->query_socket) == -1) {
       report_test_failure(test,
-			  __func__,
+			  (char *)__func__,
                           DNSE_SOCKET_SHUTDOWN_FAILED,
                           "failure shuting down data socket");
     } 
@@ -1160,7 +1160,7 @@ send_dns_rr_idle_link(test_t *test, int last_len)
     /* a transition to a state other than TEST_IDLE was requested
        after the link was closed in the TEST_LOADED state */
     report_test_failure(test,
-			__func__,
+			(char *)__func__,
                         DNSE_DATA_CONNECTION_CLOSED_ERROR,
                         "data connection closed and non idle state requested");
 
