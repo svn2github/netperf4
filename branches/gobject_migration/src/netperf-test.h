@@ -67,11 +67,11 @@ typedef struct _NetperfTest {
   /* the rest of the test stuff goes here.  how much should be
      "public" and how much "private" I've no idea... */
 
-  gchar   *id;         /* the identifier for this test instance. it
+  xmlChar   *id;         /* the identifier for this test instance. it
 			  will be duplicated with the key used in the
 			  GHash to find this object. */
 
-  gchar   *server_id;     /* perhaps this should become a
+  xmlChar   *server_id;     /* perhaps this should become a
 			     [strong|weak] object reference  to the
 			     netserver object? */
 

@@ -117,6 +117,8 @@ delete this exception statement from your version.
 int debug = 0;
 FILE *where;
 
+const xmlChar *my_nid = (const xmlChar *)"netperf";
+
 typedef gboolean (*netperf_interactive_cmd_func_t)(gchar *arguments,gpointer data);
 
 static gboolean parse_interactive_new_command(char *arguments, gpointer data);
@@ -389,8 +391,13 @@ void print_netserver_hash_entry(gpointer key, gpointer value, gpointer user_data
   NetperfNetserver *netserver;
   guint state,req_state;
   gchar *id;
+  xmlNodePtr node;
+  xmlNodePtr tmp_node;
+  xmlDocPtr  tmp_doc;
+  xmlChar *buf;
+  guint buflen;
 
-  g_print("key: %s, value %p, user_data %p\n",
+  g_print("netserver: %s, object %p, user_data %p\n",
 	  (char *)key,
 	  value,
 	  user_data);
@@ -401,15 +408,78 @@ void print_netserver_hash_entry(gpointer key, gpointer value, gpointer user_data
 	       "state", &state,
 	       "req-state", &req_state,
 	       "id", &id,
+	       "node", &node,
 	       NULL);
-  g_print("\tstate: %d res_state: %d id %s\n",state,req_state,id);
+  g_print("state: %d req_state: %d id %s\n",state,req_state,id);
+  g_print("node: %p\n",node);
 
+  /* seems we cannot just dump a node absent a doc... */
+  if ((tmp_doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
+    if ((tmp_node = xmlDocCopyNode(node,tmp_doc,1)) != NULL) {
+      xmlDocSetRootElement(tmp_doc,tmp_node);
+      xmlDocDumpFormatMemory(tmp_doc,
+			     &buf,
+			     &buflen,
+			     1);
+      g_print("node buflen is %d\n%s",buflen,buf);
+    }
+    else {
+      g_print("could not copy node information\n");
+    }
+    xmlFreeDoc(tmp_doc);
+  }
+  else {
+    g_print("\t\tcould not allocate doc for node information\n");
+  }
 }
 
-static void display_netserver_hash() {
-  /* try iterating through all the entries in the hash table */
-  g_hash_table_foreach(server_hash, print_netserver_hash_entry, NULL);
+void print_test_hash_entry(gpointer key, gpointer value, gpointer user_data)
+{
+  NetperfTest *test;
+  guint state,req_state;
+  gchar *id;
+  xmlNodePtr node;
+  xmlNodePtr tmp_node;
+  xmlDocPtr  tmp_doc;
+  xmlChar *buf;
+  guint buflen;
 
+  /* the key :) thing to remember is that the pointer to the test
+     object is the value, not the key */
+  test = value;
+  g_object_get(test,
+	       "state", &state,
+	       "req-state", &req_state,
+	       "id", &id,
+	       "node", &node,
+	       NULL);
+  g_print("test: %s, object %p, user_data %p id %s state %d req_state %d node %p\n",
+	  (char *)key,
+	  value,
+	  user_data,
+	  id,
+	  state,
+	  req_state,
+	  node);
+
+  /* seems we cannot just dump a node absent a doc... */
+  if ((tmp_doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
+    if ((tmp_node = xmlDocCopyNode(node,tmp_doc,1)) != NULL) {
+      xmlDocSetRootElement(tmp_doc,tmp_node);
+      xmlDocDumpFormatMemory(tmp_doc,
+			     &buf,
+			     &buflen,
+			     1);
+      g_print("node buflen is %d\n%s",buflen,buf);
+    }
+    else {
+      g_print("could not copy node information\n");
+    }
+    xmlFreeDoc(tmp_doc);
+  }
+  else {
+    g_print("\t\tcould not allocate doc for node information\n");
+  }
 }
 
 static void netperf_init() 
@@ -417,12 +487,13 @@ static void netperf_init()
   /* the key for the server hash is the id string, so we use the
      glib-provided g_str_hash as the hash function and g_str_equal for
      the key equality test function */
+  NETPERF_DEBUG_ENTRY(debug,where);
   server_hash = g_hash_table_new(g_str_hash,g_str_equal);
 
   test_hash = g_hash_table_new(g_str_hash, g_str_equal);
 
   test_set_hash = g_hash_table_new(g_str_hash, g_str_equal);
-
+  NETPERF_DEBUG_EXIT(debug,where);
 }
 
 
@@ -545,12 +616,107 @@ static gboolean parse_interactive_set_command(char *arguments,
   return return_value;
 }
 
+static gboolean parse_interactive_show_test_command(char *arguments,
+						    gpointer data)
+{
+  gboolean return_value = TRUE;
+  NetperfTest *test;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,print_test_hash_entry,data);
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      print_test_hash_entry(split[0],test,data);
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+  return return_value;
+}
+
+static gboolean parse_interactive_show_netserver_command(char *arguments,
+						    gpointer data)
+{
+  gboolean return_value = TRUE;
+  gchar **split;
+  NetperfNetserver *server;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(server_hash,print_netserver_hash_entry,data);
+  }
+  else {
+    server = g_hash_table_lookup(server_hash,split[0]);
+    if (NULL != server) {
+      print_netserver_hash_entry(split[0],server,data);
+    }
+    else {
+      g_print("netserver id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+  NETPERF_DEBUG_EXIT(debug,where);
+  return return_value;
+}
+
+static gboolean execute_interactive_show_all_command(gpointer data)
+{
+  gboolean return_value = TRUE;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+  return return_value;
+}
+
+
 static gboolean parse_interactive_show_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
   g_print("the arguments to the SHOW command were %s\n",
 	  arguments);
+  split = g_strsplit_set(arguments,
+			" \r\n",
+			2);
+
+  if (g_strcasecmp("netserver",split[0]) == 0) 
+    return_value = parse_interactive_show_netserver_command(split[1],
+							    data);
+  else if (g_strcasecmp("test",split[0]) == 0)
+    return_value = parse_interactive_show_test_command(split[1],
+						       data);
+  else if (g_strcasecmp("all",split[0]) == 0)
+    return_value = execute_interactive_show_all_command(data);
+
+  g_strfreev(split);
+  NETPERF_DEBUG_EXIT(debug,where);
   return return_value;
 }
 
@@ -623,6 +789,7 @@ static gboolean parse_interactive_die_command(char *arguments,
    bit more sophisticated if warranted. also, the return should
    probably become a bit more sophisticated one of these days to deal
    with fatal vs non-fatal errors */
+
 static gboolean parse_interactive_command_line(gchar *command_line,
 					       gpointer data)
 {
@@ -632,8 +799,8 @@ static gboolean parse_interactive_command_line(gchar *command_line,
   gboolean return_value = TRUE;
   command_table_entry = interactive_command_table;
 
-  split = g_strsplit(command_line,
-		     " ", /* space, the final delimiter */
+  split = g_strsplit_set(command_line,
+		     " \r\n", /* space, the final delimiter */
 		     2);  /* yes, splitting to a magic constant number
 			     of tokens, naughty naughty */
 
@@ -646,6 +813,7 @@ static gboolean parse_interactive_command_line(gchar *command_line,
      _think_ I'm OK - famous last words. perhaps one of these days
      we'll use one of those tables like used for the command message
      parsing... */
+
   while (command_table_entry->command_name != NULL) {
     if (g_strcasecmp(command_table_entry->command_name,split[0]) == 0){
       return_value = (command_table_entry->command_func)(split[1],data);
@@ -686,11 +854,6 @@ static gboolean read_from_terminal(GIOChannel *source,
 
   switch (ret)     {
   case G_IO_STATUS_NORMAL:
-    
-    g_print("There were %d bytes to read from the terminal\n",
-	  length);
-    g_print("and it was %s\n",command_line);
-    g_print("with the terminator position being %d\n",terminator_pos);
     return_value = parse_interactive_command_line(command_line,data);
     g_free(command_line);
     break;
@@ -712,10 +875,105 @@ static gboolean read_from_terminal(GIOChannel *source,
 
   return return_value;
 }
+
+static void add_netservers_tests(xmlNodePtr server_node, NetperfNetserver *server) {
+  int        rc = NPE_SUCCESS;
+  NetperfTest    *new_test;
+  xmlNodePtr this_test;
+  xmlChar   *testid;
+  xmlChar   *serverid = xmlGetProp(server_node,(xmlChar *)"nid");
+
+  /* Now get the first child node, all children are test elements or
+     comments and all test elements have a unique tid value.  The check
+     for correctness was done by the xml parser.  sbg 2003-10-02 */
+  this_test = server_node->xmlChildrenNode;
+  while (this_test != NULL && rc == NPE_SUCCESS) {
+    if (xmlStrcmp(this_test->name,(const xmlChar *)"test")) {
+      if (debug) {
+        printf("instantiate_tests skipped a non-test node\n");
+      }
+      this_test = this_test->next;
+      continue;
+    }
+    testid = xmlGetProp(this_test,(const xmlChar *)"tid");
+    new_test = g_object_new(TYPE_NETPERF_TEST,
+			    "id", testid,
+			    "serverid", serverid,
+			    "node", this_test,
+			    NULL);
+    if (new_test != NULL) { /* we have a new NetperfTest object */
+      /* REVISIT - extract the relevant functions please
+      rc = get_test_function(new_test,(const xmlChar *)"test_name");
+      rc = get_test_function(new_test,(const xmlChar *)"test_decode"); */
+      g_hash_table_replace(test_hash,
+			   testid,
+			   new_test);
+    }
+    this_test = this_test->next;
+  }
+}
+
+static void add_netservers_from_config(xmlDocPtr config_doc) {
+
+  int                 rc = NPE_SUCCESS;
+  xmlNodePtr          netperf;
+  xmlNodePtr          this_netserver;
+  NetperfNetserver   *new_server;
+  xmlChar            *netserverid;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+
+  /* first, get the netperf element which was checked at parse time.  The
+     netperf element has only netserver elements each with its own unique
+     nid ID attribute. Duplicates should have been caught by the xml parser.
+     Users must correctly setup configuration files. Syntax errors in the
+     netperf configuration file should have been caught by the xml parser
+     when it did a syntax check against netperf_docs.dtd sgb 2003-10-7 */
+
+  netperf = xmlDocGetRootElement(config_doc);
+
+  if (NULL != netperf) {
+    /* now get the first netserver node */
+    this_netserver = netperf->xmlChildrenNode;
+    
+    while (this_netserver != NULL && rc == NPE_SUCCESS) {
+      if (xmlStrcmp(this_netserver->name,(const xmlChar *)"netserver")) {
+	if (debug) {
+	  g_print("instantiate_netservers skipped a non-netserver node\n");
+	}
+	this_netserver = this_netserver->next;
+	continue;
+      }
+      netserverid = xmlGetProp(this_netserver,(const xmlChar *)"nid");
+      /* REVISIT - make sure the node property gets set */
+      new_server = g_object_new(TYPE_NETPERF_NETSERVER,
+				"id", netserverid,
+				"node", this_netserver,
+				NULL);
+      if (new_server != NULL) {    /* we have a new netserver object,
+				      lets add it to the server_hash */
+	g_hash_table_replace(server_hash,
+			     netserverid,
+			     new_server);
+	/* REVISIT must set the node property, and decide what to do
+	   about the control connection/object. must also see about
+	   adding the tests to the test_hash and the like */
+      }
+      add_netservers_tests(this_netserver,new_server);
+      /* see about the next netserver */
+      this_netserver = this_netserver->next;
+    }
+  }
+  else {
+    g_print("Yo, there was either nothing to the config file or it had no netservers\n");
+  }
+  NETPERF_DEBUG_EXIT(debug,where);
+
+}
 int main(int argc, char **argv) 
 {
 
-  NetperfNetserver *netserver = NULL;
 
   GIOChannel *input_channel;
   guint       input_watch_id;
@@ -768,6 +1026,8 @@ int main(int argc, char **argv)
   xmlDoValidityCheckingDefaultValue = 1;
   xmlLoadExtDtdDefaultValue |= XML_COMPLETE_ATTRS;
 
+  netperf_init();
+
   /* OK, all the "non-test" initialization is complete.  Now we have
      to decide if we are going to run a batch command file, or start
      trying to take commands from the user in an interactive
@@ -775,7 +1035,12 @@ int main(int argc, char **argv)
 
   parse_xml_file(cname, (const xmlChar *)"netperf", &config_doc);
 
-  netperf_init();
+  /* add_netservers_from_config will add all the netservers from the
+     config file to the server_hash. it will also cause all the tests
+     associated with those netservers to be added to the
+     test_hash. whether or not it starts to init those will depend on
+     whim and whether or not the user asked for an interactive session */ 
+  add_netservers_from_config(config_doc);
 
   loop = g_main_loop_new(NULL, FALSE);
 

@@ -88,7 +88,7 @@ struct _NetperfNetserver {
 			    instead be a weak reference to a control
 			    connection object? */
 
-  gchar  *node;      /* the XML document node containing the
+  xmlNodePtr  node;      /* the XML document node containing the
 			    servers configuration data */
 
   netserver_state_t  state;     /* the present state of the netserver */

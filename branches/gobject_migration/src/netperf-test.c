@@ -54,7 +54,9 @@ delete this exception statement from your version.
 enum {
   TEST_PROP_DUMMY_0,    /* GObject does not like a zero value for a property id */
   TEST_PROP_ID,
+  TEST_PROP_SERVERID,
   TEST_PROP_STATE,
+  TEST_PROP_NODE,
   TEST_PROP_REQ_STATE,
   TEST_PROP_TEST_FUNC,
   TEST_PROP_TEST_CLEAR,
@@ -134,6 +136,8 @@ static void netperf_test_class_init(NetperfTestClass *klass)
   /* GParamSpecs for properties go here */
   GParamSpec *state_param;
   GParamSpec *req_state_param;
+  GParamSpec *node_param;
+  GParamSpec *serverid_param;
   GParamSpec *id_param;
   GParamSpec *test_func_param;
   GParamSpec *test_clear_param;
@@ -173,6 +177,13 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 			"unnamed",    /* default value */
 			G_PARAM_READWRITE);
 
+  serverid_param =
+    g_param_spec_string("serverid",
+			"server identifier",
+			"the id of the server to which this test belongs",
+			"unnamed",
+			G_PARAM_READWRITE);
+
   test_func_param = 
     g_param_spec_pointer("test_func",
 			 "test function",
@@ -189,6 +200,12 @@ static void netperf_test_class_init(NetperfTestClass *klass)
     g_param_spec_pointer("test_stats",
 			 "test statistics",
 			 "the function which creates an XML stats node",
+			 G_PARAM_READWRITE);
+
+  node_param = 
+    g_param_spec_pointer("node",
+			 "test node",
+			 "the xml node containing test information",
 			 G_PARAM_READWRITE);
 
   test_decode_param =
@@ -235,8 +252,16 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 				  id_param);
 
   g_object_class_install_property(g_object_class,
+				  TEST_PROP_SERVERID,
+				  serverid_param);
+
+  g_object_class_install_property(g_object_class,
 				  TEST_PROP_TEST_FUNC,
 				  test_func_param);
+
+  g_object_class_install_property(g_object_class,
+				  TEST_PROP_NODE,
+				  node_param);
 
   g_object_class_install_property(g_object_class,
 				  TEST_PROP_TEST_CLEAR,
@@ -476,8 +501,16 @@ static void netperf_test_set_property(GObject *object,
     test->id = g_value_dup_string(value);
     break;
 
+  case TEST_PROP_SERVERID:
+    test->server_id = g_value_dup_string(value);
+    break;
+
   case TEST_PROP_TEST_FUNC:
     test->test_func = g_value_get_pointer(value);
+    break;
+
+  case TEST_PROP_NODE:
+    test->node = g_value_get_pointer(value);
     break;
 
   case TEST_PROP_TEST_CLEAR:
@@ -528,8 +561,16 @@ static void netperf_test_get_property(GObject *object,
     g_value_set_string(value, test->id);
     break;
 
+  case TEST_PROP_SERVERID:
+    g_value_set_string(value, test->server_id);
+    break;
+
   case TEST_PROP_TEST_FUNC:
     g_value_set_pointer(value, test->test_func);
+    break;
+
+  case TEST_PROP_NODE:
+    g_value_set_pointer(value, test->node);
     break;
 
   case TEST_PROP_TEST_CLEAR:

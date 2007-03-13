@@ -131,6 +131,7 @@ enum {
   NETSERVER_PROP_ID,
   NETSERVER_PROP_STATE,
   NETSERVER_PROP_REQ_STATE,
+  NETSERVER_PROP_NODE,
   NETSERVER_PROP_CONTROL_CONNECTION
 };
 
@@ -203,6 +204,7 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   GParamSpec *req_state_param;
   GParamSpec *id_param;
   GParamSpec *control_connection_param;
+  GParamSpec *node_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -244,6 +246,12 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
 			 "the control connection this netserver should use",
 			 G_PARAM_READWRITE);
 
+  node_param = 
+    g_param_spec_pointer("node",
+			 "config node",
+			 "XML configuration node",
+			 G_PARAM_READWRITE);
+
   /* overwrite the base object methods with our own get and set
      property routines */
 
@@ -266,6 +274,10 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   g_object_class_install_property(g_object_class,
 				  NETSERVER_PROP_CONTROL_CONNECTION,
 				  control_connection_param);
+
+  g_object_class_install_property(g_object_class,
+				  NETSERVER_PROP_NODE,
+				  node_param);
 
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
@@ -1401,6 +1413,10 @@ static void netperf_netserver_set_property(GObject *object,
     g_object_add_weak_pointer(temp_ptr,&(netserver->control_connection));
     break;
 
+  case NETSERVER_PROP_NODE:
+    netserver->node = g_value_get_pointer(value);
+    break;
+
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;
@@ -1431,6 +1447,10 @@ static void netperf_netserver_get_property(GObject *object,
 
   case NETSERVER_PROP_CONTROL_CONNECTION:
     g_value_set_pointer(value, netserver->control_connection);
+    break;
+
+  case NETSERVER_PROP_NODE:
+    g_value_set_pointer(value, netserver->node);
     break;
 
   default:
