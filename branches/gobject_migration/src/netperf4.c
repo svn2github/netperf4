@@ -592,8 +592,6 @@ static gboolean parse_interactive_new_command(char *arguments,
 					      gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the NEW command were %s\n",
-	  arguments);
 
   return return_value;
 }
@@ -611,8 +609,6 @@ static gboolean parse_interactive_set_command(char *arguments,
 {
   gboolean return_value = TRUE;
 
-  g_print("the arguments to the SET command were %s\n",
-	  arguments);
   return return_value;
 }
 
@@ -700,8 +696,7 @@ static gboolean parse_interactive_show_command(char *arguments,
   gchar **split;
 
   NETPERF_DEBUG_ENTRY(debug,where);
-  g_print("the arguments to the SHOW command were %s\n",
-	  arguments);
+
   split = g_strsplit_set(arguments,
 			" \r\n",
 			2);
@@ -724,8 +719,7 @@ static gboolean parse_interactive_read_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the READ command were %s\n",
-	  arguments);
+
   return return_value;
 }
 
@@ -733,8 +727,7 @@ static gboolean parse_interactive_load_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the LOAD command were %s\n",
-	  arguments);
+
   return return_value;
 }
 
@@ -742,8 +735,7 @@ static gboolean parse_interactive_measure_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the MEASURE command were %s\n",
-	  arguments);
+
   return return_value;
 }
 
@@ -751,8 +743,7 @@ static gboolean parse_interactive_init_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the INIT command were %s\n",
-	  arguments);
+
   return return_value;
 }
 
@@ -760,8 +751,7 @@ static gboolean parse_interactive_idle_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the IDLE command were %s\n",
-	  arguments);
+
   return return_value;
 }
 
@@ -769,8 +759,7 @@ static gboolean parse_interactive_stats_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the stats command were %s\n",
-	  arguments);
+
   return return_value;
 }
 
@@ -778,8 +767,7 @@ static gboolean parse_interactive_die_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
-  g_print("the arguments to the DIE command were %s\n",
-	  arguments);
+
   return return_value;
 }
 
@@ -902,7 +890,12 @@ static void add_netservers_tests(xmlNodePtr server_node, NetperfNetserver *serve
 			    "node", this_test,
 			    NULL);
     if (new_test != NULL) { /* we have a new NetperfTest object */
-      /* REVISIT - extract the relevant functions please
+      /* REVISIT - extract the relevant functions please. the netperf
+	 side probably doesn't need anything but the decode?  and even
+	 that shouldn't be necessary once we have the generic
+	 formatter. i'm not sure why we bothered extracting the
+	 function for test_name from the XML on the netperf side in
+	 the first place?
       rc = get_test_function(new_test,(const xmlChar *)"test_name");
       rc = get_test_function(new_test,(const xmlChar *)"test_decode"); */
       g_hash_table_replace(test_hash,
@@ -946,20 +939,28 @@ static void add_netservers_from_config(xmlDocPtr config_doc) {
 	continue;
       }
       netserverid = xmlGetProp(this_netserver,(const xmlChar *)"nid");
-      /* REVISIT - make sure the node property gets set */
       new_server = g_object_new(TYPE_NETPERF_NETSERVER,
 				"id", netserverid,
 				"node", this_netserver,
 				NULL);
       if (new_server != NULL) {    /* we have a new netserver object,
 				      lets add it to the server_hash */
+	/* you know.... we should probably check if that netserverid
+	   is already in the hash, particularly once we have
+	   interactive addition of netservers and not just netservers
+	   from a validated XML config file. raj 2007-03-13 */
 	g_hash_table_replace(server_hash,
 			     netserverid,
 			     new_server);
-	/* REVISIT must set the node property, and decide what to do
-	   about the control connection/object. must also see about
-	   adding the tests to the test_hash and the like */
+	/* REVISIT must decide what to do about the control
+	   connection/object. should we create it explicitly here, or
+	   should it be done when the "node" property is set as that
+	   is, presumably, where the addressing info happens to be? it
+	   should probably be after the netserver has been added to the
+	   server_hash on the off chance that messages start arriving */
       }
+      /* lets go ahead and add the tests associated with this
+	 netserver */
       add_netservers_tests(this_netserver,new_server);
       /* see about the next netserver */
       this_netserver = this_netserver->next;

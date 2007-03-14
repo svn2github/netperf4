@@ -42,11 +42,17 @@ delete this exception statement from your version.
 #include <stdlib.h>
 #endif
 
+#ifdef HAVE_STRING_H
+#include <string.h>
+#endif 
+
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
 #include <glib-object.h>
+#include <glib.h>
+#include <gmodule.h>
 
 #include "netperf.h"
 #include "netperf-test.h"
@@ -473,6 +479,157 @@ static void netperf_test_launch_thread(NetperfTest *test)
      failure etc. */
 }
 
+static int get_test_function(NetperfTest *test, const xmlChar *func)
+{
+
+  GModule *lib_handle = test->library_handle;
+  gboolean ret;
+  xmlChar *fname;
+  void    *fptr = NULL;
+  int      fnlen = 0;
+  int      rc = NPE_FUNC_NAME_TOO_LONG;
+  char     func_name[NETPERF_MAX_TEST_FUNCTION_NAME];
+  xmlChar *la_file;
+
+  /* should this be global debug, or test->debug? */
+  if (test->debug) {
+    g_fprintf(test->where,
+	      "%s enter test %p func %s\n",
+	      __func__,
+	      test,
+	      func);
+    fflush(test->where);
+  }
+
+  if (lib_handle == NULL) {
+    /* load the library for the test */
+    la_file   = xmlGetProp(test->node,(const xmlChar *)"library");
+    if (test->debug) {
+      g_fprintf(test->where,
+		"%s looking to open library %p\n",
+		__func__,
+		la_file);
+      fflush(test->where);
+    }
+
+    lib_handle = open_library(la_file);
+    free(la_file);
+    test->library_handle = lib_handle;
+  }
+
+  fname = xmlGetProp(test->node,func);
+  if (!fname) {
+    fnlen = 0;
+  }
+  else {
+    fnlen = strlen((char *)fname);
+  }
+  if (test->debug) {
+    if (fname) {
+      g_fprintf(test->where,"func = '%s'  fname = '%s' fname[0] = %c fnlen = %d\n",
+	      (char *)func, fname, fname[0], fnlen);
+    }
+    else {
+      g_fprintf(test->where,"func = '%s'  fname = '' fname[0] = '' fnlen = %d\n",
+	      (char *)func, fnlen);
+    }
+    fflush(test->where);
+  }
+
+  if (fnlen < NETPERF_MAX_TEST_FUNCTION_NAME) {
+    if (fnlen) {
+      strcpy(func_name,(char *)fname);
+      rc = NPE_SUCCESS;
+    } else {
+      xmlChar *tname      = test->test_name;
+      int      tnlen = strlen((char *)tname);
+
+      strcpy(func_name,(char *)tname);
+      if (test->debug) {
+        g_fprintf(test->where,"func_name = '%s' tnlen = %d\n",
+                (char *)func_name, tnlen);
+        fflush(test->where);
+      }
+
+      if (!xmlStrcmp(func,(const xmlChar *)"test_clear")) {
+        if (strlen("_clear_stats") < (size_t)(NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+          strcat(func_name,"_clear_stats");
+          rc = NPE_SUCCESS;
+        } else {
+          rc = NPE_FUNC_NAME_TOO_LONG;
+        }
+      } else if (!xmlStrcmp(func,(const xmlChar *)"test_stats")) {
+        if (strlen("_get_stats") < (size_t)(NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+          strcat(func_name,"_get_stats");
+          rc = NPE_SUCCESS;
+        } else {
+          rc = NPE_FUNC_NAME_TOO_LONG;
+        }
+      } else if (!xmlStrcmp(func,(const xmlChar *)"test_decode")) {
+        if (strlen("_decode_stats") < (size_t)(NETPERF_MAX_TEST_FUNCTION_NAME-tnlen)) {
+          strcat(func_name,"_decode_stats");
+          rc = NPE_SUCCESS;
+        } else {
+          rc = NPE_FUNC_NAME_TOO_LONG;
+        }
+      } else {
+        rc = NPE_UNKNOWN_FUNCTION_TYPE;
+      }
+    }
+    if (test->debug) {
+      g_fprintf(test->where,"func_name = '%s'\n", (char *)func_name);
+      fflush(test->where);
+    }
+    if (rc == NPE_SUCCESS) {
+      ret = g_module_symbol(lib_handle,func_name,&fptr);
+      if (test->debug) {
+        g_fprintf(test->where,"symbol lookup of func_name '%s' returned %p\n",
+                func_name, fptr);
+        if (fptr == NULL) {
+	  g_fprintf(test->where,"g_module_symbol error '%s'\n",g_module_error());
+        }
+        fflush(test->where);
+      }
+      if (fptr == NULL) {
+        if (lib_handle) {
+          rc = NPE_FUNC_NOT_FOUND;
+        } else {
+          rc = NPE_LIBRARY_NOT_LOADED;
+        }
+      }
+    }
+  } else {
+    rc = NPE_FUNC_NAME_TOO_LONG;
+  }
+
+  if (!xmlStrcmp(func,(const xmlChar *)"test_name")) {
+    test->test_name    = fname;
+    test->test_func    = (NetperfTestFunc)fptr;
+  } else if (!xmlStrcmp(func,(const xmlChar *)"test_clear")) {
+    test->test_clear   = (NetperfTestClear)fptr;
+    xmlFree(fname);
+  } else if (!xmlStrcmp(func,(const xmlChar *)"test_stats")) {
+    test->test_stats   = (NetperfTestStats)fptr;
+    xmlFree(fname);
+  } else if (!xmlStrcmp(func,(const xmlChar *)"test_decode")) {
+    test->test_decode  = (NetperfTestDecode)fptr;
+    xmlFree(fname);
+  } else {
+    rc = NPE_UNKNOWN_FUNCTION_TYPE;
+    xmlFree(fname);
+  }
+
+  if (rc != NPE_SUCCESS) {
+    if (test->debug) {
+      g_fprintf(test->where,
+              "get_test_function: error %d occured getting function %s\n",
+              rc,func_name);
+      fflush(test->where);
+    }
+  }
+
+  return(rc);
+}
 
 /* get and set property routines */
 static void netperf_test_set_property(GObject *object,
@@ -480,7 +637,11 @@ static void netperf_test_set_property(GObject *object,
 					   const GValue *value,
 					   GParamSpec *pspec) {
   NetperfTest *test;
+  NetperfTest *dependent;
+  
+  GList *item;
   guint req_state;
+  xmlChar *test_func;
 
   test = NETPERF_TEST(object);
 
@@ -526,10 +687,14 @@ static void netperf_test_set_property(GObject *object,
     break;
 
   case TEST_PROP_TEST_ADD_DEPENDANT:
-    g_print("Yo, add the code to add a dependant!\n");
+    dependent = g_value_get_pointer(value);
+    item = g_list_append(NULL, dependent);
+    g_object_add_weak_pointer(dependent, &item->data);
+    test->dependent_tests = g_list_concat(item, test->dependent_tests);
     break;
 
   case TEST_PROP_TEST_DEL_DEPENDANT:
+    dependent = g_value_get_pointer(value);
     g_print("Yo, add the code to delete a dependant!\n");
     break;
 
@@ -565,12 +730,12 @@ static void netperf_test_get_property(GObject *object,
     g_value_set_string(value, test->server_id);
     break;
 
-  case TEST_PROP_TEST_FUNC:
-    g_value_set_pointer(value, test->test_func);
-    break;
-
   case TEST_PROP_NODE:
     g_value_set_pointer(value, test->node);
+    break;
+
+  case TEST_PROP_TEST_FUNC:
+    g_value_set_pointer(value, test->test_func);
     break;
 
   case TEST_PROP_TEST_CLEAR:
