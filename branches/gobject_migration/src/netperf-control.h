@@ -49,6 +49,11 @@ typedef struct _NetperfControl {
   /* the parent object - in this case a GObject object */
   GObject parent_instance;
 
+  /* one wonders if this should be something other than void * */
+  void *netserver; /* the object pointer of the netserver which "owns"
+		      this control object. used to allow us to send it
+		      signals like "connected" and the like */
+
   /* the rest of the control stuff goes here.  how much should be
      "public" and how much "private" I've no idea... */
   control_state_t  state;     /* the present state of the control */

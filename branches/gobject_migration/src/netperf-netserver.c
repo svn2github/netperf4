@@ -169,10 +169,10 @@ enum {
 			 working happened to do so... */
 };
 
-static void netperf_netserver_connect(NetperfNetserver *netserver);
 static void netperf_netserver_new_message(NetperfNetserver *netserver, gpointer message);
 static void netperf_netserver_control_closed(NetperfNetserver *netserver);
 static void netperf_netserver_connect_control(NetperfNetserver *netserver);
+static void netperf_netserver_control_connected(NetperfNetserver *netserver);
 
 /* a place to stash the id's returned by g_signal_new should we ever
    need to refer to them by their ID. */ 
@@ -295,6 +295,7 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   klass->new_message = netperf_netserver_new_message;
   klass->control_closed = netperf_netserver_control_closed;
   klass->connect_control = netperf_netserver_connect_control;
+  klass->control_connected = netperf_netserver_control_connected;
 
   netperf_netserver_signals[NEW_MESSAGE] = 
     g_signal_new("new_message",            /* signal name */
@@ -328,6 +329,17 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
 		 TYPE_NETPERF_NETSERVER,
 		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
 		 G_STRUCT_OFFSET(NetperfNetserverClass, connect_control),
+		 NULL,
+		 NULL,
+		 g_cclosure_marshal_VOID__VOID,
+		 G_TYPE_NONE,
+		 0);
+
+  netperf_netserver_signals[CONTROL_CONNECTED] = 
+    g_signal_new("control_connected",
+		 TYPE_NETPERF_NETSERVER,
+		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+		 G_STRUCT_OFFSET(NetperfNetserverClass, control_connected),
 		 NULL,
 		 NULL,
 		 g_cclosure_marshal_VOID__VOID,
@@ -1453,52 +1465,89 @@ static void netperf_netserver_connect_control(NetperfNetserver *server)
   int      localfamily;
   int      remotefamily;
 
-  /* validation means that we know that the host informaion is in attributes
-     of the netserver element. The xml parser checked them and initialized
-     any optional attributes which where not present.  sgb 2003-10-11 */
-
-  /* pull the remote address family, service and host attributes */
-  remotefamily = strtofam(xmlGetProp(server->node,(const xmlChar *)"family"));
-  remoteport   = xmlGetProp(server->node,(const xmlChar *)"remote_service");
-  remotehost   = xmlGetProp(server->node,(const xmlChar *)"remote_host");
-
-  /* for the time being, the netserver element definition provides only
-     one family attribute - this means no mixed family stuff, which should
-     not be a problem for the moment.  since getaddrinfo() takes a servname
-     parm as an ASCII string we will just pass the string. sgb 2003-10-11 */
-
-  /* now pull the local address family, service and host attributes */
-  localfamily  = strtofam(xmlGetProp(server->node,(const xmlChar *)"family"));
-  localport    = xmlGetProp(server->node,(const xmlChar *)"local_service");
-  localhost    = xmlGetProp(server->node,(const xmlChar *)"local_host");
-
-  g_print("server %s asking for new control object with remote %s %s %d local %s %s %d\n",
-	  server->id,
-	  remotehost, 
-	  remoteport,
-	  remotefamily,
-	  localhost,
-	  localport,
-	  localfamily);
-
-  /* armed with this information, create a control object and give it
-     what it needs to do its work, then tell it to go ahead and
-     connect. should this become a g_object_weak_pointer reference? */
-  server->control_object= g_object_new(TYPE_NETPERF_CONTROL,
-				       "remotefamily", remotefamily,
-				       "remotehost", remotehost,
-				       "remoteport", remoteport,
-				       "localfamily", localfamily,
-				       "localhost", localhost,
-				       "localport", localport,
-				       NULL);
-
-  /* and now signal it to connect-up */
-  g_signal_emit_by_name(server->control_object,
-			"connect");
-
+  if (NETSERVER_PREINIT == server->state) {
+    /* validation means that we know that the host informaion is in
+       attributes of the netserver element. The xml parser checked
+       them and initialized any optional attributes which where not
+       present.  sgb 2003-10-11 */
+    
+    /* pull the remote address family, service and host attributes */
+    remotefamily = strtofam(xmlGetProp(server->node,(const xmlChar *)"family"));
+    remoteport   = xmlGetProp(server->node,(const xmlChar *)"remote_service");
+    remotehost   = xmlGetProp(server->node,(const xmlChar *)"remote_host");
+    
+    /* for the time being, the netserver element definition provides only
+       one family attribute - this means no mixed family stuff, which should
+       not be a problem for the moment.  since getaddrinfo() takes a servname
+       parm as an ASCII string we will just pass the string. sgb 2003-10-11 */
+    
+    /* now pull the local address family, service and host attributes */
+    localfamily  = strtofam(xmlGetProp(server->node,(const xmlChar *)"family"));
+    localport    = xmlGetProp(server->node,(const xmlChar *)"local_service");
+    localhost    = xmlGetProp(server->node,(const xmlChar *)"local_host");
+    
+    g_print("server %s asking for new control object with remote %s %s %d local %s %s %d\n",
+	    server->id,
+	    remotehost, 
+	    remoteport,
+	    remotefamily,
+	    localhost,
+	    localport,
+	    localfamily);
+    
+    /* armed with this information, create a control object and give it
+       what it needs to do its work, then tell it to go ahead and
+       connect. should this become a g_object_weak_pointer reference? */
+    server->control_object= g_object_new(TYPE_NETPERF_CONTROL,
+					 "remotefamily", remotefamily,
+					 "remotehost", remotehost,
+					 "remoteport", remoteport,
+					 "localfamily", localfamily,
+					 "localhost", localhost,
+					 "localport", localport,
+					 "netserver", server,
+					 NULL);
+    /* set our desired state correctly so when we receive the signal
+       we are connected the right things can happen */
+    server->state_req = NETSERVER_CONNECTED;
+    /* and now signal it to connect-up */
+    g_signal_emit_by_name(server->control_object,
+			  "connect");
+  }
+  else {
+    /* just what should we do if we are signaled to connect and we are
+       not in NETSERVER_PREINIT? */
+    g_print("%s Yo! netserver at %p id %s was asked to connect when it was in state %s rather than NETSERVER_PREINIT!\n",
+	    __func__,
+	    server,
+	    server->id,
+	    server->state);
+  }
+    
 }
 
+static void netperf_netserver_control_connected(NetperfNetserver *netserver)
+{
+
+  /* since we are connected, we can transition to the CONNECTED state
+     - REVISIT - should we be checking against the current state? */
+
+  if (NETSERVER_PREINIT == netserver->state) {
+    g_print("%s Netserver %p has been informed that the control connection is connected\n",
+	    __func__,
+	    netserver);
+    netserver->state = NETSERVER_CONNECTED;
+    /* REVISIT - do we need to make sure that netserver->state_req is
+       suitably set? */
+  }
+  else {
+    g_print("%s received unexpected control_connected signal for server %p id %s\n",
+	    __func__,
+	    netserver,
+	    netserver->id);
+  }
+  
+}
 static void netperf_netserver_set_state(NetperfNetserver *netserver, guint req_state) 
 {
 

@@ -130,6 +130,7 @@ struct _NetperfNetserverClass {
   void (*new_message)(NetperfNetserver *netserver, gpointer message);
   void (*control_closed)(NetperfNetserver *netserver);
   void (*connect_control)(NetperfNetserver *netserver);
+  void (*control_connected)(NetperfNetserver *netserver);
 
   /* methods */
 };

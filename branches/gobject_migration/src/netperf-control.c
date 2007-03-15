@@ -58,7 +58,8 @@ enum {
   CONTROL_PROP_REMOTEFAMILY,
   CONTROL_PROP_LOCALHOST,
   CONTROL_PROP_LOCALPORT,
-  CONTROL_PROP_LOCALFAMILY
+  CONTROL_PROP_LOCALFAMILY,
+  CONTROL_PROP_NETSERVER
 };
 
 /* some forward declarations to make the compiler happy regardless of
@@ -137,6 +138,7 @@ static void netperf_control_class_init(NetperfControlClass *klass)
   GParamSpec *localhost_param;
   GParamSpec *localport_param;
   GParamSpec *localfamily_param;
+  GParamSpec *netserver_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -212,6 +214,12 @@ static void netperf_control_class_init(NetperfControlClass *klass)
 		      AF_UNSPEC,
 		      G_PARAM_READWRITE);
 
+  netserver_param = 
+    g_param_spec_pointer("netserver",
+			 "owning netserver",
+			 "pointer to the owning netserver object",
+			 G_PARAM_READWRITE);
+
   /* overwrite the base object methods with our own get and set
      property routines */
 
@@ -254,6 +262,10 @@ static void netperf_control_class_init(NetperfControlClass *klass)
   g_object_class_install_property(g_object_class,
 				  CONTROL_PROP_LOCALFAMILY,
 				  localfamily_param);
+
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_NETSERVER,
+				  netserver_param);
 
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
@@ -333,7 +345,12 @@ static void netperf_control_connect(NetperfControl *control)
 
   /* REVISIT - do the g_io_channel stuff here */
 
+  /* REVISIT this should be conditional on all the control connection stuff
+     being successful */
+  g_signal_emit_by_name(control->netserver,"control_connected");
+
 }
+
 /* get and set property routines */
 static void netperf_control_set_property(GObject *object,
 					   guint prop_id,
@@ -377,6 +394,10 @@ static void netperf_control_set_property(GObject *object,
 
   case CONTROL_PROP_LOCALFAMILY:
     control->localfamily = g_value_get_uint(value);
+    break;
+
+  case CONTROL_PROP_NETSERVER:
+    control->netserver = g_value_get_pointer(value);
     break;
 
   default:
@@ -425,6 +446,10 @@ static void netperf_control_get_property(GObject *object,
 
   case CONTROL_PROP_LOCALFAMILY:
     g_value_set_uint(value, control->localfamily);
+    break;
+
+  case CONTROL_PROP_NETSERVER:
+    g_value_set_pointer(value, control->netserver);
     break;
 
   default:
