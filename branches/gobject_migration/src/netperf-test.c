@@ -110,6 +110,40 @@ static void netperf_test_launch_thread(NetperfTest *test);
 
 static guint netperf_test_signals[LAST_SIGNAL] = {0,0,0,0};
 
+char *
+netperf_test_state_to_string(int value)
+{
+  char *state; 
+
+  switch (value) {
+  case NP_TST_PREINIT:
+    state = "PREINIT";
+    break;
+  case NP_TST_INIT:
+    state = "INIT";
+    break;
+  case NP_TST_IDLE:
+    state = "IDLE";
+    break;
+  case NP_TST_MEASURE:
+    state = "MEASURE";
+    break;
+  case NP_TST_LOADED:
+    state = "LOAD";
+    break;
+  case NP_TST_ERROR:
+    state = "ERROR";
+    break;
+  case NP_TST_DEAD:
+    state = "DEAD";
+    break;
+  default:
+    state = "UNKNOWN";
+    break;
+  }
+  return state;
+}
+
 GType netperf_test_get_type(void) {
   static GType netperf_test_type = 0;
 

@@ -52,7 +52,13 @@ enum {
   CONTROL_PROP_DUMMY_0,    /* GObject does not like a zero value for a property id */
   CONTROL_PROP_ID,
   CONTROL_PROP_STATE,
-  CONTROL_PROP_REQ_STATE
+  CONTROL_PROP_REQ_STATE,
+  CONTROL_PROP_REMOTEHOST,
+  CONTROL_PROP_REMOTEPORT,
+  CONTROL_PROP_REMOTEFAMILY,
+  CONTROL_PROP_LOCALHOST,
+  CONTROL_PROP_LOCALPORT,
+  CONTROL_PROP_LOCALFAMILY
 };
 
 /* some forward declarations to make the compiler happy regardless of
@@ -74,7 +80,10 @@ enum {
   NEW_MESSAGE,        /* this would be the control connection object
 			 telling us a complete message has arrived. */
   CONTROL_CLOSED,     /* this would be the control connection object
-			 telling us the controll connection died. */
+			 telling us the control connection died. */
+  CONNECT,            /* this would be the netserver telling us to
+			 connect the control connection to the remote
+			 */ 
   LAST_SIGNAL         /* this should always be the last in the list so
 			 we can use it to size the array correctly. */
 };
@@ -82,10 +91,12 @@ enum {
 static void netperf_control_new_message(NetperfControl *control, gpointer message);
 static void netperf_control_control_closed(NetperfControl *control);
 
+static void netperf_control_connect(NetperfControl *control);
+
 /* a place to stash the id's returned by g_signal_new should we ever
    need to refer to them by their ID. */ 
 
-static guint netperf_control_signals[LAST_SIGNAL] = {0,0};
+static guint netperf_control_signals[LAST_SIGNAL] = {0,0,0};
 
 GType netperf_control_get_type(void) {
   static GType netperf_control_type = 0;
@@ -120,6 +131,12 @@ static void netperf_control_class_init(NetperfControlClass *klass)
   GParamSpec *state_param;
   GParamSpec *req_state_param;
   GParamSpec *id_param;
+  GParamSpec *remotehost_param;
+  GParamSpec *remoteport_param;
+  GParamSpec *remotefamily_param;
+  GParamSpec *localhost_param;
+  GParamSpec *localport_param;
+  GParamSpec *localfamily_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -141,7 +158,7 @@ static void netperf_control_class_init(NetperfControlClass *klass)
 		      "desired state of the control", /* description
 							   */
 		      CONTROL_PREINIT, /* min value */
-		      CONTROL_CLOSE,    /* max value */
+		      CONTROL_CLOSE,   /* max value */
 		      CONTROL_PREINIT, /* def value */
 		      G_PARAM_READWRITE); 
 
@@ -151,6 +168,49 @@ static void netperf_control_class_init(NetperfControlClass *klass)
 			"unique control identifier", /* description */
 			"unnamed",    /* default value */
 			G_PARAM_READWRITE);
+
+  remotehost_param = 
+    g_param_spec_string("remotehost",
+			"remote host",
+			"remote hostname or IP address",
+			"localhost",  /* belt and suspenders with the DTD */
+			G_PARAM_READWRITE);
+  remoteport_param = 
+    g_param_spec_string("remoteport",
+			"remote port",
+			"remote port number",
+			"56821",  /* belt and suspenders with the DTD */
+			G_PARAM_READWRITE);
+  remotefamily_param = 
+    g_param_spec_uint("remotefamily",
+		      "remote family",
+		      "remote address family",
+		      0,
+		      INT_MAX,
+		      AF_UNSPEC,
+		      G_PARAM_READWRITE);
+
+  localhost_param = 
+    g_param_spec_string("localhost",
+			"local host",
+			"local hostname or IP address",
+			"localhost",  /* belt and suspenders with the DTD */
+			G_PARAM_READWRITE);
+
+  localport_param = 
+    g_param_spec_string("localport",
+			"local port",
+			"local port name or number",
+			"0",  /* belt and suspenders with the DTD */
+			G_PARAM_READWRITE);
+  localfamily_param = 
+    g_param_spec_uint("localfamily",
+		      "local family",
+		      "local IP address family",
+		      0,
+		      INT_MAX,
+		      AF_UNSPEC,
+		      G_PARAM_READWRITE);
 
   /* overwrite the base object methods with our own get and set
      property routines */
@@ -171,12 +231,37 @@ static void netperf_control_class_init(NetperfControlClass *klass)
 				  CONTROL_PROP_ID,
 				  id_param);
 
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_REMOTEHOST,
+				  remotehost_param);
+
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_REMOTEPORT,
+				  remoteport_param);
+
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_REMOTEFAMILY,
+				  remotefamily_param);
+
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_LOCALHOST,
+				  localhost_param);
+
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_LOCALPORT,
+				  localport_param);
+
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_LOCALFAMILY,
+				  localfamily_param);
+
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
      perhaps the cotnrol connection going down or somesuch. */
 
   klass->new_message = netperf_control_new_message;
   klass->control_closed = netperf_control_control_closed;
+  klass->connect_control = netperf_control_connect;
 
   netperf_control_signals[NEW_MESSAGE] = 
     g_signal_new("new_message",            /* signal name */
@@ -204,6 +289,16 @@ static void netperf_control_class_init(NetperfControlClass *klass)
 		 g_cclosure_marshal_VOID__VOID,
 		 G_TYPE_NONE,
 		 0);
+  netperf_control_signals[CONTROL_CLOSED] = 
+    g_signal_new("connect",
+		 TYPE_NETPERF_CONTROL,
+		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+		 G_STRUCT_OFFSET(NetperfControlClass, connect_control),
+		 NULL,
+		 NULL,
+		 g_cclosure_marshal_VOID__VOID,
+		 G_TYPE_NONE,
+		 0);
 }
 
 /* signal handler for new message */
@@ -225,6 +320,20 @@ static void netperf_control_control_closed(NetperfControl *control)
   return;
 }
 
+static void netperf_control_connect(NetperfControl *control)
+{
+  g_print("asked to connect control at %p\n",control);
+
+  control->sockfd = establish_control(control->remotehost,
+				      control->remoteport,
+				      control->remotefamily,
+				      control->localhost,
+				      control->localport,
+				      control->localfamily);
+
+  /* REVISIT - do the g_io_channel stuff here */
+
+}
 /* get and set property routines */
 static void netperf_control_set_property(GObject *object,
 					   guint prop_id,
@@ -244,6 +353,30 @@ static void netperf_control_set_property(GObject *object,
     /* we really need to sanity check the reqeusted state against the
        current state here... */
     control->state_req = req_state;
+    break;
+
+  case CONTROL_PROP_REMOTEHOST:
+    control->remotehost = g_value_dup_string(value);
+    break;
+
+  case CONTROL_PROP_REMOTEPORT:
+    control->remoteport = g_value_dup_string(value);
+    break;
+
+  case CONTROL_PROP_REMOTEFAMILY:
+    control->remotefamily = g_value_get_uint(value);
+    break;
+
+  case CONTROL_PROP_LOCALHOST:
+    control->localhost = g_value_dup_string(value);
+    break;
+
+  case CONTROL_PROP_LOCALPORT:
+    control->localport = g_value_dup_string(value);
+    break;
+
+  case CONTROL_PROP_LOCALFAMILY:
+    control->localfamily = g_value_get_uint(value);
     break;
 
   default:
@@ -268,6 +401,30 @@ static void netperf_control_get_property(GObject *object,
 
   case CONTROL_PROP_REQ_STATE:
     g_value_set_uint(value, control->state_req);
+    break;
+
+  case CONTROL_PROP_REMOTEHOST:
+    g_value_set_string(value, control->remotehost);
+    break;
+
+  case CONTROL_PROP_REMOTEPORT:
+    g_value_set_string(value, control->remoteport);
+    break;
+
+  case CONTROL_PROP_REMOTEFAMILY:
+    g_value_set_uint(value, control->remotefamily);
+    break;
+
+  case CONTROL_PROP_LOCALHOST:
+    g_value_set_string(value, control->localhost);
+    break;
+
+  case CONTROL_PROP_LOCALPORT:
+    g_value_set_string(value, control->localport);
+    break;
+
+  case CONTROL_PROP_LOCALFAMILY:
+    g_value_set_uint(value, control->localfamily);
     break;
 
   default:

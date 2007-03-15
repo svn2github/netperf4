@@ -386,6 +386,7 @@ parse_xml_file(char *fname,const xmlChar *doctype, xmlDocPtr *document)
 }
 
 
+/* should this be in netperf-netserver.c? */
 void print_netserver_hash_entry(gpointer key, gpointer value, gpointer user_data)
 {
   NetperfNetserver *netserver;
@@ -410,7 +411,12 @@ void print_netserver_hash_entry(gpointer key, gpointer value, gpointer user_data
 	       "id", &id,
 	       "node", &node,
 	       NULL);
-  g_print("state: %d req_state: %d id %s\n",state,req_state,id);
+  g_print("state: %s (%d) req_state: %s (%d) id %s\n",
+	  netperf_netserver_state_to_string(state),
+	  state,
+	  netperf_netserver_state_to_string(req_state),
+	  req_state,
+	  id);
   g_print("node: %p\n",node);
 
   /* seems we cannot just dump a node absent a doc... */
@@ -453,12 +459,14 @@ void print_test_hash_entry(gpointer key, gpointer value, gpointer user_data)
 	       "id", &id,
 	       "node", &node,
 	       NULL);
-  g_print("test: %s, object %p, user_data %p id %s state %d req_state %d node %p\n",
+  g_print("test: %s, object %p, user_data %p id %s state %s (%d) req_state %s (%d) node %p\n",
 	  (char *)key,
 	  value,
 	  user_data,
 	  id,
+	  netperf_test_state_to_string(state),
 	  state,
+	  netperf_test_state_to_string(state),
 	  req_state,
 	  node);
 
@@ -537,44 +545,6 @@ wait_for_test_to_enter_requested_state(gchar *testid, guint state)
 }
 
 
-
-
-static SOCKET
-connect_netserver(xmlDocPtr doc, xmlNodePtr netserver, server_t *new_server)
-{
-  xmlChar   *remotehost;
-  xmlChar   *remoteport;
-  xmlChar   *localhost;
-  xmlChar   *localport;
-
-  int      localfamily;
-  int      remotefamily;
-  SOCKET      sock;
-
-  /* validation means that we know that the host informaion is in attributes
-     of the netserver element. The xml parser checked them and initialized
-     any optional attributes which where not present.  sgb 2003-10-11 */
-
-  /* pull the remote address family, service and host attributes */
-  remotefamily = strtofam(xmlGetProp(netserver,(const xmlChar *)"family"));
-  remoteport   = xmlGetProp(netserver,(const xmlChar *)"remote_service");
-  remotehost   = xmlGetProp(netserver,(const xmlChar *)"remote_host");
-
-  /* for the time being, the netserver element definition provides only
-     one family attribute - this means no mixed family stuff, which should
-     not be a problem for the moment.  since getaddrinfo() takes a servname
-     parm as an ASCII string we will just pass the string. sgb 2003-10-11 */
-
-  /* now pull the local address family, service and host attributes */
-  localfamily  = strtofam(xmlGetProp(netserver,(const xmlChar *)"family"));
-  localport    = xmlGetProp(netserver,(const xmlChar *)"local_service");
-  localhost    = xmlGetProp(netserver,(const xmlChar *)"local_host");
-
-  /* and now call establish_control */
-  sock = establish_control(remotehost, remoteport, remotefamily,
-                           localhost,  localport,  localfamily);
-  return(sock);
-}
 
 static gboolean periodic_callback(gpointer data)
 {
@@ -956,8 +926,17 @@ static void add_netservers_from_config(xmlDocPtr config_doc) {
 	   connection/object. should we create it explicitly here, or
 	   should it be done when the "node" property is set as that
 	   is, presumably, where the addressing info happens to be? it
-	   should probably be after the netserver has been added to the
-	   server_hash on the off chance that messages start arriving */
+	   should probably be after the netserver has been added to
+	   the server_hash on the off chance that messages start
+	   arriving.  for now since the addressing information is
+	   embedded in the netserver XML node, we want to at least go
+	   through the netserver object so we will "signal" the object
+	   we want it to establish the control connection and let it
+	   decide whether that control will be a separate control
+	   object or not */
+	g_print("asking new server to connect\n");
+	g_signal_emit_by_name(new_server,
+			      "connect_control");
       }
       /* lets go ahead and add the tests associated with this
 	 netserver */

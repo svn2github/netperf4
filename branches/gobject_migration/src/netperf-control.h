@@ -54,13 +54,20 @@ typedef struct _NetperfControl {
   control_state_t  state;     /* the present state of the control */
   control_state_t  state_req; /* the state in which we want the control
 				 to be*/
+  gchar *remotehost;
+  gchar *remoteport;
+  gchar *localhost;
+  gchar *localport;
+
+  guint remotefamily;
+  guint localfamily;
 
   /* private */
   /* things which I think will remain purely private */
   GIOChannel  *source;   /* the io channel over which we communicate
 			    with the remote control.  */
 
-  int  sockfd;    /* the file descriptor associated with the
+  int  sockfd;    /* REVISIT the file descriptor associated with the
 		     socket. THIS NEEDS TO CHANGE TO "SOCKET" ASAP */
 
   /* do we need anything to store messages which could not be sent
@@ -84,6 +91,7 @@ typedef struct _NetperfControlClass {
   /* signals */
   void (*new_message)(NetperfControl *control, gpointer message);
   void (*control_closed)(NetperfControl *control);
+  void (*connect_control)(NetperfControl *control);
 
   /* methods */
 } NetperfControlClass;

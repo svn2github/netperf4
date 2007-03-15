@@ -40,12 +40,17 @@ delete this exception statement from your version.
 #include <stdio.h>
 #endif
 
+#ifdef HAVE_STRING_H
+#include <string.h>
+#endif
+
 #include <libxml/xmlmemory.h>
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
 #include "netperf.h"
 #include "netlib.h"
+#include "netperf-control.h"
 #include "netperf-netserver.h"
 #include "netperf-test.h"
 
@@ -153,6 +158,8 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass);
 enum {
   NEW_MESSAGE,        /* this would be the control connection object
 			 telling us a complete message has arrived. */
+  CONNECT_CONTROL,    /* tells us to go ahead and establish a control
+			 connection */ 
   CONTROL_CLOSED,     /* this would be the control connection object
 			 telling us the controll connection died. */
   LAST_SIGNAL         /* this should always be the last in the list so
@@ -162,13 +169,15 @@ enum {
 			 working happened to do so... */
 };
 
+static void netperf_netserver_connect(NetperfNetserver *netserver);
 static void netperf_netserver_new_message(NetperfNetserver *netserver, gpointer message);
 static void netperf_netserver_control_closed(NetperfNetserver *netserver);
+static void netperf_netserver_connect_control(NetperfNetserver *netserver);
 
 /* a place to stash the id's returned by g_signal_new should we ever
    need to refer to them by their ID. */ 
 
-static guint netperf_netserver_signals[LAST_SIGNAL] = {0,0};
+static guint netperf_netserver_signals[LAST_SIGNAL] = {0,0,0};
 
 GType netperf_netserver_get_type(void) {
   static GType netperf_netserver_type = 0;
@@ -285,6 +294,7 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
 
   klass->new_message = netperf_netserver_new_message;
   klass->control_closed = netperf_netserver_control_closed;
+  klass->connect_control = netperf_netserver_connect_control;
 
   netperf_netserver_signals[NEW_MESSAGE] = 
     g_signal_new("new_message",            /* signal name */
@@ -312,6 +322,55 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
 		 g_cclosure_marshal_VOID__VOID,
 		 G_TYPE_NONE,
 		 0);
+
+  netperf_netserver_signals[CONNECT_CONTROL] = 
+    g_signal_new("connect_control",
+		 TYPE_NETPERF_NETSERVER,
+		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+		 G_STRUCT_OFFSET(NetperfNetserverClass, connect_control),
+		 NULL,
+		 NULL,
+		 g_cclosure_marshal_VOID__VOID,
+		 G_TYPE_NONE,
+		 0);
+		 
+}
+
+char *
+netperf_netserver_state_to_string(int value)
+{
+  char *state; 
+
+  switch (value) {
+  case NETSERVER_PREINIT:
+    state = "PREINIT";
+    break;
+  case NETSERVER_CONNECTED:
+    state = "CONNECTED";
+    break;
+  case NETSERVER_VERS:
+    state = "VERSION";
+    break;
+  case NETSERVER_INIT:
+    state = "INIT";
+    break;
+  case NETSERVER_WORK:
+    state = "WORK";
+    break;
+  case NETSERVER_ERROR:
+    state = "ERROR";
+    break;
+  case NETSERVER_CLOSE:
+    state = "CLOSE";
+    break;
+  case NETSERVER_EXIT:
+    state = "EXIT";
+    break;
+  default:
+    state = "UNKNOWN";
+    break;
+  }
+  return state;
 }
 
 /* a bunch of the message processing code, originally from netmsg.c */
@@ -1382,6 +1441,139 @@ static void netperf_netserver_control_closed(NetperfNetserver *netserver)
   return;
 }
 
+/* signal handler to tell us to establish the control connection */
+static void netperf_netserver_connect_control(NetperfNetserver *server)
+{
+
+  xmlChar   *remotehost;
+  xmlChar   *remoteport;
+  xmlChar   *localhost;
+  xmlChar   *localport;
+
+  int      localfamily;
+  int      remotefamily;
+
+  /* validation means that we know that the host informaion is in attributes
+     of the netserver element. The xml parser checked them and initialized
+     any optional attributes which where not present.  sgb 2003-10-11 */
+
+  /* pull the remote address family, service and host attributes */
+  remotefamily = strtofam(xmlGetProp(server->node,(const xmlChar *)"family"));
+  remoteport   = xmlGetProp(server->node,(const xmlChar *)"remote_service");
+  remotehost   = xmlGetProp(server->node,(const xmlChar *)"remote_host");
+
+  /* for the time being, the netserver element definition provides only
+     one family attribute - this means no mixed family stuff, which should
+     not be a problem for the moment.  since getaddrinfo() takes a servname
+     parm as an ASCII string we will just pass the string. sgb 2003-10-11 */
+
+  /* now pull the local address family, service and host attributes */
+  localfamily  = strtofam(xmlGetProp(server->node,(const xmlChar *)"family"));
+  localport    = xmlGetProp(server->node,(const xmlChar *)"local_service");
+  localhost    = xmlGetProp(server->node,(const xmlChar *)"local_host");
+
+  g_print("server %s asking for new control object with remote %s %s %d local %s %s %d\n",
+	  server->id,
+	  remotehost, 
+	  remoteport,
+	  remotefamily,
+	  localhost,
+	  localport,
+	  localfamily);
+
+  /* armed with this information, create a control object and give it
+     what it needs to do its work, then tell it to go ahead and
+     connect. should this become a g_object_weak_pointer reference? */
+  server->control_object= g_object_new(TYPE_NETPERF_CONTROL,
+				       "remotefamily", remotefamily,
+				       "remotehost", remotehost,
+				       "remoteport", remoteport,
+				       "localfamily", localfamily,
+				       "localhost", localhost,
+				       "localport", localport,
+				       NULL);
+
+  /* and now signal it to connect-up */
+  g_signal_emit_by_name(server->control_object,
+			"connect");
+
+}
+
+static void netperf_netserver_set_state(NetperfNetserver *netserver, guint req_state) 
+{
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+  switch(req_state) {
+  case NETSERVER_PREINIT:
+    /* probably bad to ask a netserver to go to the preinit state? */
+    break;
+
+  case NETSERVER_CONNECTED:
+    /* OK if we are in the PREINIT state, bad otherwise */
+    if (NETSERVER_PREINIT == netserver->state) {
+      /* go ahead and do whatever we need to do */
+      netserver->state_req = req_state;
+    }
+    else {
+      /* badness */
+    }
+    break;
+
+  case NETSERVER_VERS:
+    /* OK if we are in the CONNECTED state, bad otherwise */
+    if (NETSERVER_CONNECTED == netserver->state) {
+      /* go ahead and do whatever we need to do */
+      netserver->state_req = req_state;
+    }
+    else {
+      /* badness */
+    }
+    break;
+
+  case NETSERVER_INIT:
+    /* OK if we are in the CONNECTED state, bad otherwise */
+    if (NETSERVER_VERS == netserver->state) {
+      /* go ahead and do whatever we need to do */
+      netserver->state_req = req_state;
+    }
+    else {
+      /* badness */
+    }
+    break;
+
+  case NETSERVER_WORK:
+    /* OK if we are in the CONNECTED state, bad otherwise */
+    if (NETSERVER_INIT == netserver->state) {
+      /* go ahead and do whatever we need to do */
+      netserver->state_req = req_state;
+    }
+    else {
+      /* badness */
+    }
+    break;
+
+  case NETSERVER_ERROR:
+    /* we can enter the ERROR state any time */
+    netserver->state_req = req_state;
+
+    break;
+
+  case NETSERVER_CLOSE:
+    /* not sure what we do here - do we allow a transition to CLOSE
+       only from the WORK state, or something else? */
+    break;
+
+  case NETSERVER_EXIT:
+    /* not sure what to do here */
+    break;
+ 
+  default:
+    /* naughty naughty */
+    g_print("invalid state provided\n");
+  }
+  NETPERF_DEBUG_EXIT(debug,where);
+}
+
 /* get and set property routines */
 static void netperf_netserver_set_property(GObject *object,
 					   guint prop_id,
@@ -1389,7 +1581,6 @@ static void netperf_netserver_set_property(GObject *object,
 					   GParamSpec *pspec) {
   NetperfNetserver *netserver;
   guint req_state;
-  void *temp_ptr;
 
   netserver = NETPERF_NETSERVER(object);
 
@@ -1401,7 +1592,7 @@ static void netperf_netserver_set_property(GObject *object,
     req_state = g_value_get_uint(value);
     /* we really need to sanity check the reqeusted state against the
        current state here... */
-    netserver->state_req = req_state;
+    netperf_netserver_set_state(netserver,req_state);
     break;
 
   case NETSERVER_PROP_ID:
@@ -1409,8 +1600,11 @@ static void netperf_netserver_set_property(GObject *object,
     break;
 
   case NETSERVER_PROP_CONTROL_CONNECTION:
+    /* I don't think we'll ever be setting this one */
+#ifdef notdef
     temp_ptr = g_value_get_pointer(value);
-    g_object_add_weak_pointer(temp_ptr,&(netserver->control_connection));
+    g_object_add_weak_pointer(temp_ptr,&(netserver->control_object));
+#endif
     break;
 
   case NETSERVER_PROP_NODE:
@@ -1446,7 +1640,7 @@ static void netperf_netserver_get_property(GObject *object,
     break;
 
   case NETSERVER_PROP_CONTROL_CONNECTION:
-    g_value_set_pointer(value, netserver->control_connection);
+    g_value_set_pointer(value, netserver->control_object);
     break;
 
   case NETSERVER_PROP_NODE:

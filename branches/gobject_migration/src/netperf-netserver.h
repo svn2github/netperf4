@@ -113,8 +113,9 @@ struct _NetperfNetserver {
   /* do we need to have references to the test instances associated
      with this netserver instance? */
 
-  /* we do want a weak pointer for the control object */
-  void *control_connection;
+  /* we do want a g_object_weak_pointer for the control object? should
+     this be a different type than just void? */
+  void *control_object;
 
 };
 
@@ -128,6 +129,7 @@ struct _NetperfNetserverClass {
   /* signals */
   void (*new_message)(NetperfNetserver *netserver, gpointer message);
   void (*control_closed)(NetperfNetserver *netserver);
+  void (*connect_control)(NetperfNetserver *netserver);
 
   /* methods */
 };
