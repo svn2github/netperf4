@@ -499,7 +499,11 @@ np_version_check(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
     } 
     rc = NPE_SUCCESS;
     server->state = NETSERVER_INIT;
-    server->state_req = NETSERVER_WORK;   /* is this correct? */
+    server->state_req = NETSERVER_WORK;   /* is this correct to do
+					     here? I think it depends
+					     on it being interactive
+					     vs batch processing, but
+					     am not sure */
   } else {
     /* versions don't match */
     if (debug) {
