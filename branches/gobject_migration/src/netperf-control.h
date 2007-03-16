@@ -72,6 +72,8 @@ typedef struct _NetperfControl {
   control_state_t  state;     /* the present state of the control */
   control_state_t  state_req; /* the state in which we want the control
 				 to be*/
+  gboolean is_netperf;   /* are we a netperf-side control object or
+			    netserver-side control object? */
   gchar *remotehost;
   gchar *remoteport;
   gchar *localhost;
@@ -85,6 +87,8 @@ typedef struct _NetperfControl {
   GIOChannel  *source;   /* the io channel over which we communicate
 			    with the remote control.  */
 
+  guint       watch_id;  /* the id of the channel watch we ahve
+			    installed to pull things from the control channel */
   int  sockfd;    /* REVISIT the file descriptor associated with the
 		     socket. THIS NEEDS TO CHANGE TO "SOCKET" ASAP */
 

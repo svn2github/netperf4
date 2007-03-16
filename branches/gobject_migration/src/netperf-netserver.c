@@ -137,7 +137,8 @@ enum {
   NETSERVER_PROP_STATE,
   NETSERVER_PROP_REQ_STATE,
   NETSERVER_PROP_NODE,
-  NETSERVER_PROP_CONTROL_CONNECTION
+  NETSERVER_PROP_CONTROL_CONNECTION,
+  NETSERVER_PROP_IS_NETPERF
 };
 
 /* some forward declarations to make the compiler happy regardless of
@@ -214,6 +215,7 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   GParamSpec *id_param;
   GParamSpec *control_connection_param;
   GParamSpec *node_param;
+  GParamSpec *is_netperf_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -261,6 +263,13 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
 			 "XML configuration node",
 			 G_PARAM_READWRITE);
 
+  is_netperf_param = 
+    g_param_spec_boolean("is_netperf",
+			 "is on netperf",
+			 "is this netserver on a netperf or a netserver?",
+			 TRUE,
+			 G_PARAM_READWRITE);
+
   /* overwrite the base object methods with our own get and set
      property routines */
 
@@ -287,6 +296,10 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   g_object_class_install_property(g_object_class,
 				  NETSERVER_PROP_NODE,
 				  node_param);
+
+  g_object_class_install_property(g_object_class,
+				  NETSERVER_PROP_IS_NETPERF,
+				  is_netperf_param);
 
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
@@ -413,13 +426,15 @@ process_message(NetperfNetserver *server, xmlDocPtr doc)
   if (server != NULL)  cur_state = 1 << server->state;
     
   if (debug) {
-    fprintf(where,"process_message: received '%s' message from server %s\n",
+    fprintf(where,"%s: received '%s' message from server %s\n",
+	    __func__,
             msg->xmlChildrenNode->name, fromnid);
-    fprintf(where,"process_message: servers current state is %d\n", cur_state);
+    fprintf(where,"%s: servers current state is %d\n", __func__, cur_state);
     fflush(where);
   }
   for (cur = msg->xmlChildrenNode; cur != NULL; cur = cur->next) {
     which_msg = server->message_state_table;
+    g_print("message_state_table %p\n",server->message_state_table);
     while (which_msg->msg_name != NULL) {
       if (xmlStrcmp(cur->name,(xmlChar *)which_msg->msg_name)) {
         which_msg++;
@@ -428,7 +443,8 @@ process_message(NetperfNetserver *server, xmlDocPtr doc)
       if (which_msg->valid_states & cur_state) {
         rc = (which_msg->msg_func)(cur,doc,server);
         if (rc != NPE_SUCCESS) {
-          fprintf(where,"process_message: received %d from %s\n",
+          fprintf(where,"%s: received %d from %s\n",
+		  __func__,
                   rc, which_msg->msg_name);
           fflush(where);
           server->state = NSRV_ERROR;
@@ -444,7 +460,8 @@ process_message(NetperfNetserver *server, xmlDocPtr doc)
       } else {
         if (debug || loc_debug) {
           fprintf(where,
-                  "process_message:state is %d got unexpected '%s' message.\n",
+                  "%s :state is %d got unexpected '%s' message.\n",
+		  __func__,
                   cur_state,
                   cur->name);
           fflush(where);
@@ -481,6 +498,8 @@ np_version_check(xmlNodePtr msg, xmlDocPtr doc, NetperfNetserver *server)
       fflush(where);
     } 
     rc = NPE_SUCCESS;
+    server->state = NETSERVER_INIT;
+    server->state_req = NETSERVER_WORK;   /* is this correct? */
   } else {
     /* versions don't match */
     if (debug) {
@@ -504,6 +523,7 @@ send_version_message(NetperfNetserver *server, const xmlChar *fromnid)
   int rc = NPE_SUCCESS;
   xmlNodePtr message;
 
+  netperf_control_msg_desc_t *desc;
 
   if ((message = xmlNewNode(NULL,(xmlChar *)"version")) != NULL) {
     /* set the properties of the version message -
@@ -512,19 +532,31 @@ send_version_message(NetperfNetserver *server, const xmlChar *fromnid)
         (xmlSetProp(message,(xmlChar *)"updt",NETPERF_UPDATE)  != NULL) &&
         (xmlSetProp(message,(xmlChar *)"fix", NETPERF_FIX)     != NULL))  {
       /* still smiling */
-      /* almost there... */
-      rc = write_to_control_connection(server->source,
-				       message,
-				       server->id,
-				       fromnid);
-      if (rc != NPE_SUCCESS) {
-        if (debug) {
-          fprintf(where,
-                  "send_version_message: write_to_control_connection failed\n");
-          fflush(where);
-        }
-      }
-    } else {
+      /* almost there... build a descriptor to avoid having a three
+	 argmuent marshaller for a signal and just leverage the
+	 existing one for a pointer :) the control object will be
+	 responsible for freeing the fields of the desc as well as the
+	 desc itself - while the "signal" since it has a return code
+	 implies a procedure call, later the control object may
+	 decided to queue something so we best not mess with things
+	 behind its back */
+
+      desc = g_malloc(sizeof(netperf_control_msg_desc_t));
+      desc->body = message;
+      /* should this be a copy using glib, or libxml2 routines? */
+      desc->nid = g_strdup(server->id);
+      desc->fromnid = g_strdup(fromnid);
+
+      server->state     = NETSERVER_VERS;
+      server->state_req = NETSERVER_VERS;
+
+      /* now tell the control object to send the thing. perhaps one of
+	 these days we'll have a return value :) */
+      g_signal_emit_by_name(server->control_object,
+			    "message", desc);
+
+    }
+    else {
       if (debug) {
         fprintf(where,
                 "send_version_message: an xmlSetProp failed\n");
@@ -532,8 +564,11 @@ send_version_message(NetperfNetserver *server, const xmlChar *fromnid)
       }
       rc = NPE_SEND_VERSION_XMLSETPROP_FAILED;
     }
-    /* now that we are done with it, best to free the message node */
-    xmlFreeNode(message);
+    /* now that we are done with it, best to free the message
+       node. however, that needs to be done by the control object now
+       because that will be the thing that "knows" when it is finished
+       with it */
+    /* xmlFreeNode(message); */
   }
   else {
     if (debug) {
@@ -1506,6 +1541,7 @@ static void netperf_netserver_connect_control(NetperfNetserver *server)
 					 "localhost", localhost,
 					 "localport", localport,
 					 "netserver", server,
+					 "is_netperf", TRUE,
 					 NULL);
     /* set our desired state correctly so when we receive the signal
        we are connected the right things can happen */
@@ -1539,6 +1575,9 @@ static void netperf_netserver_control_connected(NetperfNetserver *netserver)
     netserver->state = NETSERVER_CONNECTED;
     /* REVISIT - do we need to make sure that netserver->state_req is
        suitably set? */
+    /* probably need to get rid of the constant string one of these
+       days */
+    send_version_message(netserver,"netperf");
   }
   else {
     g_print("%s received unexpected control_connected signal for server %p id %s\n",
@@ -1660,6 +1699,15 @@ static void netperf_netserver_set_property(GObject *object,
     netserver->node = g_value_get_pointer(value);
     break;
 
+  case NETSERVER_PROP_IS_NETPERF:
+    netserver->is_netperf = g_value_get_boolean(value);
+    if (netserver->is_netperf) 
+      netserver->message_state_table = NP_Msgs;
+    else
+      netserver->message_state_table = NS_Msgs;
+    g_print("setting netservers is_netperf property to %p\n",netserver->message_state_table);
+    break;
+
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;
@@ -1695,6 +1743,9 @@ static void netperf_netserver_get_property(GObject *object,
   case NETSERVER_PROP_NODE:
     g_value_set_pointer(value, netserver->node);
     break;
+
+  case NETSERVER_PROP_IS_NETPERF:
+    g_value_set_boolean(value, netserver->is_netperf);
 
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);

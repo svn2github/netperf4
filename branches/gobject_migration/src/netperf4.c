@@ -912,6 +912,7 @@ static void add_netservers_from_config(xmlDocPtr config_doc) {
       new_server = g_object_new(TYPE_NETPERF_NETSERVER,
 				"id", netserverid,
 				"node", this_netserver,
+				"is_netperf", TRUE,
 				NULL);
       if (new_server != NULL) {    /* we have a new netserver object,
 				      lets add it to the server_hash */

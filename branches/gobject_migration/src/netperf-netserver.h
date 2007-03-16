@@ -83,10 +83,12 @@ struct _NetperfNetserver {
 
   gchar   *my_nid;     /* an identifier used by netserver? */
 
+
   GIOChannel  *source;   /* the io channel over which we communicate
 			    with the remote netserver. should this
 			    instead be a weak reference to a control
 			    connection object? */
+
 
   xmlNodePtr  node;      /* the XML document node containing the
 			    servers configuration data */
@@ -94,7 +96,8 @@ struct _NetperfNetserver {
   netserver_state_t  state;     /* the present state of the netserver */
   netserver_state_t  state_req; /* the state in which we want the netserver
 			    to be*/
-
+  gboolean    is_netperf; /* is this netserver on a netperf or a
+			     netserver */
   gint        err_rc;    /* error code received which caused this
 			    server to enter the NETSERVER_ERROR state */
   char        *err_fn;   /* name of the routine which placed this

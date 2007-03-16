@@ -2095,7 +2095,8 @@ allocate_netperf(GIOChannel *source, xmlDocPtr message, gpointer data) {
 gboolean
 xml_parse_control_message(gchar *message, gsize length) {
   
-  xmlDocPtr xml_message;
+  xmlDocPtr xml_doc;
+  xmlNodePtr xml_message;
   gchar *key;
   gboolean ret;
   NetperfNetserver *netserver;
@@ -2110,7 +2111,8 @@ xml_parse_control_message(gchar *message, gsize length) {
 	      length,
 	      message);
   }
-  if ((xml_message = xmlParseMemory(message, length)) != NULL) {
+
+  if ((xml_doc = xmlParseMemory(message, length)) != NULL) {
     /* got the message, run with it */
     if (debug) {
       g_fprintf(where,
@@ -2118,7 +2120,7 @@ xml_parse_control_message(gchar *message, gsize length) {
 		__func__,
 		length,
 		message,
-		xml_message);
+		xml_doc);
     }
 #ifdef notdef
     /* we used to see if this was the first message on the control
@@ -2131,16 +2133,33 @@ xml_parse_control_message(gchar *message, gsize length) {
       global_state->first_message = FALSE;
     }
 #endif
-    /* extract the netserver id from the to portion of the message */
+
+    xml_message =  xmlDocGetRootElement(xml_doc);
+
+    /* extract the id from the to portion of the message. if the
+       destination is "netperf" then it implies we are the netperf
+       side (should have a sanity check there at some point) which
+       means to find the netserver we really want to be looking
+       based on the fromnid, not the tonid */
+
+      
     key = xmlGetProp(xml_message, (const xmlChar *)"tonid");
 
     if (NULL != key) {
       /* lookup its destination and send it on its way. we need to be
 	 certain that netserver.c has added a suitable entry to a
 	 netperf_netserver_hash like netperf.c does. */
-      
+
       netserver = g_hash_table_lookup(server_hash,key);
 
+      if (debug) {
+	g_fprintf(where,
+		  "%s found netserver at %p in the hash using %s as the key\n",
+		  __func__,
+		  netserver,
+		  key);
+	fflush(where);
+      }
       /* should this be a signal sent to the netserver object, a
 	 method we invoke, or a property we attempt to set? I suspect
 	 just about any of those would actually work, question is
@@ -2149,12 +2168,13 @@ xml_parse_control_message(gchar *message, gsize length) {
 	 here which I suppose is a good thing. REVISIT we used to call
 	 a routine called process_message with a pointer to the server
 	 structure and a pointer to the message */
-      g_signal_emit_by_name(netserver,"new-message",xml_message);
+      g_signal_emit_by_name(netserver,"new-message",xml_doc);
       /* REVISIT this - should we have a return value from the signal?
 	 */
       ret = TRUE;
     }
     else {
+      g_print("YoHo! the key was null!\n");
       ret = FALSE;
     }
   }

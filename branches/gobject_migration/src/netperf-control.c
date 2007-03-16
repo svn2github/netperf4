@@ -43,10 +43,12 @@ delete this exception statement from your version.
 #include <glib-object.h>
 #include <stdio.h>
 #include "netperf-control.h"
+#include "netperf-netserver.h"
 #include "netperf.h"
 
 extern int debug;
 extern FILE * where;
+extern GHashTable *server_hash;
 
 enum {
   CONTROL_PROP_DUMMY_0,    /* GObject does not like a zero value for a property id */
@@ -59,11 +61,16 @@ enum {
   CONTROL_PROP_LOCALHOST,
   CONTROL_PROP_LOCALPORT,
   CONTROL_PROP_LOCALFAMILY,
-  CONTROL_PROP_NETSERVER
+  CONTROL_PROP_NETSERVER,
+  CONTROL_PROP_IS_NETPERF
 };
 
 /* some forward declarations to make the compiler happy regardless of
    the order in which things appear in the file */
+static gboolean read_from_control_connection(GIOChannel *source,
+					     GIOCondition condition,
+					     gpointer data);
+
 static void netperf_control_set_property(GObject *object,
 					   guint prop_id,
 					   const GValue *value,
@@ -139,6 +146,7 @@ static void netperf_control_class_init(NetperfControlClass *klass)
   GParamSpec *localport_param;
   GParamSpec *localfamily_param;
   GParamSpec *netserver_param;
+  GParamSpec *is_netperf_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -220,6 +228,13 @@ static void netperf_control_class_init(NetperfControlClass *klass)
 			 "pointer to the owning netserver object",
 			 G_PARAM_READWRITE);
 
+  is_netperf_param = 
+    g_param_spec_boolean("is_netperf",
+			 "is netperf side?",
+			 "is this a netperf-side control object or netserver?",
+			 TRUE,
+			 G_PARAM_READWRITE);
+			 
   /* overwrite the base object methods with our own get and set
      property routines */
 
@@ -266,6 +281,10 @@ static void netperf_control_class_init(NetperfControlClass *klass)
   g_object_class_install_property(g_object_class,
 				  CONTROL_PROP_NETSERVER,
 				  netserver_param);
+
+  g_object_class_install_property(g_object_class,
+				  CONTROL_PROP_IS_NETPERF,
+				  is_netperf_param);
 
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
@@ -515,7 +534,14 @@ static void netperf_control_connect(NetperfControl *control)
   control->state     = CONTROL_CONNECTED;
   control->state_req = CONTROL_CONNECTED;
   
-  
+  /* we need to add a watch to the main event loop so we can start
+     pulling messages from the socket */
+  control->watch_id = g_io_add_watch(control->source,
+				     G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+				     read_from_control_connection,
+				     control);
+  g_print("ho! adding a watch_id returned %u\n",control->watch_id);
+
   /* REVISIT this should be conditional on all the control connection stuff
      being successful */
   g_signal_emit_by_name(control->netserver,"control_connected");
@@ -571,6 +597,10 @@ static void netperf_control_set_property(GObject *object,
     control->netserver = g_value_get_pointer(value);
     break;
 
+  case CONTROL_PROP_IS_NETPERF:
+    control->is_netperf = g_value_get_boolean(value);
+    break;
+
   default:
     G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
     break;
@@ -621,6 +651,10 @@ static void netperf_control_get_property(GObject *object,
 
   case CONTROL_PROP_NETSERVER:
     g_value_set_pointer(value, control->netserver);
+    break;
+
+  case CONTROL_PROP_IS_NETPERF:
+    g_value_set_boolean(value, control->is_netperf);
     break;
 
   default:
@@ -700,7 +734,111 @@ handle_control_connection_error(GIOChannel *source, gpointer data) {
   return(FALSE);
 }
 
-gboolean
+/* given a buffer with a complete control message, XML parse it and
+   then send it on its way. */
+static gboolean
+netperf_control_parse_message(NetperfControl *control) {
+  
+  xmlDocPtr xml_doc;
+  xmlNodePtr xml_message;
+  gchar *key;
+  gboolean ret;
+  NetperfNetserver *netserver;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  if (debug) {
+    g_fprintf(where,
+	      "%s asked to parse %d byte message '%*s'\n",
+	      __func__,
+	      control->bytes_received,
+	      control->bytes_received,
+	      control->buffer);
+  }
+
+  if ((xml_doc = xmlParseMemory(control->buffer, control->bytes_received)) != NULL) {
+    /* got the message, run with it */
+    if (debug) {
+      g_fprintf(where,
+		"%s:xmlParseMemory parsed a %d byte message at %p giving doc at %p\n",
+		__func__,
+		control->bytes_received,
+		control->buffer,
+		xml_doc);
+    }
+#ifdef notdef
+    /* we used to see if this was the first message on the control
+       connection, which was related to this routine being used only
+       by netserver.c and not netperf.c et al.  we will have to
+       figure-out something else to do in that case. */
+    /* was this the first message on the control connection? */
+    if (global_state->first_message) {
+      allocate_netperf(source,xml_message,data);
+      global_state->first_message = FALSE;
+    }
+#endif
+
+    xml_message =  xmlDocGetRootElement(xml_doc);
+
+    /* extract the id from the to portion of the message. if the
+       destination is "netperf" then it implies we are the netperf
+       side (should have a sanity check there at some point) which
+       means to find the netserver we really want to be looking
+       based on the fromnid, not the tonid */
+
+    if (control->is_netperf) 
+      key = xmlGetProp(xml_message, (const xmlChar *)"fromnid");
+    else
+      key = xmlGetProp(xml_message, (const xmlChar *)"tonid");
+
+    if (NULL != key) {
+      /* lookup its destination and send it on its way. we need to be
+	 certain that netserver.c has added a suitable entry to a
+	 netperf_netserver_hash like netperf.c does. */
+
+      netserver = g_hash_table_lookup(server_hash,key);
+
+      if (debug) {
+	g_fprintf(where,
+		  "%s found netserver at %p in the hash using %s as the key\n",
+		  __func__,
+		  netserver,
+		  key);
+	fflush(where);
+      }
+      /* should this be a signal sent to the netserver object, a
+	 method we invoke, or a property we attempt to set? I suspect
+	 just about any of those would actually work, question is
+	 which to use? if we start with either a signal or a property
+	 we won't be dereferencing anything from the object pointer
+	 here which I suppose is a good thing. REVISIT we used to call
+	 a routine called process_message with a pointer to the server
+	 structure and a pointer to the message */
+      g_signal_emit_by_name(netserver,"new-message",xml_doc);
+      /* REVISIT this - should we have a return value from the signal?
+	 */
+      ret = TRUE;
+    }
+    else {
+      g_print("YoHo! the key was null!\n");
+      ret = FALSE;
+    }
+  }
+  else {
+    if (debug) {
+      g_fprintf(where,
+		"%s: xmlParseMemory gagged on a %d byte message at %p\n",
+		__func__,
+		control->bytes_received,
+		control->buffer);
+    }
+    ret = FALSE;
+  }
+  NETPERF_DEBUG_EXIT(debug,where);
+  return(ret);
+}
+
+static gboolean
 read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointer data) {
 
   gsize bytes_read;
@@ -711,6 +849,9 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
   NetperfControl *control_object = data;
 
   NETPERF_DEBUG_ENTRY(debug,where);
+
+  g_print("Yo! reading from control connection debug is %d where is %p\n",
+	  debug,where);
 
   if (debug) {
     g_fprintf(where,
@@ -851,15 +992,13 @@ read_from_control_connection(GIOChannel *source, GIOCondition condition, gpointe
       /* make sure we are NULL terminated just in case someone tries
 	 to print it as a string or something. */
       control_object->buffer[control_object->bytes_received] = '\0';
-      /* xml_parse_control_message, from netlib, will attempt to
-	 convert the buffer into an XML document and will then parse
-	 it to find the correct destination. we have it in netlib
-	 because we don't want no stinkin XML here in the control
-	 object code :) */
-      ret = xml_parse_control_message(control_object->buffer,
-				      control_object->bytes_received,
-				      data,
-				      source);
+
+      /* should we be "signaling" here or just go ahead and pretend
+	 that this routing is control object code anyway - might as
+	 well for the time being */
+
+      ret = netperf_control_parse_message(control_object);
+
       /* let us not forget to reset our control_object shall we?  we
 	 don't really want to re-parse the same message over and over
 	 again... raj 2006-03-22 */
