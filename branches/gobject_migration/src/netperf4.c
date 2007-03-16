@@ -1023,7 +1023,8 @@ int main(int argc, char **argv)
      whim and whether or not the user asked for an interactive session */ 
   add_netservers_from_config(config_doc);
 
-  loop = g_main_loop_new(NULL, FALSE);
+  loop = g_main_loop_new(NULL,   /* use the default context */
+			 FALSE); /* the loop isn't running at the time */
 
   if (want_interactive) {
     g_print("Yo, the user wants an interactive session\n");
@@ -1045,34 +1046,6 @@ int main(int argc, char **argv)
 
   g_main_loop_run(loop);
 
-#ifdef notdef
-  netserver = g_object_new(TYPE_NETPERF_NETSERVER,
-			   "req-state", NSRV_CONNECTED,
-			   "id", "george",
-			   NULL);
-  g_print("netserver george is at %p\n",netserver);
-
-  g_hash_table_replace(server_hash,
-		       g_strdup("george"),
-		       netserver);
-
-  netserver = g_object_new(TYPE_NETPERF_NETSERVER,
-			   "req-state", NSRV_CONNECTED,
-			   "id", "fred",
-			   NULL);
-  g_print("netserver fred is at %p\n",netserver);
-
-  g_hash_table_replace(server_hash,
-		       g_strdup("fred"),
-		       netserver);
-
-  netserver = g_hash_table_lookup(server_hash,"fred");
-  g_print("netserver fred is %p from the hash table\n",
-	  netserver);
-
-  /* try iterating through all the entries in the hash table */
-  g_hash_table_foreach(server_hash, print_netserver_hash_entry, NULL);
-#endif
 
   return 0;
 
