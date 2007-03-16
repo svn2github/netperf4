@@ -78,7 +78,7 @@ static void netperf_control_class_init(NetperfControlClass *klass);
 
 /* our control signals */
 enum {
-  NEW_MESSAGE,        /* this would be the control connection object
+  MESSAGE,        /* this would be the control connection object
 			 telling us a complete message has arrived. */
   CONTROL_CLOSED,     /* this would be the control connection object
 			 telling us the control connection died. */
@@ -89,7 +89,7 @@ enum {
 			 we can use it to size the array correctly. */
 };
 
-static void netperf_control_new_message(NetperfControl *control, gpointer message);
+static void netperf_control_message(NetperfControl *control, gpointer message);
 static void netperf_control_control_closed(NetperfControl *control);
 
 static void netperf_control_connect(NetperfControl *control);
@@ -271,19 +271,19 @@ static void netperf_control_class_init(NetperfControlClass *klass)
      have a signal say for the arrival of a complete message or
      perhaps the cotnrol connection going down or somesuch. */
 
-  klass->new_message = netperf_control_new_message;
+  klass->message = netperf_control_message;
   klass->control_closed = netperf_control_control_closed;
   klass->connect_control = netperf_control_connect;
 
-  netperf_control_signals[NEW_MESSAGE] = 
-    g_signal_new("new_message",            /* signal name */
+  netperf_control_signals[MESSAGE] = 
+    g_signal_new("message",            /* signal name */
 		 TYPE_NETPERF_CONTROL,   /* class type id */
 		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED, /* options,
 							   not sure if
 							   G_SIGNAL_DETAILED
 							   is
 							   indicated */
-		 G_STRUCT_OFFSET(NetperfControlClass, new_message),
+		 G_STRUCT_OFFSET(NetperfControlClass, message),
 		 NULL,                     /* no accumulator */
 		 NULL,                     /* so no accumulator data */
 		 g_cclosure_marshal_VOID__POINTER, /* return void,
@@ -314,12 +314,150 @@ static void netperf_control_class_init(NetperfControlClass *klass)
 }
 
 /* signal handler for new message */
-static void netperf_control_new_message(NetperfControl *control, gpointer message)
+static void netperf_control_message(NetperfControl *control, gpointer message)
 {
-  g_print("A new message %p arrived for control object %p\n",
-	  message,
-	  control);
+  netperf_control_msg_desc_t *descriptor = message;
 
+  g_print("Control object %p was requested to send a message from descriptor %p\n",
+	  control,
+	  message);
+
+  int rc;
+  int32_t length;
+
+  gchar *chars_to_send;
+
+  xmlDocPtr doc;
+  xmlDtdPtr dtd;
+  xmlNodePtr message_header;
+  xmlNodePtr new_node;
+  char *control_message;
+  int  control_message_len;
+  gsize bytes_written;
+  GError *error = NULL;
+  GIOStatus status;
+
+  if ((doc = xmlNewDoc((xmlChar *)"1.0")) != NULL) {
+    /* zippity do dah */
+    doc->standalone = 0;
+    dtd = xmlCreateIntSubset(doc,(xmlChar *)"message",NULL,NETPERF_DTD_FILE);
+    if (dtd != NULL) {
+      if (((message_header = xmlNewNode(NULL,(xmlChar *)"message")) != NULL) &&
+          (xmlSetProp(message_header,(xmlChar *)"tonid",descriptor->nid) != NULL) &&
+          (xmlSetProp(message_header,(xmlChar *)"fromnid",descriptor->fromnid) != NULL)) {
+        /* zippity ay */
+        xmlDocSetRootElement(doc,message_header);
+        /* it certainly would be nice to not have to do this with two
+           calls... raj 2003-02-28 */
+        if (((new_node = xmlDocCopyNode(descriptor->body,doc,1)) != NULL) &&
+            (xmlAddChild(message_header, new_node) != NULL)) {
+	  /* IF there were a call where I could specify the buffer,
+	     then we wouldn't have to copy this again to get things
+	     contiguous with the "header" - then again, if the glib IO
+	     channel stuff offered a gathering write call it wouldn't
+	     matter... raj 2006-03-24 */
+          xmlDocDumpMemory(doc,
+                           (xmlChar **)&control_message,
+                           &control_message_len);
+          if (control_message_len > 0) {
+            /* what a wonderful day */
+
+	    length = control_message_len;
+
+	    if (debug) {
+	      g_fprintf(where,
+			"%s allocating %d bytes\n",
+			__func__,
+			length+NETPERF_MESSAGE_HEADER_SIZE);
+	    }
+
+	    chars_to_send = g_malloc(length+NETPERF_MESSAGE_HEADER_SIZE);
+
+	    /* if glib IO channels offered a gathering write, this
+	       silliness wouldn't be necessary.  yes, they offer
+	       buffered I/O and I could do two writes and then a
+	       flush, but dagnabit, if I could just call sendmsg()
+	       before, so no extra copies, no flushes, it certainly
+	       would be nice to be able to do the same with an IO
+	       channel. raj 2006-03-24 */
+
+            /* the message length send via the network does not include
+               the length itself... raj 2003-02-27 */
+            length = htonl(strlen(control_message));
+
+	    /* first copy the "header" ... */
+	    memcpy(chars_to_send,
+		   &length,
+		   NETPERF_MESSAGE_HEADER_SIZE);
+	    if (debug) {
+	      g_fprintf(where,
+			"%s copied %d bytes to %p\n",
+			__func__,
+			NETPERF_MESSAGE_HEADER_SIZE,
+			chars_to_send);
+	    }
+	    /* ... now copy the "data" */
+	    memcpy(chars_to_send+NETPERF_MESSAGE_HEADER_SIZE,
+		   control_message,
+		   control_message_len);
+
+	    if (debug) {
+	      g_fprintf(where,
+			"%s copied %d bytes to %p\n",
+			__func__,
+			control_message_len,
+			chars_to_send+NETPERF_MESSAGE_HEADER_SIZE);
+	    }
+
+	    /* and finally, send the data */
+            status = g_io_channel_write_chars(control->source,
+					      chars_to_send,
+					      control_message_len +
+					        NETPERF_MESSAGE_HEADER_SIZE,
+					      &bytes_written,
+					      &error);
+
+            if (debug) {
+              /* first display the header */
+              fprintf(where, "Sending %d byte message\n",
+                      control_message_len);
+              fprintf(where, "|%*s| ",control_message_len,control_message);
+              fflush(where);
+            }
+            if (bytes_written == 
+		(control_message_len+NETPERF_MESSAGE_HEADER_SIZE)) {
+	      if (debug) {
+		fprintf(where,"was successful\n");
+	      }
+              rc = NPE_SUCCESS;
+            } else {
+              rc = NPE_SEND_CTL_MSG_FAILURE;
+	      if (debug) {
+		fprintf(where,"failed\n");
+	      }
+            }
+	    g_free(chars_to_send);
+	    /* this may not be the 100% correct place for this */
+	    xmlFreeDoc(doc);
+	    free(control_message);
+          } else {
+            rc = NPE_SEND_CTL_MSG_XMLDOCDUMPMEMORY_FAILED;
+          }
+        } else {
+          rc = NPE_SEND_CTL_MSG_XMLCOPYNODE_FAILED;
+        }
+      } else {
+        rc = NPE_SEND_CTL_MSG_XMLNEWNODE_FAILED;
+      }
+    } else {
+      rc = NPE_SEND_CTL_MSG_XMLNEWDTD_FAILED;
+    }
+  } else {
+    rc = NPE_SEND_CTL_MSG_XMLNEWDOC_FAILED;
+  }
+  /* the signaller allocated, we free the descriptor - do we also free
+     any of the contents? */
+  g_free(descriptor);
   return;
 }
 
@@ -334,6 +472,9 @@ static void netperf_control_control_closed(NetperfControl *control)
 
 static void netperf_control_connect(NetperfControl *control)
 {
+  GIOStatus   status;
+  GError      *error = NULL;
+
   g_print("asked to connect control at %p\n",control);
 
   control->sockfd = establish_control(control->remotehost,
@@ -344,7 +485,37 @@ static void netperf_control_connect(NetperfControl *control)
 				      control->localfamily);
 
   /* REVISIT - do the g_io_channel stuff here */
-
+#ifdef G_OS_WIN32
+  control->source = g_io_channel_win32_new_socket(control->sockfd);
+#else
+  control->source = g_io_channel_unix_new(control->sockfd);
+#endif
+  status = g_io_channel_set_flags(control->source,
+				  G_IO_FLAG_NONBLOCK,
+				  &error);
+  if (error) {
+    g_warning("g_io_channel_set_flags %s %d %s\n",
+	      g_quark_to_string(error->domain),
+	      error->code,
+	      error->message);
+    g_clear_error(&error);
+  }
+  
+  status = g_io_channel_set_encoding(control->source,NULL,&error);
+  if (error) {
+    g_warning("g_io_channel_set_encoding %s %d %s\n",
+	      g_quark_to_string(error->domain),
+	      error->code,
+	      error->message);
+    g_clear_error(&error);
+  }
+  
+  g_io_channel_set_buffered(control->source,FALSE);
+  
+  control->state     = CONTROL_CONNECTED;
+  control->state_req = CONTROL_CONNECTED;
+  
+  
   /* REVISIT this should be conditional on all the control connection stuff
      being successful */
   g_signal_emit_by_name(control->netserver,"control_connected");

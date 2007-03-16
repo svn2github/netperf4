@@ -35,6 +35,19 @@ delete this exception statement from your version.
 /* declarations to provide us with a Control object to be used by
    netperf4's GObject conversion */
 
+/* initially I wanted to keep netperf-control free of XML, but that is
+   not terribly practical */
+
+#include <libxml/xmlmemory.h>
+#include <libxml/parser.h>
+#include <libxml/tree.h>
+
+typedef struct netperf_control_msg_desc {
+  xmlNodePtr  body;    /* message body */
+  xmlChar    *nid;     /* the destination id */
+  xmlChar    *fromnid; /* the source id */
+} netperf_control_msg_desc_t;
+
 typedef enum netperf_control_state {
   CONTROL_PREINIT,
   CONTROL_CONNECTED,
@@ -94,7 +107,7 @@ typedef struct _NetperfControlClass {
   GObjectClass parent_class;
 
   /* signals */
-  void (*new_message)(NetperfControl *control, gpointer message);
+  void (*message)(NetperfControl *control, gpointer message);
   void (*control_closed)(NetperfControl *control);
   void (*connect_control)(NetperfControl *control);
 

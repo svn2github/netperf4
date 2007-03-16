@@ -1517,7 +1517,7 @@ static void netperf_netserver_connect_control(NetperfNetserver *server)
   else {
     /* just what should we do if we are signaled to connect and we are
        not in NETSERVER_PREINIT? */
-    g_print("%s Yo! netserver at %p id %s was asked to connect when it was in state %s rather than NETSERVER_PREINIT!\n",
+    g_print("%s Yo! netserver at %p id %s was asked to connect when it was in state %d rather than NETSERVER_PREINIT!\n",
 	    __func__,
 	    server,
 	    server->id,
