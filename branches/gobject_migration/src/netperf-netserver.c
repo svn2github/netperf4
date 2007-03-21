@@ -163,6 +163,8 @@ enum {
 			 connection */ 
   CONTROL_CLOSED,     /* this would be the control connection object
 			 telling us the controll connection died. */
+  SEND_MESSAGE,       /* this would be someone asking us to send a
+			 message */  
   LAST_SIGNAL         /* this should always be the last in the list so
 			 we can use it to size the array correctly. of
 			 course, we may never actually use the array,
@@ -174,11 +176,12 @@ static void netperf_netserver_new_message(NetperfNetserver *netserver, gpointer 
 static void netperf_netserver_control_closed(NetperfNetserver *netserver);
 static void netperf_netserver_connect_control(NetperfNetserver *netserver);
 static void netperf_netserver_control_connected(NetperfNetserver *netserver);
+static void netperf_netserver_send_message(NetperfNetserver *netserver, gpointer*desc);
 
 /* a place to stash the id's returned by g_signal_new should we ever
    need to refer to them by their ID. */ 
 
-static guint netperf_netserver_signals[LAST_SIGNAL] = {0,0,0};
+static guint netperf_netserver_signals[LAST_SIGNAL] = {0,0,0,0};
 
 GType netperf_netserver_get_type(void) {
   static GType netperf_netserver_type = 0;
@@ -309,6 +312,7 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
   klass->control_closed = netperf_netserver_control_closed;
   klass->connect_control = netperf_netserver_connect_control;
   klass->control_connected = netperf_netserver_control_connected;
+  klass->send_message = netperf_netserver_send_message;
 
   netperf_netserver_signals[NEW_MESSAGE] = 
     g_signal_new("new_message",            /* signal name */
@@ -326,6 +330,25 @@ static void netperf_netserver_class_init(NetperfNetserverClass *klass)
 		 G_TYPE_NONE,              /* type of return value */
 		 1,                        /* one additional parameter */
 		 G_TYPE_POINTER);          /* and its type */
+
+  netperf_netserver_signals[SEND_MESSAGE] = 
+    g_signal_new("send_message",            /* signal name */
+		 TYPE_NETPERF_NETSERVER,   /* class type id */
+		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED, /* options,
+							   not sure if
+							   G_SIGNAL_DETAILED
+							   is
+							   indicated */
+		 G_STRUCT_OFFSET(NetperfNetserverClass, send_message),
+		 NULL,                     /* no accumulator */
+		 NULL,                     /* so no accumulator data */
+		 g_cclosure_marshal_VOID__POINTER, /* return void,
+						      take pointer */
+		 G_TYPE_NONE,              /* type of return value */
+		 1,                        /* one additional parameter */
+		 G_TYPE_POINTER);          /* and its type */
+
+
   netperf_netserver_signals[CONTROL_CLOSED] = 
     g_signal_new("control_closed",
 		 TYPE_NETPERF_NETSERVER,
@@ -1479,6 +1502,32 @@ static void netperf_netserver_new_message(NetperfNetserver *netserver, gpointer 
 	  netserver->id);
 
   process_message(netserver, message);
+
+  return;
+}
+
+static void netperf_netserver_send_message(NetperfNetserver *netserver, gpointer *message)
+{
+  netperf_control_msg_desc_t *desc;
+
+  g_print("Netserver object %p asked to send a message from %p\n",
+	  netserver->id,
+	  message);
+
+  desc = g_malloc(sizeof(netperf_control_msg_desc_t));
+  desc->body = message;
+  if (netserver->is_netperf) {
+    desc->nid = g_strdup(netserver->id);
+    desc->fromnid = g_strdup("netperf");
+  }
+  else {
+    desc->nid = g_strdup("netperf");
+    desc->fromnid = g_strdup(netserver->id);
+  }
+
+  /* ok, now go ahead and tell the control object to do its thing */
+  g_signal_emit_by_name(netserver->control_object,
+			"message", desc);
 
   return;
 }

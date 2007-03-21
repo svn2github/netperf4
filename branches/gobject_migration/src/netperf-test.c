@@ -56,6 +56,14 @@ delete this exception statement from your version.
 
 #include "netperf.h"
 #include "netperf-test.h"
+#include "netperf-netserver.h"
+#include "netperf-control.h"
+
+extern int debug;
+extern FILE * where;
+extern GHashTable *test_hash;
+extern GHashTable *test_set_hash;
+extern GHashTable *server_hash;
 
 enum {
   TEST_PROP_DUMMY_0,    /* GObject does not like a zero value for a property id */
@@ -69,7 +77,8 @@ enum {
   TEST_PROP_TEST_STATS,
   TEST_PROP_TEST_DECODE,
   TEST_PROP_TEST_ADD_DEPENDANT,
-  TEST_PROP_TEST_DEL_DEPENDANT
+  TEST_PROP_TEST_DEL_DEPENDANT,
+  TEST_PROP_TEST_DEPENDENT_DATA
 };
 
 /* some forward declarations to make the compiler happy regardless of
@@ -185,6 +194,7 @@ static void netperf_test_class_init(NetperfTestClass *klass)
   GParamSpec *test_decode_param;
   GParamSpec *test_add_dependant_param;
   GParamSpec *test_del_dependant_param;
+  GParamSpec *test_dependent_data_param;
 
   /* and on with the show */
   GObjectClass *g_object_class;
@@ -208,7 +218,7 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 		      NP_TST_PREINIT, /* min value */
 		      NP_TST_DEAD,    /* max value */
 		      NP_TST_PREINIT, /* def value */
-		      G_PARAM_READABLE); /* should this be read only? */
+		      G_PARAM_READWRITE);
 
   id_param = 
     g_param_spec_string("id",         /* identifier */
@@ -260,6 +270,13 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 			 "add this test object to the list of dependant tests",
 			 G_PARAM_READWRITE); /* should this be just
 						WRITABLE? */
+
+  test_dependent_data_param = 
+    g_param_spec_pointer("dependent_data",
+			 "dependent data",
+			 "data other tests might depend upon",
+			 G_PARAM_READWRITE); /* should this just be
+						READABLE */
 
   /* if we go with a weak pointer reference then we probably don't
      need/want a delete property, but if we simply keep a pointer to
@@ -322,6 +339,10 @@ static void netperf_test_class_init(NetperfTestClass *klass)
   g_object_class_install_property(g_object_class,
 				  TEST_PROP_TEST_DEL_DEPENDANT,
 				  test_del_dependant_param);
+
+  g_object_class_install_property(g_object_class,
+				  TEST_PROP_TEST_DEPENDENT_DATA,
+				  test_dependent_data_param);
 
   /* we would set the signal handlers for the class here. we might
      have a signal say for the arrival of a complete message or
@@ -665,6 +686,213 @@ static int get_test_function(NetperfTest *test, const xmlChar *func)
   return(rc);
 }
 
+static void netperf_test_initialize(NetperfTest *test) 
+{
+
+  xmlNodePtr cur = NULL;
+  xmlNodePtr dependent_data = NULL;
+  guint      dependent_state = NP_TST_PREINIT;
+
+  xmlChar   *id  = NULL;
+  NetperfTest *dependency;
+
+  /* we wish to be in the NP_TST_INIT state */
+  test->state_req = NP_TST_INIT;
+
+  cur = test->node->xmlChildrenNode;
+  while (cur != NULL) {
+    if (!xmlStrcmp(cur->name,(const xmlChar *)"dependson")) {
+      id  = xmlGetProp(cur, (const xmlChar *)"testid");
+      if (test->debug) {
+        g_fprintf(test->where,"%s test %s has a dependency on %s\n",
+		  __func__,
+		  test->id,
+		  id);
+      }
+      /* rc = resolve_dependency(id, &dep_data); */
+      dependency = g_hash_table_lookup(test_hash,id);
+      g_print("%s test %s has a dependency on %s at %p\n",
+	      __func__,
+	      test->id,
+	      id,
+	      dependency);
+      /* go ahead and tell the test we depend upon them. one of these
+	 days we'll probably need to make sure we aren't in their list
+	 multiple times, but we will probably leave that up to
+	 them  */
+      g_object_set(dependency,
+		   "add_dependant", test,
+		   NULL);
+
+      /* now then, see if there is dependent data to get */
+      g_object_get(dependency,
+		   "state", &dependent_state,
+		   "dependent_data", &dependent_data,
+		   NULL);
+      g_print("dependent test in state %u with data %p\n",
+	      dependent_state,
+	      dependent_data);
+      break;
+    }
+    cur = cur->next;
+  }
+
+  /* OK, now what do we do :) If we had no depdency upon another test
+     we want to go ahead and send our test message now.  otherwise, if
+     we had a dependency and have the dependent data, we want to send
+     it now.  we do nothing only if we depend and the data isn't
+     ready, in which case, we should be covered by the signal we
+     should receive from the test upon which we depend once it is
+     initialized. */
+
+  if ((NULL == id) ||
+      ((dependent_state != NP_TST_PREINIT) && (NULL != dependent_data))) {
+    NetperfNetserver *server = NULL;
+    xmlNodePtr message = NULL;
+    /* find our server, send a message */
+    server = g_hash_table_lookup(server_hash,test->server_id);
+    g_print("frabjous day, the server for test %s is at %p\n",
+	    test->id,server);
+    /* build-up a message, first copy our initial config info */
+    message = xmlCopyNode(test->node,1);
+    /* now add-in any dependency data */
+    if (NULL != dependent_data) {
+      cur = message->xmlChildrenNode;
+      while (NULL != cur) {
+	/* prune dependson node and replace with dependency data */
+	if (!xmlStrcmp(cur->name,(const xmlChar *)"dependson")) {
+	  xmlReplaceNode(cur,dependent_data);
+	  break;
+	}
+	cur = cur->next;
+      }
+    }
+    /* now ask the server to go ahead and send the message. the
+       netserver object will handle dealing with the control
+      connection object */
+    g_signal_emit_by_name(server,"send_message",message);
+
+  }
+  else {
+    /* do nothing */
+    g_print("test %s must await further initialization instruction\n",
+	    test->id);
+  }
+}
+
+static void netperf_test_set_req_state(NetperfTest *test,
+				       guint req_state) {
+
+  gboolean legal_transition = TRUE;
+
+  switch (req_state) {
+  case NP_TST_PREINIT:
+    if (NP_TST_PREINIT == test->state) test->state_req = req_state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_INIT:
+    if (NP_TST_PREINIT == test->state) netperf_test_initialize(test);
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_IDLE:
+    if ((NP_TST_INIT == test->state) ||
+	(NP_TST_LOADED == test->state)) test->state_req = req_state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_LOADED:
+    if ((NP_TST_IDLE == test->state) ||
+	(NP_TST_MEASURE == test->state))  test->state_req = req_state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_MEASURE:
+    if (NP_TST_LOADED == test->state) test->state_req = req_state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_ERROR:
+    test->state_req = req_state;
+
+  case NP_TST_DEAD:
+    /* not really sure */
+    test->state_req = req_state;
+
+  default:
+    legal_transition = FALSE;
+  }
+
+  if (!legal_transition) 
+    g_print("Illegal attempt made to transition test id %s from state %u to %u\n",
+	    test->id,
+	    test->state,
+	    req_state);
+
+}
+
+static void netperf_test_set_state(NetperfTest *test, guint state) 
+{
+  gboolean legal_transition = TRUE;
+
+  switch (state) {
+  case NP_TST_PREINIT:
+    /* we really only allow it when it would be a noop */
+    if ((NP_TST_PREINIT == test->state) && 
+	(NP_TST_PREINIT == test->state_req)) test->state = state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_INIT:
+    if ((NP_TST_PREINIT == test->state) &&
+	(NP_TST_INIT == test->state_req)) test->state = state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_IDLE:
+    if ((NP_TST_IDLE == test->state_req) &&
+	((NP_TST_INIT == test->state) ||
+	 (NP_TST_LOADED == test->state))) test->state = state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_LOADED:
+    if ((NP_TST_LOADED == test->state_req) &&
+	((NP_TST_MEASURE == test->state) ||
+	 (NP_TST_IDLE == test->state)))  test->state = state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_MEASURE:
+    if ((NP_TST_MEASURE == test->state_req) &&
+	(NP_TST_LOADED == test->state)) test->state = state;
+    else legal_transition = FALSE;
+    break;
+
+  case NP_TST_ERROR:
+    /* probably actually have to do something here besides just set
+       the state */
+    test->state = state;
+    test->state_req = state;
+
+  case NP_TST_DEAD:
+    /* not really sure */
+    test->state = state;
+
+  default:
+    legal_transition = FALSE;
+  }
+
+  if (!legal_transition) 
+    g_print("Illegal state change test id %s from state %u to %u when state_req %u \n",
+	    test->id,
+	    test->state,
+	    state,
+	    test->state_req);
+
+}
+
 /* get and set property routines */
 static void netperf_test_set_property(GObject *object,
 					   guint prop_id,
@@ -681,15 +909,15 @@ static void netperf_test_set_property(GObject *object,
 
   switch(prop_id) {
   case TEST_PROP_STATE:
-    g_print("naughty naughty, trying to set the state. rick should make that readonly \n");
+    /* might as well reuse req_state rather than a separate state
+       local */
+    req_state = g_value_get_uint(value);
+    netperf_test_set_state(test,req_state);
     break;
 
   case TEST_PROP_REQ_STATE:
     req_state = g_value_get_uint(value);
-    /* we really need to sanity check the reqeusted state against the
-       current state here... and perhaps do some other work as
-       well... */
-    test->state_req = req_state;
+    netperf_test_set_req_state(test,req_state);
     break;
 
   case TEST_PROP_ID:
@@ -721,15 +949,30 @@ static void netperf_test_set_property(GObject *object,
     break;
 
   case TEST_PROP_TEST_ADD_DEPENDANT:
+    g_print("test %s being told that test at %p depends upon it\n",
+	    test->id,dependent);
+    /* only one entry in the list please */
     dependent = g_value_get_pointer(value);
-    item = g_list_append(NULL, dependent);
-    g_object_add_weak_pointer(dependent, &item->data);
-    test->dependent_tests = g_list_concat(item, test->dependent_tests);
+    item = g_list_find(test->dependent_tests,dependent);
+    if (NULL == item) {
+      item = g_list_append(NULL, dependent);
+      g_object_add_weak_pointer(dependent, &item->data);
+      test->dependent_tests = g_list_concat(item, test->dependent_tests);
+    }
+    else {
+      /* probably should be a debug thing only... */
+      g_print("suppressed an attempt to add a duplicate dependent %p\n",
+	      dependent);
+    }
     break;
 
   case TEST_PROP_TEST_DEL_DEPENDANT:
     dependent = g_value_get_pointer(value);
     g_print("Yo, add the code to delete a dependant!\n");
+    break;
+
+  case TEST_PROP_TEST_DEPENDENT_DATA:
+    g_print("I'm sorry Dave, I can't let you do that.\n");
     break;
 
   default:
@@ -784,10 +1027,14 @@ static void netperf_test_get_property(GObject *object,
     g_value_set_pointer(value, test->test_decode);
     break;
 
+  case TEST_PROP_TEST_DEPENDENT_DATA:
+    g_value_set_pointer(value, test->dependent_data);
+    break;
+
     /* it doesn't seem to make much sense to have "get" for add/del a
        dependant test so we will let those fall-through to the default
        case */
-
+    
   case TEST_PROP_TEST_ADD_DEPENDANT:
   case TEST_PROP_TEST_DEL_DEPENDANT:
   default:

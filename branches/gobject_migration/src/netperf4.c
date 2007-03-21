@@ -439,11 +439,31 @@ void print_netserver_hash_entry(gpointer key, gpointer value, gpointer user_data
   }
 }
 
+void set_test_state(gpointer key, gpointer value, gpointer user_data) 
+{
+  /* remember that the value is the pointer to the test object, not
+     the key, which we don't really use here but to make
+     g_hash_mumble_for_each happy.  the user_data will be the desired
+     state */
+  guint desired_state = GPOINTER_TO_UINT(user_data);
+
+  g_print("about to try to set the state of test %s at %p to %u\n",
+	  (char *) key,
+	  value,
+	  desired_state);
+
+  g_object_set(value,
+	       "req_state", desired_state,
+	       NULL);
+
+}
+
 void print_test_hash_entry(gpointer key, gpointer value, gpointer user_data)
 {
   NetperfTest *test;
   guint state,req_state;
   gchar *id;
+  gchar *server_id;
   xmlNodePtr node;
   xmlNodePtr tmp_node;
   xmlDocPtr  tmp_doc;
@@ -457,16 +477,18 @@ void print_test_hash_entry(gpointer key, gpointer value, gpointer user_data)
 	       "state", &state,
 	       "req-state", &req_state,
 	       "id", &id,
+	       "serverid", &server_id,
 	       "node", &node,
 	       NULL);
-  g_print("test: %s, object %p, user_data %p id %s state %s (%d) req_state %s (%d) node %p\n",
+  g_print("test: %s, object %p, user_data %p id %s server %s state %s (%d) req_state %s (%d) node %p\n",
 	  (char *)key,
 	  value,
 	  user_data,
 	  id,
+	  server_id,
 	  netperf_test_state_to_string(state),
 	  state,
-	  netperf_test_state_to_string(state),
+	  netperf_test_state_to_string(req_state),
 	  req_state,
 	  node);
 
@@ -567,17 +589,80 @@ static gboolean parse_interactive_new_command(char *arguments,
 }
 
 static gboolean unknown_interactive_command(char *arguments,
-					    gpointer data) {
+					    gpointer data)
+{
   g_print("The command you entered %s is presently unknown\n",
 	  arguments);
 
   return TRUE;
 }
 
+static gboolean parse_interactive_set_netserver_command(char *arguments,
+							gpointer data)
+{
+  gboolean return_value = TRUE;
+
+  return return_value;
+}
+
+static gboolean parse_interactive_set_test_command(char *arguments,
+						   gpointer data)
+{
+  gboolean return_value = TRUE;
+  NetperfTest *test;
+  gchar **split;
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,set_test_state,data);
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      set_test_state(split[0],test,data);
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return return_value;
+}
+
 static gboolean parse_interactive_set_command(char *arguments,
 					      gpointer data)
 {
   gboolean return_value = TRUE;
+  gchar **split;
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"test") == 0) {
+    return_value = parse_interactive_set_test_command(split[1],data);
+  }
+  else if (g_strcasecmp(split[0],"netserver") == 0) {
+    return_value = parse_interactive_set_netserver_command(split[1],data);
+  }
+  else {
+    g_print("%s is not sure what you are trying to set \n",
+	    __func__);
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
 
   return return_value;
 }
@@ -674,8 +759,8 @@ static gboolean parse_interactive_show_command(char *arguments,
   if (g_strcasecmp("netserver",split[0]) == 0) 
     return_value = parse_interactive_show_netserver_command(split[1],
 							    data);
-  else if (g_strcasecmp("test",split[0]) == 0)
-    return_value = parse_interactive_show_test_command(split[1],
+  else if (g_strcasecmp("test",split[0]) == 0)  
+  return_value = parse_interactive_show_test_command(split[1],
 						       data);
   else if (g_strcasecmp("all",split[0]) == 0)
     return_value = execute_interactive_show_all_command(data);
@@ -709,10 +794,108 @@ static gboolean parse_interactive_measure_command(char *arguments,
   return return_value;
 }
 
+static gboolean parse_interactive_init_netserver_command(char *arguments,
+							 gpointer data) 
+{
+  gboolean return_value = TRUE;
+
+  return return_value;
+}
+
+static gboolean parse_interactive_init_test_command(char *arguments,
+						    gpointer data) 
+{
+
+  gboolean return_value = TRUE;
+  NetperfTest *test;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,set_test_state,NP_TST_INIT);
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      set_test_state(split[0],test,NP_TST_INIT);
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return return_value;
+
+}
+
 static gboolean parse_interactive_init_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
+  gchar **split;
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+  if (g_strcasecmp("netserver", split[0]) == 0) 
+    return_value = parse_interactive_init_netserver_command(split[1],
+							    data);
+  else if (g_strcasecmp("test", split[0]) == 0) 
+    return_value = parse_interactive_init_test_command(split[1],
+						       data);
+
+  g_strfreev(split);
+  return return_value;
+}
+
+static gboolean parse_interactive_idle_netserver_command(char *arguments,
+							 gpointer data) 
+{
+  gboolean return_value = TRUE;
+
+  return return_value;
+}
+
+static gboolean parse_interactive_idle_test_command(char *arguments,
+						    gpointer data) 
+{
+  gboolean return_value = TRUE;
+  NetperfTest *test;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,set_test_state,NP_TST_IDLE);
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      set_test_state(split[0],test,NP_TST_IDLE);
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
 
   return return_value;
 }
@@ -721,6 +904,19 @@ static gboolean parse_interactive_idle_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
+  gchar **split;
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+  if (g_strcasecmp("netserver", split[0]) == 0) 
+    return_value = parse_interactive_idle_netserver_command(split[1],
+							    data);
+  else if (g_strcasecmp("test", split[0]) == 0) 
+    return_value = parse_interactive_idle_test_command(split[1],
+						       data);
+
+  g_strfreev(split);
 
   return return_value;
 }
