@@ -381,7 +381,7 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 		 0);
 
   netperf_test_signals[DEPENDENCY_MET] =
-    g_signal_new("dependecy_met",
+    g_signal_new("dependency_met",
 		 TYPE_NETPERF_TEST,
 		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
 		 G_STRUCT_OFFSET(NetperfTestClass, dependency_met),
@@ -427,12 +427,88 @@ static void netperf_test_control_closed(NetperfTest *test)
 
 /* we are sent this signal when the test on which we are dependant has
    finished its initialization, which means we can get our dependency
-   data */ 
+   data. this will look rather like netperf_test_initialize but with a
+   twist */ 
 static void netperf_test_dependency_met(NetperfTest *test)
 {
-  g_print("The dependency for test %p named %s has been met\n",
-	  test,
-	  test->id);
+  xmlNodePtr cur = NULL;
+  xmlNodePtr dependent_data = NULL;
+  guint      dependent_state = NP_TST_PREINIT;
+
+  xmlChar   *id  = NULL;
+  NetperfTest *dependency;
+
+  /* we wish to be in the NP_TST_INIT state */
+  test->state_req = NP_TST_INIT;
+
+  cur = test->node->xmlChildrenNode;
+  /* gee, maybe we should have stashed the name of the test upon which
+     we depend in our structure rather than leaving it in the XML ?-)
+  */ 
+  while (cur != NULL) {
+    if (!xmlStrcmp(cur->name,(const xmlChar *)"dependson")) {
+      id  = xmlGetProp(cur, (const xmlChar *)"testid");
+      dependency = g_hash_table_lookup(test_hash,id);
+      /* the dependency already knows we depend upon it so no need to
+	 tell it again...*/
+
+      /* now then, see if there is dependent data to get */
+      g_object_get(dependency,
+		   "state", &dependent_state,
+		   "dependent_data", &dependent_data,
+		   NULL);
+      g_print("dependent test in state %u with data %p\n",
+	      dependent_state,
+	      dependent_data);
+      break;
+    }
+    cur = cur->next;
+  }
+
+  /* at this point id'd better not be NULL, and dependent state better
+     not be NP_TST_PREINIT and the dependent_data best not be NULL.
+     it is OK (really, it is) for the test to be in any state besides
+     NP_TST_PREINIT, NP_TEST_ERROR or NP_TST_DEAD */
+
+  if ((NULL != id) &&
+      (NULL != dependent_data) &&
+      (dependent_state >= NP_TST_INIT) &&
+      (dependent_state <= NP_TST_MEASURE)) {
+    NetperfNetserver *server = NULL;
+    xmlNodePtr message = NULL;
+    /* find our server, send a message */
+    server = g_hash_table_lookup(server_hash,test->server_id);
+    g_print("frabjous day, the server for test %s is at %p\n",
+	    test->id,server);
+    /* build-up a message, first copy our initial config info */
+    message = xmlCopyNode(test->node,1);
+    /* now add-in any dependency data */
+    if (NULL != dependent_data) {
+      cur = message->xmlChildrenNode;
+      while (NULL != cur) {
+	/* prune dependson node and replace with dependency data */
+	if (!xmlStrcmp(cur->name,(const xmlChar *)"dependson")) {
+	  xmlReplaceNode(cur,dependent_data);
+	  break;
+	}
+	cur = cur->next;
+      }
+    }
+    /* now ask the server to go ahead and send the message. the
+       netserver object will handle dealing with the control
+      connection object */
+    g_signal_emit_by_name(server,"send_message",message);
+
+  }
+  else {
+    /* do nothing */
+    g_print("YIKES! test %s received a spurrious dependency_met signal\n",
+	    test->id);
+    /* we probably need some sort of "enter the error state" function
+       here */
+    test->state = NP_TST_ERROR;
+    test->state_req = NP_TST_ERROR;
+  }
 
   return;
 }
@@ -780,6 +856,89 @@ static void netperf_test_initialize(NetperfTest *test)
   }
 }
 
+static void netperf_test_load(NetperfTest *test)
+{
+
+  xmlNodePtr message;
+
+  test->state_req = NP_TST_LOADED;
+  if ((message = xmlNewNode(NULL, (xmlChar *)"load")) != NULL) {
+    /* zippity do dah */
+    if (xmlSetProp(message,(xmlChar *)"tid",test->id) != NULL) {
+      /* zippity ey */
+      NetperfNetserver *server = NULL;
+      server = g_hash_table_lookup(server_hash,test->server_id);
+      g_signal_emit_by_name(server,"send_message",message);
+    }
+    else {
+      /* xmlSetProp failed, we should probably do something about that */
+      test->state = NP_TST_ERROR;
+      test->state_req = NP_TST_ERROR;
+    }
+  }
+  else {
+    /* xmlNewNode failed, we should probably do something about that */
+    test->state = NP_TST_ERROR;
+    test->state_req = NP_TST_ERROR;
+  }
+  
+}
+static void netperf_test_measure(NetperfTest *test)
+{
+
+  xmlNodePtr message;
+
+  test->state_req = NP_TST_MEASURE;
+  if ((message = xmlNewNode(NULL, (xmlChar *)"measure")) != NULL) {
+    /* zippity do dah */
+    if (xmlSetProp(message,(xmlChar *)"tid",test->id) != NULL) {
+      /* zippity ey */
+      NetperfNetserver *server = NULL;
+      server = g_hash_table_lookup(server_hash,test->server_id);
+      g_signal_emit_by_name(server,"send_message",message);
+    }
+    else {
+      /* xmlSetProp failed, we should probably do something about that */
+      test->state = NP_TST_ERROR;
+      test->state_req = NP_TST_ERROR;
+    }
+  }
+  else {
+    /* xmlNewNode failed, we should probably do something about that */
+    test->state = NP_TST_ERROR;
+    test->state_req = NP_TST_ERROR;
+  }
+  
+}
+
+static void netperf_test_idle(NetperfTest *test) 
+{
+
+  xmlNodePtr message;
+
+  test->state_req = NP_TST_IDLE;
+  if ((message = xmlNewNode(NULL, (xmlChar *)"idle")) != NULL) {
+    /* zippity do dah */
+    if (xmlSetProp(message,(xmlChar *)"tid",test->id) != NULL) {
+      /* zippity ey */
+      NetperfNetserver *server = NULL;
+      server = g_hash_table_lookup(server_hash,test->server_id);
+      g_signal_emit_by_name(server,"send_message",message);
+    }
+    else {
+      /* xmlSetProp failed, we should probably do something about that */
+      test->state = NP_TST_ERROR;
+      test->state_req = NP_TST_ERROR;
+    }
+  }
+  else {
+    /* xmlNewNode failed, we should probably do something about that */
+    test->state = NP_TST_ERROR;
+    test->state_req = NP_TST_ERROR;
+  }
+  
+}
+
 static void netperf_test_set_req_state(NetperfTest *test,
 				       guint req_state) {
 
@@ -798,18 +957,18 @@ static void netperf_test_set_req_state(NetperfTest *test,
 
   case NP_TST_IDLE:
     if ((NP_TST_INIT == test->state) ||
-	(NP_TST_LOADED == test->state)) test->state_req = req_state;
+	(NP_TST_LOADED == test->state)) netperf_test_idle(test);
     else legal_transition = FALSE;
     break;
 
   case NP_TST_LOADED:
     if ((NP_TST_IDLE == test->state) ||
-	(NP_TST_MEASURE == test->state))  test->state_req = req_state;
+	(NP_TST_MEASURE == test->state))  netperf_test_load(test);
     else legal_transition = FALSE;
     break;
 
   case NP_TST_MEASURE:
-    if (NP_TST_LOADED == test->state) test->state_req = req_state;
+    if (NP_TST_LOADED == test->state) netperf_test_measure(test);
     else legal_transition = FALSE;
     break;
 
@@ -832,6 +991,12 @@ static void netperf_test_set_req_state(NetperfTest *test,
 
 }
 
+static void netperf_test_signal_dependency_met(gpointer data_ptr, gpointer ignored) 
+{
+  g_signal_emit_by_name(data_ptr,
+			"dependency_met");
+}
+
 static void netperf_test_set_state(NetperfTest *test, guint state) 
 {
   gboolean legal_transition = TRUE;
@@ -846,18 +1011,33 @@ static void netperf_test_set_state(NetperfTest *test, guint state)
 
   case NP_TST_INIT:
     if ((NP_TST_PREINIT == test->state) &&
-	(NP_TST_INIT == test->state_req)) test->state = state;
+	(NP_TST_INIT == test->state_req)) {
+      test->state = state;
+      /* tell anyone waiting on us we are done */
+      g_list_foreach(test->dependent_tests,
+		     netperf_test_signal_dependency_met,
+		     NULL);
+    }
     else legal_transition = FALSE;
     break;
 
   case NP_TST_IDLE:
-    if ((NP_TST_IDLE == test->state_req) &&
-	((NP_TST_INIT == test->state) ||
-	 (NP_TST_LOADED == test->state))) test->state = state;
+    /* seems that the initial netperf4 stuff will automagically
+       transition a test from INIT to IDLE, no request required. so,
+       we need to accept that and allow the transition to IDLE
+       regardless of the state_req */
+    if ((NP_TST_INIT == test->state) ||
+	 (NP_TST_LOADED == test->state)) {
+      /* we should probably go ahead and set the state_req to IDLE too
+       */ 
+      test->state = state;
+      test->state_req = state;
+    }
     else legal_transition = FALSE;
     break;
 
   case NP_TST_LOADED:
+    g_print("NOTICE ME!\n");
     if ((NP_TST_LOADED == test->state_req) &&
 	((NP_TST_MEASURE == test->state) ||
 	 (NP_TST_IDLE == test->state)))  test->state = state;
@@ -884,13 +1064,13 @@ static void netperf_test_set_state(NetperfTest *test, guint state)
     legal_transition = FALSE;
   }
 
-  if (!legal_transition) 
+  if (!legal_transition) {
     g_print("Illegal state change test id %s from state %u to %u when state_req %u \n",
 	    test->id,
 	    test->state,
 	    state,
 	    test->state_req);
-
+  }
 }
 
 /* get and set property routines */
@@ -956,7 +1136,14 @@ static void netperf_test_set_property(GObject *object,
     item = g_list_find(test->dependent_tests,dependent);
     if (NULL == item) {
       item = g_list_append(NULL, dependent);
+      g_print("before weak_pointer dependent %p item->data %p \n",
+	      dependent,
+	      item->data);
       g_object_add_weak_pointer(dependent, &item->data);
+      g_print("after weak_pointer dependent %p item->data %p addr %p\n",
+	      dependent,
+	      item->data,
+	      &(item->data));
       test->dependent_tests = g_list_concat(item, test->dependent_tests);
     }
     else {

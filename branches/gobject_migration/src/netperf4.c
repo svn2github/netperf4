@@ -778,18 +778,115 @@ static gboolean parse_interactive_read_command(char *arguments,
   return return_value;
 }
 
+static gboolean parse_interactive_load_test_command(char *arguments,
+						    gpointer data) 
+{
+  gboolean return_value = TRUE;
+  NetperfTest *test;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,set_test_state,NP_TST_LOADED);
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      set_test_state(split[0],test,NP_TST_LOADED);
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return return_value;
+
+}
+
 static gboolean parse_interactive_load_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
 
+  gchar **split;
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+  if (g_strcasecmp("test", split[0]) == 0) 
+    return_value = parse_interactive_load_test_command(split[1],
+						       data);
+  else {
+    g_print("Silly rabbit, LOAD is for tests!\n");
+  }
+
+  g_strfreev(split);
+
   return return_value;
+}
+
+static gboolean parse_interactive_measure_test_command(char *arguments,
+						       gpointer data)
+{
+  gboolean return_value = TRUE;
+  NetperfTest *test;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,set_test_state,NP_TST_MEASURE);
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      set_test_state(split[0],test,NP_TST_MEASURE);
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return return_value;
+
 }
 
 static gboolean parse_interactive_measure_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
+  gchar **split;
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+  if (g_strcasecmp("test", split[0]) == 0) 
+    return_value = parse_interactive_measure_test_command(split[1],
+						       data);
+  else {
+    g_print("Silly rabbit, MEASURE is for tests!\n");
+  }
+
+  g_strfreev(split);
 
   return return_value;
 }

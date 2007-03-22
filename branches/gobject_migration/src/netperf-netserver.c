@@ -95,11 +95,11 @@ const struct netperf_msgs   NP_Msgs[] = {
   { "cleared",         cleared_message,          0x00000000 },
   { "configured",      configured_message,       0x00000000 },
 #endif
-  { "measuring",       measuring_message,        0x00000010 },
-  { "loaded",          loaded_message,           0x00000010 },
+  { "measuring",       measuring_message,        0x00000018 }, /* prior 10 */
+  { "loaded",          loaded_message,           0x00000018 }, /* prior 10 */
   { "idled",           np_idle_message,          0x00000018 },
-  { "test_stats",      test_stats_message,       0x00000010 },
-  { "sys_stats",       sys_stats_message,        0x00000010 },
+  { "test_stats",      test_stats_message,       0x00000018 }, /* prior 10 */
+  { "sys_stats",       sys_stats_message,        0x00000018 }, /* prior 10 */
   { "initialized",     initialized_message,      0x00000018 },
   { "error",           error_message,            0x00000018 },
   { "dead",            dead_message,             0x00000018 },
