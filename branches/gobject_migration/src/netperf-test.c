@@ -105,6 +105,8 @@ enum {
 			 dependant has finished initializing */
   LAUNCH_THREAD,      /* ask the object to launch a thread to run the
 			 actual test code */
+  GET_STATS,          /* ask the object to retrieve stats */
+  CLEAR_STATS,        /* ask the object to clear stats */
   LAST_SIGNAL         /* this should always be the last in the list so
 			 we can use it to size the array correctly. */
 };
@@ -113,6 +115,8 @@ static void netperf_test_new_message(NetperfTest *test, gpointer message);
 static void netperf_test_control_closed(NetperfTest *test);
 static void netperf_test_dependency_met(NetperfTest *test);
 static void netperf_test_launch_thread(NetperfTest *test);
+static void netperf_test_get_stats(NetperfTest *test);
+static void netperf_test_clear_stats(NetperfTest *test);
 
 /* a place to stash the id's returned by g_signal_new should we ever
    need to refer to them by their ID. */ 
@@ -352,6 +356,8 @@ static void netperf_test_class_init(NetperfTestClass *klass)
   klass->control_closed = netperf_test_control_closed;
   klass->dependency_met = netperf_test_dependency_met;
   klass->launch_thread = netperf_test_launch_thread;
+  klass->get_stats = netperf_test_get_stats;
+  klass->clear_stats = netperf_test_clear_stats;
 
   netperf_test_signals[NEW_MESSAGE] = 
     g_signal_new("new_message",            /* signal name */
@@ -369,11 +375,33 @@ static void netperf_test_class_init(NetperfTestClass *klass)
 		 G_TYPE_NONE,              /* type of return value */
 		 1,                        /* one additional parameter */
 		 G_TYPE_POINTER);          /* and its type */
+
   netperf_test_signals[CONTROL_CLOSED] = 
     g_signal_new("control_closed",
 		 TYPE_NETPERF_TEST,
 		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
 		 G_STRUCT_OFFSET(NetperfTestClass, control_closed),
+		 NULL,
+		 NULL,
+		 g_cclosure_marshal_VOID__VOID,
+		 G_TYPE_NONE,
+		 0);
+  netperf_test_signals[GET_STATS] = 
+    g_signal_new("get_stats",
+		 TYPE_NETPERF_TEST,
+		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+		 G_STRUCT_OFFSET(NetperfTestClass, get_stats),
+		 NULL,
+		 NULL,
+		 g_cclosure_marshal_VOID__VOID,
+		 G_TYPE_NONE,
+		 0);
+
+  netperf_test_signals[CLEAR_STATS] = 
+    g_signal_new("clear_stats",
+		 TYPE_NETPERF_TEST,
+		 G_SIGNAL_RUN_LAST | G_SIGNAL_DETAILED,
+		 G_STRUCT_OFFSET(NetperfTestClass, clear_stats),
 		 NULL,
 		 NULL,
 		 g_cclosure_marshal_VOID__VOID,
@@ -425,6 +453,58 @@ static void netperf_test_control_closed(NetperfTest *test)
   return;
 }
 
+static void netperf_test_get_stats(NetperfTest *test)
+{
+  xmlNodePtr message;
+
+  if ((message = xmlNewNode(NULL, (xmlChar *)"get_stats")) != NULL) {
+    /* zippity do dah */
+    if (xmlSetProp(message,(xmlChar *)"tid",test->id) != NULL) {
+      /* zippity ey */
+      NetperfNetserver *server = NULL;
+      server = g_hash_table_lookup(server_hash,test->server_id);
+      g_signal_emit_by_name(server,"send_message",message);
+    }
+    else {
+      /* xmlSetProp failed, we should probably do something about that */
+      test->state = NP_TST_ERROR;
+      test->state_req = NP_TST_ERROR;
+    }
+  }
+  else {
+    /* xmlNewNode failed, we should probably do something about that */
+    test->state = NP_TST_ERROR;
+    test->state_req = NP_TST_ERROR;
+  }
+
+}
+
+static void netperf_test_clear_stats(NetperfTest *test) 
+
+{
+  xmlNodePtr message;
+
+  if ((message = xmlNewNode(NULL, (xmlChar *)"clear_stats")) != NULL) {
+    /* zippity do dah */
+    if (xmlSetProp(message,(xmlChar *)"tid",test->id) != NULL) {
+      /* zippity ey */
+      NetperfNetserver *server = NULL;
+      server = g_hash_table_lookup(server_hash,test->server_id);
+      g_signal_emit_by_name(server,"send_message",message);
+    }
+    else {
+      /* xmlSetProp failed, we should probably do something about that */
+      test->state = NP_TST_ERROR;
+      test->state_req = NP_TST_ERROR;
+    }
+  }
+  else {
+    /* xmlNewNode failed, we should probably do something about that */
+    test->state = NP_TST_ERROR;
+    test->state_req = NP_TST_ERROR;
+  }
+
+}
 /* we are sent this signal when the test on which we are dependant has
    finished its initialization, which means we can get our dependency
    data. this will look rather like netperf_test_initialize but with a

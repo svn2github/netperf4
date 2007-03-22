@@ -195,6 +195,8 @@ typedef struct _NetperfTestClass {
   void (*control_closed)(NetperfTest *test);
   void (*dependency_met)(NetperfTest *test);
   void (*launch_thread)(NetperfTest *test);
+  void (*get_stats)(NetperfTest *test);
+  void (*clear_stats)(NetperfTest *test);
 
   /* methods */
 

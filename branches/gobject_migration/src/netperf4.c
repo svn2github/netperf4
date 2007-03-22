@@ -457,6 +457,21 @@ void set_test_state(gpointer key, gpointer value, gpointer user_data)
 	       NULL);
 
 }
+void send_test_signal(gpointer key, gpointer value, gpointer user_data) 
+{
+  /* remember that the value is the pointer to the test object, not
+     the key, which we don't really use here but to make
+     g_hash_mumble_for_each happy.  the user_data will be the desired
+     state */
+
+  g_print("about to try to send %s signal to test %s\n",
+	  (char *)user_data,
+	  (char *) key);
+
+  g_signal_emit_by_name(value,
+			(char *)user_data);
+
+}
 
 void print_test_hash_entry(gpointer key, gpointer value, gpointer user_data)
 {
@@ -1018,10 +1033,103 @@ static gboolean parse_interactive_idle_command(char *arguments,
   return return_value;
 }
 
+static gboolean parse_interactive_stats_get_command(char *arguments,
+						     gpointer data) 
+{
+
+  gboolean return_value = TRUE;
+  NetperfTest *test;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,send_test_signal,"get_stats");
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      send_test_signal(split[0],test,"get_stats");
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return return_value;
+
+  return return_value;
+}
+
+static gboolean parse_interactive_stats_clear_command(char *arguments,
+						      gpointer data)
+{
+  gboolean return_value;
+  NetperfTest *test;
+  gchar **split;
+
+  NETPERF_DEBUG_ENTRY(debug,where);
+
+  g_print("%s called with arguments |%s|\n",__func__,arguments);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+
+  if (g_strcasecmp(split[0],"all") == 0) {
+    g_hash_table_foreach(test_hash,send_test_signal,"clear_stats");
+  }
+  else {
+    test = g_hash_table_lookup(test_hash,split[0]);
+    if (NULL != test) {
+      send_test_signal(split[0],test,"clear_stats");
+    }
+    else {
+      g_print("test id %s unknown!\n",
+	      split[0]);
+    }
+  }
+  
+  g_strfreev(split);
+
+  NETPERF_DEBUG_EXIT(debug,where);
+
+  return return_value;
+
+}
 static gboolean parse_interactive_stats_command(char *arguments,
 					       gpointer data)
 {
   gboolean return_value = TRUE;
+  gchar **split;
+
+  g_print("%s called with arguetns |%s|\n",
+	  __func__,
+	  arguments);
+
+  split = g_strsplit_set(arguments,
+			 " \r\n",
+			 2);
+  if (g_strcasecmp("get", split[0]) == 0) 
+    return_value = parse_interactive_stats_get_command(split[1],
+							data);
+  else if (g_strcasecmp("clear", split[0]) == 0)
+    return_value = parse_interactive_stats_clear_command(split[1],
+							 data);
+  else {
+    g_print("Silly rabbit, STATS are for tests!\n");
+  }
+
+  g_strfreev(split);
 
   return return_value;
 }
