@@ -61,7 +61,7 @@ delete this exception statement from your version.
 
 #else
 
-#ifdef WANT_HISTOGRAM
+#if !defined(NETLIB)
 
 #ifdef HAVE_GETHRTIME
 #define HISTOGRAM_VARS        hrtime_t time_one,time_two
@@ -85,7 +85,7 @@ typedef void *HIST;
 
 /* hist.h
 
-   Given a time difference in microseconds, increment one of 91
+   Given a time difference in nanoseconds, increment one of 91
    different buckets: 
    
    0 - 9 in increments of 100 nsecs
