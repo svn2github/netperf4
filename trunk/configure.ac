@@ -130,8 +130,8 @@ AC_ARG_WITH(glib,
 	[AS_HELP_STRING([--with-glib],
 	[in the future will show where/how to include glib])])
 
-AM_PATH_GLIB_2_0(2.4.0,,AC_MSG_ERROR([
-*** GLIB >= 2.4 is required to build netperf4; please make sure you have
+AM_PATH_GLIB_2_0(2.6.0,,AC_MSG_ERROR([
+*** GLIB >= 2.6 is required to build netperf4; please make sure you have
 *** the development headers installed. The latest version of GLIB is
 *** always available at ftp://ftp.gnome.org/pub/gnome/sources/glib/.]),
    gthread gobject gmodule)

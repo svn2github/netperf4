@@ -21,7 +21,9 @@ xmlcatalog) installed prior to building netperf4.
 
 The netperf4 benchmark also depends on several components of glib-2.0.
 You must have glib-2.0 and its development environment installed prior
-to building netperf4.
+to building netperf4.  Specifically, you must have at least version
+2.6 or later of glib installed prior to building netperf4. Version
+2.4.X of glib is insufficient.
 
 Further, netperf4 depends on the pkg-config utility.  You must have
 pkg-config installed prior to building netperf4.
