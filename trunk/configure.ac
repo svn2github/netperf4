@@ -3,11 +3,11 @@
 # Process this file with autoconf to produce a configure script.
 
 FULL-PACKAGE-NAME=netperf
-VERSION=4.0.0rc2
+VERSION=4.0.0rc3
 BUG-REPORT-ADDRESS=netperf-feedback@netperf.org
 
 AC_PREREQ(2.59)
-AC_INIT(netperf, 4.0.0rc2)
+AC_INIT(netperf, 4.0.0rc3)
 # use the target version rather than host - one day we may want cross-compile
 AC_CANONICAL_TARGET
 # AC_CONFIG_SRCDIR([src/hist.h])
@@ -93,7 +93,7 @@ AC_FUNC_SELECT_ARGTYPES
 # remove pstat_getdynamic (at least for now) since we don't do
 # anything conditional with the check anyway...
 AC_CHECK_FUNCS([gethrtime gettimeofday inet_ntoa memset memcpy socket \
-		sqrt strcasecmp strchr strstr strtoul uname])
+		sqrt strcasecmp strchr strstr strtoul ])
 
 #AC_CONFIG_SUBDIRS(src/missing)
 
@@ -386,189 +386,6 @@ if $use_demo
 then
 	AC_DEFINE([WANT_DEMO],,
 		  [Define to one to enable demo support. May affect results.])
-fi
-
-# see if we should be including the AF_UNIX tests
-
-AC_MSG_CHECKING(whether to include Unix-domain socket tests)
-
-AC_ARG_ENABLE(unixdomain,
-	[  --enable-unixdomain  include Unix Domain socket tests])
-
-case "$enable_unixdomain" in
-     yes)
-		use_unixdomain=true
-		;;
-     no)	
-		use_unixdomain=false
-		;;
-     '')
-		use_unixdomain=false
-		;;
-     *)
-		AC_MSG_ERROR([--enable-unixdomain takes yes or no])
-		;;
-esac
-
-if $use_unixdomain
-then
-	AC_MSG_RESULT(yes)
-else
-	AC_MSG_RESULT(no)
-fi
-
-if $use_unixdomain
-then
-	AC_DEFINE([WANT_UNIX],,
-		  [Define to one to include Unix Domain socket tests.])
-fi
-
-# see if we should be including the DLPI tests
-
-AC_MSG_CHECKING(whether to include DLPI tests)
-
-AC_ARG_ENABLE(dlpi,
-	[  --enable-dlpi  include Unix Domain socket tests])
-
-case "$enable_dlpi" in
-     yes)
-		use_dlpi=true
-		;;
-     no)	
-		use_dlpi=false
-		;;
-     '')
-		use_dlpi=false
-		;;
-     *)
-		AC_MSG_ERROR([--enable-dlpi takes yes or no])
-		;;
-esac
-
-if $use_dlpi
-then
-	AC_MSG_RESULT(yes)
-else
-	AC_MSG_RESULT(no)
-fi
-
-if $use_dlpi
-then
-	AC_DEFINE([WANT_DLPI],,[Define to one to include DLPI tests.])
-fi
-
-
-# see if we should be including the XTI tests
-
-AC_MSG_CHECKING(whether to include XTI tests)
-
-AC_ARG_ENABLE(xti,
-	[  --enable-xti  include Unix Domain socket tests])
-
-case "$enable_xti" in
-     yes)
-		# probably need to be a bit more sophisticated here
-		AC_CHECK_LIB(xti,t_open)
-		use_xti=true
-		;;
-     no)	
-		use_xti=false
-		;;
-     '')
-		use_xti=false
-		;;
-     *)
-		AC_MSG_ERROR([--enable-xti takes yes or no])
-		;;
-esac
-
-if $use_xti
-then
-	AC_MSG_RESULT(yes)
-else
-	AC_MSG_RESULT(no)
-fi
-
-if $use_xti
-then
-	AC_DEFINE([WANT_XTI],,[Define to one to include XTI tests.])
-fi
-
-# see if we should be including the ICSC-EXS tests
-
-AC_MSG_CHECKING(whether to include ICSC-EXS tests)
-
-AC_ARG_ENABLE(exs,
-	[  --enable-exs  include ICSC async sockets tests])
-
-case "$enable_exs" in
-     yes)
-		use_exs=true
-		AC_CHECK_HEADER(sys/exs.h,,[use_exs=false])
-		AC_CHECK_LIB(exs,exs_init,,[use_exs=false])
-		;;
-     no)	
-		use_exs=false
-		;;
-     '')
-		use_exs=false
-		;;
-     *)
-		AC_MSG_ERROR([--enable-exs takes yes or no])
-		;;
-esac
-
-if $use_exs
-then
-	AC_MSG_RESULT(yes)
-else
-	AC_MSG_RESULT(no)
-fi
-
-if $use_exs
-then
-	AC_DEFINE([HAVE_ICSC_EXS],,[Define to one to include ICSC-EXS tests.])
-fi
-
-# see if we should be enabling SCTP support
-
-
-AC_ARG_ENABLE(sctp,
-	[  --enable-sctp   include tests to measure SCTP performance ])
-
-case "$enable_sctp" in
-	yes)
-		use_sctp=true
-		AC_CHECK_HEADERS(netinet/sctp.h,,use_sctp=false,
-[[
-#include <sys/socket.h>
-]])
-		AC_HAVE_LIBRARY(sctp,,use_sctp=false)
-		;;
-	no)
-		use_sctp=false
-		;;
-	'')
-		# whatever
-		use_sctp=false
-		;;
-	*)
-		AC_MSG_ERROR([--enable-sctp takes yes or no])
-		;;
-esac
-
-AC_MSG_CHECKING(whether to include SCTP tests)
-
-if $use_sctp
-then
-	AC_MSG_RESULT(yes)
-else
-	AC_MSG_RESULT(no)
-fi
-
-if $use_sctp
-then
-	AC_DEFINE([WANT_SCTP],,[Define to one to include SCTP tests.])
 fi
 
 # see if we should be enabling paced sends
