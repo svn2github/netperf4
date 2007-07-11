@@ -179,10 +179,18 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   }
   /* Skip first line (total) on SMP */
   if (tsd->num_cpus > 1) p = strchr (p, '\n');
-  
+
+  /* PN:
+   * p points to '\n'. Move to next char for per cpu info 
+   */
+  p++; 
   
   for (i = 0; i < tsd->num_cpus; i++) {
-    records = sscanf(proc_stat_buf,
+    /* PN:
+     * p points to the right record, not proc_stat_buf
+     */
+    /* records = sscanf(proc_stat_buf, */
+    records = sscanf(p,
 		     "%s %lld %lld %lld %lld",
 		     cpunam,
 		     &(res[i].user),
@@ -222,5 +230,9 @@ get_cpu_time_counters(cpu_time_counters_t *res,
 	      res[i].interrupt);
     }
     p = strchr(p, '\n');
+    /* PN:
+     * p points to the right record, not proc_stat_buf
+     */
+    p++;
   }
 }

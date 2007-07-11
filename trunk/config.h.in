@@ -39,9 +39,6 @@
 /* Define to 1 if you have the `gettimeofday' function. */
 #undef HAVE_GETTIMEOFDAY
 
-/* Define to one to include ICSC-EXS tests. */
-#undef HAVE_ICSC_EXS
-
 /* Define to 1 if you have the `inet_ntoa' function. */
 #undef HAVE_INET_NTOA
 
@@ -50,9 +47,6 @@
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
-
-/* Define to 1 if you have the `exs' library (-lexs). */
-#undef HAVE_LIBEXS
 
 /* Define to 1 if you have the `kstat' library (-lkstat). */
 #undef HAVE_LIBKSTAT
@@ -69,14 +63,8 @@
 /* Define to 1 if you have the `perfstat' library (-lperfstat). */
 #undef HAVE_LIBPERFSTAT
 
-/* Define to 1 if you have the `sctp' library (-lsctp). */
-#undef HAVE_LIBSCTP
-
 /* Define to 1 if you have the `socket' library (-lsocket). */
 #undef HAVE_LIBSOCKET
-
-/* Define to 1 if you have the `xti' library (-lxti). */
-#undef HAVE_LIBXTI
 
 /* Define to 1 if you have the <limits.h> header file. */
 #undef HAVE_LIMITS_H
@@ -104,9 +92,6 @@
 
 /* Define to 1 if you have the <netinet/in.h> header file. */
 #undef HAVE_NETINET_IN_H
-
-/* Define to 1 if you have the <netinet/sctp.h> header file. */
-#undef HAVE_NETINET_SCTP_H
 
 /* Define to 1 if you have the <netinet/tcp.h> header file. */
 #undef HAVE_NETINET_TCP_H
@@ -210,9 +195,6 @@
 /* Define to 1 if you have the <sys/uio.h> header file. */
 #undef HAVE_SYS_UIO_H
 
-/* Define to 1 if you have the `uname' function. */
-#undef HAVE_UNAME
-
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
@@ -282,9 +264,6 @@
 /* Define to one to enable demo support. May affect results. */
 #undef WANT_DEMO
 
-/* Define to one to include DLPI tests. */
-#undef WANT_DLPI
-
 /* Define to one to enable initial _RR burst support. May affect results. */
 #undef WANT_FIRST_BURST
 
@@ -293,15 +272,6 @@
 
 /* Define to one to enable paced operation support. May affect results. */
 #undef WANT_INTERVALS
-
-/* Define to one to include SCTP tests. */
-#undef WANT_SCTP
-
-/* Define to one to include Unix Domain socket tests. */
-#undef WANT_UNIX
-
-/* Define to one to include XTI tests. */
-#undef WANT_XTI
 
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
