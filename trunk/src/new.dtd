@@ -1,0 +1,705 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<!-- ***WARNING*** This is a new version of the DTD file for netperf4
+     ************* it has changes to allow for development of generic report
+     ************* generation.  Do not use this DTD except for development
+     ************* of the new report generator. -->
+
+<!-- Contains Declarations for the different types of netperf documents:
+        report file
+        results file
+        netperf configuration file
+        netperf commands
+        netperf message
+     
+     all three document types share common element declarations
+     which are contained in this dtd file -->
+
+<!-- default entity definitions these may be changed as desired -->
+
+<!ENTITY % default.family                  '"AF_INET"' >
+<!ENTITY % default.host                    '"localhost"' >
+<!ENTITY % default.npservice               '"netperf4"' >
+<!ENTITY % default.tstservice              '"0"' >
+<!ENTITY % default.socksize                '"32"' >
+<!ENTITY % default.msgsize                 '"4"' >
+<!ENTITY % default.units                   '"KB"' >
+<!ENTITY % default.reqsize                 '"1"' >
+<!ENTITY % default.rspsize                 '"1"' >
+<!ENTITY % default.width                   '"0"' >
+<!ENTITY % default.align                   '"8"' >
+<!ENTITY % default.offset                  '"0"' >
+<!ENTITY % default.no_delay                '"0"' >
+<!ENTITY % default.disk_io_size            '"8"' >
+<!ENTITY % default.disk_io_units           '"KB"' >
+<!ENTITY % default.disk_test_size          '"4"' >
+<!ENTITY % default.disk_test_units         '"MB"' >
+
+
+<!-- Changeing the definition of any configuration file entity or element
+     below this comment may require a code change.  sgb 2003-10-11 -->
+
+<!-- full_report document unique elements -->
+
+<!ELEMENT full_report (
+  (results),
+  (netperf),
+  (commands),
+  (report_description),
+  (systems_info)
+) >
+<!ATTLIST full_report
+  timestamp       CDATA    #REQUIRED
+>
+
+<!ELEMENT results      ( #PCDATA ) >
+<!ELEMENT systems_info ( #PCDATA ) >
+
+<!-- report description document unique elements -->
+
+<!ELEMENT report_description (
+  (data_set)+
+  (report_each_test)?
+  (report_summary)+
+>
+
+<!ATTLIST report_description
+  xmlns              CDATA    #FIXED    "http://www.netperf.org/ns/netperf"
+  name               CDATA    #REQUIRED
+  version            CDATA    #REQUIRED
+  field_separator    CDATA    #IMPLIED
+  part_separator     CDATA    #IMPLIED
+>
+
+<!ELEMENT report_summary (report_field)+ >
+<!ATTLIST report_summary
+  name            CDATA    #REQUIRED
+  version         CDATA    #REQUIRED
+  part_separator  CDATA    #IMPLIED
+>
+
+<!ELEMENT report_each_test (report_field)+ >
+<!ATTLIST report_each_test
+  name            CDATA    #REQUIRED
+  version         CDATA    #REQUIRED
+  part_separator  CDATA    #IMPLIED
+>
+
+<!ELEMENT report_field >
+<!ATTLIST report_field
+  data_set        IDREF                              #IMPLIED
+  header1         CDATA                              #REQUIRED
+  header2         CDATA                              #IMPLIED
+  header3         CDATA                              #IMPLIED
+  label           CDATA                              #IMPLIED
+  field_separator CDATA                              #IMPLIED
+  units           ( mbps  | tps   | gbps
+                  | iops  | MBps  | GBps
+                  | %/100 | us/KB | us/t
+                  | none  )                          #IMPLIED 
+  width           CDATA                              #REQUIRED
+  precision       CDATA                              #REQUIRED
+
+  type            ( mean   | min   | max | conf
+                  | intrvl | value | if_value
+		  | count  | tset  | tid )           #REQUIRED
+
+  when            ( test  | run   | summary  
+                  | run&sum )                        #REQUIRED
+>
+
+<!ELEMENT data_set (cntr_attributes)? >
+<!ATTLIST data_set
+  name            ID                                 #REQUIRED
+  sd_value_set    IDREF                              #IMPLIED
+>
+
+
+<!-- netperf configuration document unique elements -->
+
+<!ELEMENT netperf (netserver)+ >
+<!ATTLIST netperf
+  xmlns           CDATA    #FIXED    "http://www.netperf.org/ns/netperf"
+>
+
+<!ELEMENT netserver (test)+ >
+<!ATTLIST netserver
+  nid             ID                 #REQUIRED
+  family          ( AF_INET | AF_INET6 | AF_UNSPEC )  %default.family;
+  remote_service  CDATA                               %default.npservice;
+  remote_host     CDATA                               %default.host;
+  local_service   CDATA                               %default.npservice;
+  local_host      CDATA                               %default.host;
+>
+
+
+
+<!-- netperf message document unique elements -->
+
+<!ELEMENT message (
+  (clear_stats) |
+  (cleared) |
+  (configured) |
+  (die) |
+  (dead) |
+  (error) |
+  (get_stats) |
+  (idle) |
+  (idled) |
+  (initialized) |
+  (interval) |
+  (close) |
+  (closed) |
+  (load) |
+  (loaded) |
+  (measure) |
+  (measuring) |
+  (snap) |
+  (stats) |
+  (sys_stats) |
+  (test) |
+  (test_stats) |
+  (version) 
+) >
+<!ATTLIST message 
+  xmlns           CDATA    #FIXED    "http://www.netperf.org/ns/netperf"
+  tonid           ID       #REQUIRED 
+  fromnid         CDATA    #REQUIRED 
+>
+
+
+<!-- netperf command document unique elements -->
+
+<!ELEMENT commands (
+  (clear_stats) |
+  (close) |
+  (create_test_set) |
+  (delete_test_set) |
+  (die) |
+  (exec_local) |
+  (exit) |
+  (get_stats) |
+  (idle) |
+  (init) |
+  (load) |
+  (measure) |
+  (report_stats) |
+  (show) |
+  (wait) 
+)+ >
+<!ATTLIST commands
+  xmlns         CDATA    #FIXED    "http://www.netperf.org/ns/netperf"
+>
+  
+<!-- Wait until the specified test or all tests change either to the
+     requested state or to an error state. Once tests have completed
+     desired state changes wait the specified number of seconds -->
+<!ELEMENT wait EMPTY >
+<!ATTLIST wait
+  tid		CDATA	#REQUIRED
+  seconds	CDATA	#IMPLIED
+>
+
+<!ELEMENT create_test_set EMPTY >
+<!ATTLIST create_test_set
+  set_name	ID	#REQUIRED
+  tests_in_set  CDATA   #REQUIRED
+>
+<!-- tests_in_set is a list of test_ids which are to be included in the
+     named test set.  Individual ids are seperated by white space. The
+     list of tests can also contain a range specifier a range specifier
+     is test_id:test_id.  The range will include all tests between and
+     including the specified tests. -->
+
+<!ELEMENT delete_test_set EMPTY >
+<!ATTLIST delete_test_set
+  set_name	IDREF	#REQUIRED
+>
+
+<!ELEMENT show_test_set EMPTY >
+<!ATTLIST show_test_set
+  set_name	IDREF	#REQUIRED
+>
+
+
+
+<!-- shared elements for netperf documents -->
+
+<!ELEMENT dependson EMPTY >
+<!ATTLIST dependson
+  testid	IDREF   #REQUIRED
+  netserverid	IDREF   #REQUIRED
+>
+
+<!ELEMENT error ( #PCDATA ) >
+<!ATTLIST error
+  tid           ID      #REQUIRED
+  err_rc	CDATA	#REQUIRED
+  err_fn	CDATA	#IMPLIED
+  err_str	CDATA	#IMPLIED
+  err_no	CDATA	#IMPLIED
+>
+
+<!ELEMENT exit EMPTY >
+
+<!ELEMENT host EMPTY >
+<!ATTLIST host
+  name		CDATA	"localhost"
+  family	( AF_INET | AF_INET6 | AF_UNSPEC ) "AF_INET"
+  port		CDATA	#REQUIRED
+>
+
+<!ELEMENT test ((dependson | dependency_data)?,
+                ((socket_args , (dns_args)?) | disk_args | unknown )? ) >
+<!ATTLIST test
+  xmlns           CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid             ID      #REQUIRED
+  test_name       CDATA   "send_tcp_stream"
+  library         CDATA   #REQUIRED
+  test_clear      CDATA   #IMPLIED
+  test_stats      CDATA   #IMPLIED
+  test_decode     CDATA   #IMPLIED
+  locality_type   CDATA   #IMPLIED
+  locality_value  CDATA   #IMPLIED
+>
+<!-- test_name
+     The attributes allow definition of different function symbol names.
+     The function name used for the test function called by netperf4 when
+     starting the test is the value specified for test_name. -->
+<!-- test_clear is used to specify the name of the function to call to
+     clear the statics counters for the test.  If test_clear is not specified
+     the default function name will be used which is the concatination of the 
+     test_name with "_clear_stats" -->
+<!-- test_stats is used to specify the name of the function to call to
+     get the statics counters for the test.  If test_stats is not specified
+     the default function name will be used which is the concatination of the 
+     test_name with "_get_stats" -->
+<!-- test_decode is used to specify the name of the function to call to decode,
+     accumulate, and report the statics counters for the tests in the library.
+     If test_decode is not specified the default function name will be used
+     which is the concatination of the test_name with "_decode_stats" -->
+<!-- locality_type is used to specify the type of locality binding which should
+     be performed.  If locality_type is not specified no binding occurs.
+     For HP-UX valid locality_type values are ( PSET | LDOM | PROC ).
+     If an invalid locality_type is specified no binding occurs. -->
+<!-- locality_value is used to specify the id to which to bind. The value is
+     system specific.  If locality_value is not specified no binding occurs.
+     If an invalid locality_value is specified no binding occurs. -->
+
+
+<!ELEMENT unknown (#PCDATA) >
+
+<!ELEMENT version EMPTY >
+<!ATTLIST version
+  vers          CDATA   #REQUIRED
+  updt          CDATA   #REQUIRED
+  fix           CDATA   #REQUIRED
+>
+
+
+<!-- prototype elements for netperf documents -->
+
+
+<!ELEMENT clear_stats EMPTY >
+<!ATTLIST clear_stats
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid           CDATA   #REQUIRED
+>
+
+
+<!ELEMENT cleared EMPTY >
+<!ATTLIST cleared
+  tid           CDATA   #REQUIRED
+>
+
+
+<!ELEMENT close EMPTY >
+<!ATTLIST close
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  sid           CDATA           #REQUIRED
+  flag          (LOOP | EXIT)   "LOOP"
+>
+
+
+<!ELEMENT closed EMPTY >
+<!ATTLIST closed
+  flag          (LOOPING | GONE)  #IMPLIED
+>
+
+
+<!ELEMENT configured EMPTY >
+
+<!ELEMENT dependency_data (#PCDATA) >
+<!ATTLIST dependency_data
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  family        (AF_INET|AF_INET6|AF_UNSPEC)  "AF_INET"
+  remote_port   CDATA                         #REQUIRED
+  remote_host   CDATA                         #REQUIRED
+  use_tcp       (yes | no | true | false)     #IMPLIED
+>
+
+
+<!ELEMENT die EMPTY >
+<!ATTLIST die
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid           CDATA   #REQUIRED
+>
+
+
+<!ELEMENT dead EMPTY >
+<!ATTLIST dead
+  tid           CDATA   #REQUIRED
+>
+
+
+<!ELEMENT exec_local EMPTY >
+<!ATTLIST exec_local
+  command       CDATA   #REQUIRED
+>
+
+
+<!ELEMENT get_stats EMPTY >
+<!ATTLIST get_stats
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid           CDATA   #REQUIRED
+>
+
+
+<!ELEMENT idle EMPTY >
+<!ATTLIST idle
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid           CDATA   #REQUIRED
+>
+
+<!ELEMENT idled EMPTY >
+<!ATTLIST idled
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid           CDATA   #REQUIRED
+>
+
+
+<!ELEMENT initialized (dependency_data)? >
+<!ATTLIST initialized
+  tid           ID      #REQUIRED
+>
+
+
+<!ELEMENT interval EMPTY >
+<!ATTLIST interval 
+  tid           ID      #REQUIRED
+  seconds       CDATA   "10"
+>
+
+
+<!ELEMENT load EMPTY >
+<!ATTLIST load
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid           CDATA   #REQUIRED
+>
+
+
+<!ELEMENT loaded EMPTY >
+<!ATTLIST loaded
+  tid           ID      #REQUIRED
+>
+
+
+<!ELEMENT measure EMPTY >
+<!ATTLIST measure 
+  xmlns         CDATA   #FIXED    "http://www.netperf.org/ns/netperf"
+  tid           CDATA   #REQUIRED
+  seconds       CDATA   "10"
+>
+
+<!ELEMENT measuring EMPTY >
+<!ATTLIST measuring 
+  tid           ID      #REQUIRED
+>
+
+
+<!ELEMENT report_stats (
+  (clear_stats) |
+  (create_test_set) |
+  (delete_test_set) |
+  (exec_local) |
+  (get_stats) |
+  (idle) |
+  (init) |
+  (load) |
+  (measure) |
+  (show) |
+  (wait)
+)* >
+<!ATTLIST report_stats 
+  test_set      CDATA   #REQUIRED
+  library       CDATA   #IMPLIED
+  function      CDATA   #IMPLIED
+  desc_file     CDATA   #IMPLIED
+  report_flags  CDATA   #IMPLIED
+  output_file   CDATA   #IMPLIED
+  max_count     CDATA   #IMPLIED
+  min_count     CDATA   #IMPLIED
+  interval      CDATA   #IMPLIED
+  confidence  (50 | 70 | 80 | 90 | 95 | 98 | 99 | 99.8 | 99.9) #IMPLIED
+>
+<!-- If attribute output_file is not specified output defaults to stdout -->
+<!-- The attributes interval and confidence are for checking confidence
+     for reported test results.  min_count must be specified and must be
+     >1 to check confidence. -->
+<!-- Interval is the desired percentage range around the mean for which
+     the confidence level is calculated.   example 0.05 is mean +/- 2.5%
+     The default value for interval is 0.05  -->
+<!-- confidence is the desired confidence level which measured results
+     fall within the interval around the reported measured mean. 
+     The default value for confidence is 99% -->
+
+
+<!ELEMENT snap EMPTY >
+<!ATTLIST snap tid  IDREF  "t_all" >
+
+
+<!ELEMENT stats (sys_stats, (test_stats)+) >
+
+<!ELEMENT received_stats ((test_stats)+) >
+
+
+<!ELEMENT sys_stats ( #PCDATA | per_cpu_stats )* >
+<!ATTLIST sys_stats 
+  tid            ID      #REQUIRED
+  elapsed_sec    CDATA   #IMPLIED
+  elapsed_usec   CDATA   #IMPLIED
+  time_sec       CDATA   #IMPLIED
+  time_usec      CDATA   #IMPLIED
+  method         CDATA   #IMPLIED
+  number_cpus    CDATA   #IMPLIED
+  calibration    CDATA   #IMPLIED
+  idle_count     CDATA   #IMPLIED
+  user_count     CDATA   #IMPLIED
+  sys_count      CDATA   #IMPLIED
+  int_count      CDATA   #IMPLIED
+  other_count    CDATA   #IMPLIED
+>
+
+<!ELEMENT per_cpu_stats ( #PCDATA ) >
+<!ATTLIST per_cpu_stats 
+  cpu_id         CDATA   #REQUIRED
+  calibration    CDATA   #IMPLIED
+  idle_count     CDATA   #IMPLIED
+  user_count     CDATA   #IMPLIED
+  sys_count      CDATA   #IMPLIED
+  int_count      CDATA   #IMPLIED
+  other_count    CDATA   #IMPLIED
+>
+
+
+<!ELEMENT test_stats ((counter)+, ( #PCDATA | test_info | hist_stats )*) >
+<!ATTLIST test_stats 
+  tid            ID      #REQUIRED
+  elapsed_sec    CDATA   #IMPLIED
+  elapsed_usec   CDATA   #IMPLIED
+  time_sec       CDATA   #IMPLIED
+  time_usec      CDATA   #IMPLIED
+  cntr0_value    CDATA   #IMPLIED
+  cntr1_value    CDATA   #IMPLIED
+  cntr2_value    CDATA   #IMPLIED
+  cntr3_value    CDATA   #IMPLIED
+  cntr4_value    CDATA   #IMPLIED
+  cntr5_value    CDATA   #IMPLIED
+  cntr6_value    CDATA   #IMPLIED
+  cntr7_value    CDATA   #IMPLIED
+  cntr8_value    CDATA   #IMPLIED
+  cntr9_value    CDATA   #IMPLIED
+  cntrA_value    CDATA   #IMPLIED
+  cntrB_value    CDATA   #IMPLIED
+  cntrC_value    CDATA   #IMPLIED
+  cntrD_value    CDATA   #IMPLIED
+  cntrE_value    CDATA   #IMPLIED
+  cntrF_value    CDATA   #IMPLIED
+  info0_value    CDATA   #IMPLIED
+  info1_value    CDATA   #IMPLIED
+  info2_value    CDATA   #IMPLIED
+  info3_value    CDATA   #IMPLIED
+  info4_value    CDATA   #IMPLIED
+  info5_value    CDATA   #IMPLIED
+  info6_value    CDATA   #IMPLIED
+  info7_value    CDATA   #IMPLIED
+  info8_value    CDATA   #IMPLIED
+  info9_value    CDATA   #IMPLIED
+  infoA_value    CDATA   #IMPLIED
+  infoB_value    CDATA   #IMPLIED
+  infoC_value    CDATA   #IMPLIED
+  infoD_value    CDATA   #IMPLIED
+  infoE_value    CDATA   #IMPLIED
+  infoF_value    CDATA   #IMPLIED
+>
+
+<!ELEMENT counter (cntr_attributes) >
+<!ATTLIST counter
+  cntr_name      CDATA   #REQUIRED
+  cntr_value     CDATA   #REQUIRED
+>
+
+<!ELEMENT cntr_attributes EMPTY >
+<!ATTLIST cntr_attributes
+  cntr_agg_flag  CDATA   ( TRUE  | FALSE )                   #REQUIRED
+  cntr_unit      CDATA   ( bytes | calls | trans )           #REQUIRED
+  cntr_type      CDATA   ( in    | out   | bidir | other )   #REQUIRED
+  cntr_class     CDATA   ( lan   | disk  | other )           #REQUIRED
+>
+
+<!ELEMENT test_info EMPTY >
+<!ATTLIST test_info
+  info_name      CDATA   #REQUIRED
+  info_value     CDATA   #REQUIRED
+>
+
+<!ELEMENT hist_stats EMPTY >
+<!ATTLIST hist_stats
+  hist_name      CDATA   #REQUIRED
+  hundred_nsec   CDATA   #REQUIRED
+  unit_usec      CDATA   #REQUIRED
+  ten_usec       CDATA   #REQUIRED
+  hundred_usec   CDATA   #REQUIRED
+  unit_msec      CDATA   #REQUIRED
+  ten_msec       CDATA   #REQUIRED
+  hundred_msec   CDATA   #REQUIRED
+  unit_sec       CDATA   #REQUIRED
+  ten_sec        CDATA   #REQUIRED
+  plus_100_sec   CDATA   #REQUIRED
+  hist_total     CDATA   #REQUIRED
+>
+
+<!ELEMENT socket_args EMPTY >
+<!ATTLIST socket_args
+  family          ( AF_INET | AF_INET6 | AF_UNSPEC )  %default.family;
+  local_service     CDATA    %default.tstservice;
+  local_host        CDATA    %default.host;
+  fill_file         CDATA    #IMPLIED
+  send_buffer_size  CDATA    %default.socksize;
+  send_buffer_units (B | kB | KB | mB | MB | gB | GB)  %default.units;
+  recv_buffer_size  CDATA    %default.socksize;
+  recv_buffer_units (B | kB | KB | mB | MB | gB | GB)  %default.units;
+  no_delay          CDATA    %default.no_delay;
+  send_size         CDATA    %default.msgsize;
+  send_size_units   (B | kB | KB | mB | MB | gB | GB)  %default.units;
+  recv_size         CDATA    %default.msgsize;
+  recv_size_units   (B | kB | KB | mB | MB | gB | GB)  %default.units;
+  req_size          CDATA    %default.reqsize;
+  rsp_size          CDATA    %default.rspsize;
+  port_min          CDATA    #IMPLIED
+  port_max          CDATA    #IMPLIED
+  send_width        CDATA    %default.width;
+  recv_width        CDATA    %default.width;
+  send_align	    CDATA    %default.align;
+  recv_align	    CDATA    %default.align;
+  send_offset       CDATA    %default.offset;
+  recv_offset       CDATA    %default.offset;
+  burst_count       CDATA    #IMPLIED
+  interval_time     CDATA    #IMPLIED
+>
+
+<!-- burst_count
+     Will be set to zero if negative.
+     Maximum value of 255 for send_udp_rr test. 
+     send_udp_rr will set to 255 if burst_count > 255 -->
+
+<!-- interval_time
+     Will be set to zero if negative.
+     Minimum time in micro seconds to wait between the start of one burst
+     and the start of the next.  Actual time between start of bursts
+     will be longer and is dependent on OS implementation limits.  -->
+
+
+<!ELEMENT dns_args EMPTY >
+<!ATTLIST dns_args
+  max_outstanding   CDATA    #IMPLIED
+  timeout           CDATA    #IMPLIED
+>
+                      
+
+<!-- Element definitions for Disk Tests -->
+
+<!ELEMENT disk_args EMPTY >
+<!ATTLIST disk_args
+  file_name         CDATA    #REQUIRED
+  read              CDATA    #IMPLIED
+  disk_io_size      CDATA                 %default.disk_io_size;
+  disk_io_units     ( KB | MB | GB)       %default.disk_io_units;
+  disk_test_size    CDATA                 %default.disk_test_size;
+  disk_test_units   ( KB | MB | GB)       %default.disk_test_units;
+  start             CDATA    #IMPLIED
+  stop              CDATA    #IMPLIED
+  scsi_immreport    (0 | 1)  #IMPLIED
+  scsi_queue_depth  CDATA    #IMPLIED
+>
+
+<!-- read
+     Specifies the ratio of reads to all I/Os.  Valid values 1.0 to 0.0.
+     For sequential I/O tests any non-zero value defaults to read only.
+     Default value is 1.0 when no value is specified. -->
+<!-- disk_io_size
+     The size in disk_io_units of each read/write to the file.
+     Must have at maximum value of disk test size in bytes / 2.
+     Default value is smaller of 8K or disk test size in bytes / 2
+     when no value is specified.  DTD specifies default of 8KB. -->
+<!-- disk_io_units
+     Default value of 1024 bytes. -->
+<!-- disk_test_size
+     The size in disk_test_units of the file to access.
+     Default value is smaller of 512*chunk or max_file_size-start_position
+     when no value is specified. DTD specifies default of 4MB. -->
+<!-- disk_test_units
+     Default value of 1024 * 1024 bytes. -->
+<!-- start_position
+     KByte offset within the file at which to start I/O.
+     Raw I/O will be rounded to a sector boundary if sector size > 1KB.
+     Default value is 0 when no value is specified. -->
+<!-- end_position
+     Maximum KByte offset within the file.
+     Will always be defaulted for sequential I/O tests.
+     Default value when no value is specified is
+     start_position + (size converted to KB)
+     or maximum_file_size which ever is smaller. -->
+<!-- scsi_immreport
+     Specifies the value to which scsi_immreport will be set.
+     If not specified the test will not change the current value. -->
+<!-- scsi_queue_depth
+     Specifies the value to which scsi_queue_depth will be set.
+     If not specified the test will not change the current value. -->
+
+
+<!-- Element definitions for variable sized data tests  -->
+
+<!ELEMENT work_load_description (pattern, distribution?)* >
+<!ATTLIST work_load_description
+  name              CDATA    #REQUIRED
+>
+
+
+<!ELEMENT pattern (pattern_entry)* >
+<!ATTLIST pattern
+  index             CDATA    #REQUIRED
+>
+
+
+<!ELEMENT pattern_entry EMPTY >
+<!ATTLIST pattern_entry
+  req_size          CDATA    #IMPLIED
+  rsp_size          CDATA    #IMPLIED
+  dup_cnt           CDATA    #IMPLIED
+>
+
+
+<!ELEMENT distribution (distribution_entry)* >
+<!ATTLIST distribution
+  dist_key          CDATA    #IMPLIED
+>
+
+
+<!ELEMENT distribution_entry EMPTY >
+<!ATTLIST distribution_entry
+  next_pattern      CDATA    #IMPLIED
+  number            CDATA    #IMPLIED
+>
+
+

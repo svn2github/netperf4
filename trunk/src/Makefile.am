@@ -18,7 +18,9 @@ EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd n
 # some of the other include files are actually up in include/
 COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
 
-netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
+REPORT_SRC = netperf_report.h netperf_report.c
+
+netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE) $(REPORT_SRC)
 netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
 netperfdir = @datadir@/netperf

@@ -21,7 +21,7 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s1" 
-    library="nettest_bsd"
+    library="nettest_bsd.la"
     function="report_bsd_test_results" />
 
 <!-- 20 second TCP_MAERTS test
@@ -39,7 +39,7 @@
   <idle tid="s0" />
   <wait tid="s0" />
   <report_stats test_set="s4" 
-    library="nettest_bsd"
+    library="nettest_bsd.la"
     function="report_bsd_test_results" />
 
 
@@ -60,14 +60,15 @@
   <idle tid="s2" />
   <wait tid="s2" />
   <report_stats test_set="s3" 
-     library="nettest_bsd"
+     library="nettest_bsd.la"
      function="report_bsd_test_results" />
 
 <!-- 20 second TCP_STREAM test with confidence
   <create_test_set set_name="s0" tests_in_set="t0,t1,t2" />
   <create_test_set set_name="s1" tests_in_set="t0,t1" />
   <report_stats test_set="s1" 
-    library="nettest_bsd"
+    report_flags="PRINT_ALL"
+    library="nettest_bsd.la"
     function="report_bsd_test_results" >
     <wait tid="s0" />
     <load tid="s0" />

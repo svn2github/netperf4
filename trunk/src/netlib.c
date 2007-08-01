@@ -1476,7 +1476,7 @@ get_test_function(test_t *test, const xmlChar *func)
     la_file   = xmlGetProp(test->node,(const xmlChar *)"library");
     if (debug) {
       g_fprintf(where,
-		"%s looking to open library %p\n",
+		"%s looking to open library %s\n",
 		__func__,
 		la_file);
       fflush(where);

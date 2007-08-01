@@ -175,7 +175,9 @@ EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd n
 # some of the other include files are actually up in include/
 COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
 
-netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
+REPORT_SRC = netperf_report.h netperf_report.c
+
+netperf_SOURCES = netperf.c $(COMMON_SRC) $(USE_NETLIB_SOURCE) $(REPORT_SRC)
 netserver_SOURCES = netserver.c $(COMMON_SRC) $(USE_NETLIB_SOURCE)
 
 netperfdir = @datadir@/netperf
@@ -219,7 +221,8 @@ PROGRAMS = $(bin_PROGRAMS)
 am__objects_2 = netlib.$(OBJEXT) netmsg.$(OBJEXT) \
 	netconfidence.$(OBJEXT)
 am__objects_3 = netlib_@NETSYS_SOURCE@.$(OBJEXT)
-am_netperf_OBJECTS = netperf.$(OBJEXT) $(am__objects_2) $(am__objects_3)
+am_netperf_OBJECTS = netperf.$(OBJEXT) $(am__objects_2) $(am__objects_3) \
+        netperf_report.$(OBJEXT)
 netperf_OBJECTS = $(am_netperf_OBJECTS)
 netperf_DEPENDENCIES = @LIBOBJS@
 am_netserver_OBJECTS = netserver.$(OBJEXT) $(am__objects_2) \
@@ -235,6 +238,7 @@ am__depfiles_maybe = depfiles
 @AMDEP_TRUE@	./$(DEPDIR)/netconfidence.Po ./$(DEPDIR)/netlib.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netmsg.Po ./$(DEPDIR)/netperf.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/netperf_report.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netserver.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_common.Plo \
@@ -348,6 +352,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_bsd.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf_report.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	if $(COMPILE) -MT $@ -MD -MP -MF "$(DEPDIR)/$*.Tpo" \
