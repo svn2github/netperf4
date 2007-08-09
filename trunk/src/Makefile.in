@@ -166,11 +166,13 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$
 # netlib platform-specific stuff
 USE_CPU_SOURCE = netsysstats_@NETSYS_SOURCE@.c
 USE_NETLIB_SOURCE = netlib_@NETSYS_SOURCE@.c
+USE_TCPSTATS_SOURCE = nettcpstats_@NETSYS_SOURCE@.c
+USE_NETDEV_STATS_SOURCE = netdevstats_@NETSYS_SOURCE@.c
 
 
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
-EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netsysstats*.c netlib_*.c
+EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netsysstats*.c netlib_*.c nettcpstats*.c netdevstats*.c
 
 # some of the other include files are actually up in include/
 COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
@@ -185,7 +187,7 @@ netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
 
 # in theory, the stuff below should deal with creating the requisite
 # "core" libs.  optional libs are in suites/
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettcpstats.la netdevstats.la
 
 nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
 nettest_bsd_la_LDFLAGS = -module
@@ -193,6 +195,14 @@ nettest_bsd_la_LDFLAGS = -module
 # the USE_CPU_SOURCE will pick the apropriate file based on the platform
 netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)
 netsysstats_la_LDFLAGS = -module
+
+# the USE_TCPSTATS_SOURCE will pick the apropriate file based on the platform
+nettcpstats_la_SOURCES = nettcpstats_common.c nettcpstats.h $(USE_TCPSTATS_SOURCE)
+nettcpstats_la_LDFLAGS = -module
+
+# the USE_NETDEV_STATS_SOURCE will pick the apropriate file based on the platform
+netdevstats_la_SOURCES = netdevstats_common.c netdevstats.h $(USE_NETDEV_STATS_SOURCE)
+netdevstats_la_LDFLAGS = -module
 
 # if there are any "missing" routines, the libobjs should cover it
 netperf_LDADD = @LIBOBJS@
@@ -208,25 +218,34 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 LTLIBRARIES = $(lib_LTLIBRARIES)
 
+netdevstats_la_LIBADD =
+am__objects_1 = netdevstats_@NETSYS_SOURCE@.lo
+am_netdevstats_la_OBJECTS = netdevstats_common.lo $(am__objects_1)
+netdevstats_la_OBJECTS = $(am_netdevstats_la_OBJECTS)
 netsysstats_la_LIBADD =
-am__objects_1 = netsysstats_@NETSYS_SOURCE@.lo
-am_netsysstats_la_OBJECTS = netsysstats_common.lo $(am__objects_1)
+am__objects_2 = netsysstats_@NETSYS_SOURCE@.lo
+am_netsysstats_la_OBJECTS = netsysstats_common.lo $(am__objects_2)
 netsysstats_la_OBJECTS = $(am_netsysstats_la_OBJECTS)
+nettcpstats_la_LIBADD =
+am__objects_3 = nettcpstats_@NETSYS_SOURCE@.lo
+am_nettcpstats_la_OBJECTS = nettcpstats_common.lo $(am__objects_3)
+nettcpstats_la_OBJECTS = $(am_nettcpstats_la_OBJECTS)
 nettest_bsd_la_LIBADD =
 am_nettest_bsd_la_OBJECTS = nettest_bsd.lo
 nettest_bsd_la_OBJECTS = $(am_nettest_bsd_la_OBJECTS)
 bin_PROGRAMS = netperf$(EXEEXT) netserver$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
 
-am__objects_2 = netlib.$(OBJEXT) netmsg.$(OBJEXT) \
+am__objects_4 = netlib.$(OBJEXT) netmsg.$(OBJEXT) \
 	netconfidence.$(OBJEXT)
-am__objects_3 = netlib_@NETSYS_SOURCE@.$(OBJEXT)
-am_netperf_OBJECTS = netperf.$(OBJEXT) $(am__objects_2) $(am__objects_3) \
-        netperf_report.$(OBJEXT)
+am__objects_5 = netlib_@NETSYS_SOURCE@.$(OBJEXT)
+am__objects_6 = netperf_report.$(OBJEXT)
+am_netperf_OBJECTS = netperf.$(OBJEXT) $(am__objects_4) $(am__objects_5) \
+	$(am__objects_6)
 netperf_OBJECTS = $(am_netperf_OBJECTS)
 netperf_DEPENDENCIES = @LIBOBJS@
-am_netserver_OBJECTS = netserver.$(OBJEXT) $(am__objects_2) \
-	$(am__objects_3)
+am_netserver_OBJECTS = netserver.$(OBJEXT) $(am__objects_4) \
+	$(am__objects_5)
 netserver_OBJECTS = $(am_netserver_OBJECTS)
 netserver_DEPENDENCIES = @LIBOBJS@
 
@@ -235,13 +254,18 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 @AMDEP_TRUE@DEP_FILES = $(DEPDIR)/missing/getaddrinfo.Po \
 @AMDEP_TRUE@	$(DEPDIR)/missing/inet_ntop.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/netconfidence.Po ./$(DEPDIR)/netlib.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/netconfidence.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/netdevstats_@NETSYS_SOURCE@.Plo \
+@AMDEP_TRUE@	./$(DEPDIR)/netdevstats_common.Plo \
+@AMDEP_TRUE@	./$(DEPDIR)/netlib.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netmsg.Po ./$(DEPDIR)/netperf.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netperf_report.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netserver.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo \
 @AMDEP_TRUE@	./$(DEPDIR)/netsysstats_common.Plo \
+@AMDEP_TRUE@	./$(DEPDIR)/nettcpstats_@NETSYS_SOURCE@.Plo \
+@AMDEP_TRUE@	./$(DEPDIR)/nettcpstats_common.Plo \
 @AMDEP_TRUE@	./$(DEPDIR)/nettest_bsd.Plo
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
@@ -250,13 +274,14 @@ LTCOMPILE = $(LIBTOOL) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) \
 CCLD = $(CC)
 LINK = $(LIBTOOL) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
-DIST_SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) \
+DIST_SOURCES = $(netdevstats_la_SOURCES) $(netsysstats_la_SOURCES) \
+	$(nettcpstats_la_SOURCES) $(nettest_bsd_la_SOURCES) \
 	$(netperf_SOURCES) $(netserver_SOURCES)
 DATA = $(netperf_DATA)
 
 DIST_COMMON = $(srcdir)/Makefile.in Makefile.am missing/getaddrinfo.c \
 	missing/inet_ntop.c
-SOURCES = $(netsysstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
+SOURCES = $(netdevstats_la_SOURCES) $(netsysstats_la_SOURCES) $(nettcpstats_la_SOURCES) $(nettest_bsd_la_SOURCES) $(netperf_SOURCES) $(netserver_SOURCES)
 
 all: all-am
 
@@ -295,8 +320,12 @@ clean-libLTLIBRARIES:
 	  echo "rm -f \"$${dir}/so_locations\""; \
 	  rm -f "$${dir}/so_locations"; \
 	done
+netdevstats.la: $(netdevstats_la_OBJECTS) $(netdevstats_la_DEPENDENCIES) 
+	$(LINK) -rpath $(libdir) $(netdevstats_la_LDFLAGS) $(netdevstats_la_OBJECTS) $(netdevstats_la_LIBADD) $(LIBS)
 netsysstats.la: $(netsysstats_la_OBJECTS) $(netsysstats_la_DEPENDENCIES) 
 	$(LINK) -rpath $(libdir) $(netsysstats_la_LDFLAGS) $(netsysstats_la_OBJECTS) $(netsysstats_la_LIBADD) $(LIBS)
+nettcpstats.la: $(nettcpstats_la_OBJECTS) $(nettcpstats_la_DEPENDENCIES) 
+	$(LINK) -rpath $(libdir) $(nettcpstats_la_LDFLAGS) $(nettcpstats_la_OBJECTS) $(nettcpstats_la_LIBADD) $(LIBS)
 nettest_bsd.la: $(nettest_bsd_la_OBJECTS) $(nettest_bsd_la_DEPENDENCIES) 
 	$(LINK) -rpath $(libdir) $(nettest_bsd_la_LDFLAGS) $(nettest_bsd_la_OBJECTS) $(nettest_bsd_la_LIBADD) $(LIBS)
 binPROGRAMS_INSTALL = $(INSTALL_PROGRAM)
@@ -344,15 +373,19 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/getaddrinfo.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@$(DEPDIR)/missing/inet_ntop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netconfidence.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netdevstats_@NETSYS_SOURCE@.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netdevstats_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netlib_@NETSYS_SOURCE@.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netmsg.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf_report.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netserver.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_@NETSYS_SOURCE@.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netsysstats_common.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettcpstats_@NETSYS_SOURCE@.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettcpstats_common.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/nettest_bsd.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/netperf_report.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	if $(COMPILE) -MT $@ -MD -MP -MF "$(DEPDIR)/$*.Tpo" \

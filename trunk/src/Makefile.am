@@ -9,11 +9,13 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$
 # netlib platform-specific stuff
 USE_CPU_SOURCE=netsysstats_@NETSYS_SOURCE@.c
 USE_NETLIB_SOURCE=netlib_@NETSYS_SOURCE@.c
+USE_TCPSTATS_SOURCE=nettcpstats_@NETSYS_SOURCE@.c
+USE_NETDEV_STATS_SOURCE=netdevstats_@NETSYS_SOURCE@.c
 
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST
 
-EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netsysstats*.c netlib_*.c
+EXTRA_DIST = missing/* dirs NetPerfDir/* NetServerDir/* *.xml netperf_docs.dtd netsysstats*.c netlib_*.c nettcpstats*.c netdevstats*.c
 
 # some of the other include files are actually up in include/
 COMMON_SRC = netlib.c netcpu.h netmsg.c netmsg.h netconfidence.c
@@ -28,7 +30,7 @@ netperf_DATA = netperf_docs.dtd default_commands.xml default_config.xml
 
 # in theory, the stuff below should deal with creating the requisite
 # "core" libs.  optional libs are in suites/
-lib_LTLIBRARIES = nettest_bsd.la netsysstats.la
+lib_LTLIBRARIES = nettest_bsd.la netsysstats.la nettcpstats.la netdevstats.la
 
 nettest_bsd_la_SOURCES = nettest_bsd.c nettest_bsd.h
 nettest_bsd_la_LDFLAGS = -module
@@ -36,6 +38,14 @@ nettest_bsd_la_LDFLAGS = -module
 # the USE_CPU_SOURCE will pick the apropriate file based on the platform
 netsysstats_la_SOURCES = netsysstats_common.c netsysstats.h $(USE_CPU_SOURCE)
 netsysstats_la_LDFLAGS = -module
+
+# the USE_TCPSTATS_SOURCE will pick the apropriate file based on the platform
+nettcpstats_la_SOURCES = nettcpstats_common.c nettcpstats.h $(USE_TCPSTATS_SOURCE)
+nettcpstats_la_LDFLAGS = -module
+
+# the USE_NETDEV_STATS_SOURCE will pick the apropriate file based on the platform
+netdevstats_la_SOURCES = netdevstats_common.c netdevstats.h $(USE_NETDEV_STATS_SOURCE)
+netdevstats_la_LDFLAGS = -module
 
 # if there are any "missing" routines, the libobjs should cover it
 netperf_LDADD = @LIBOBJS@
@@ -61,4 +71,3 @@ install-data-local:
 	if [ ! -d /etc/xml ]; then mkdir /etc/xml; chmod 555 /etc/xml; fi
 	if [ ! -f /etc/xml/catalog ]; then xmlcatalog --create --noout /etc/xml/catalog;fi
 	xmlcatalog --noout --add "system" "http://www.netperf.org/netperf_docs.dtd/1.0" "file://$(netperfdir)/netperf_docs.dtd" /etc/xml/catalog
-

@@ -56,8 +56,26 @@ typedef struct cpu_time_counters {
   uint64_t kernel;    /* the number of time units in the kernel state */
   uint64_t interrupt; /* the number of time units in the interrupt
                          state */
+  		      /* On linux, this is the number of time units 
+		       * spent servicing hardware interrupts. */
+  /* PN: 06/27/2007.
+   * Other cpu stats we are interested in
+   */
+  uint64_t nice;      /* the number of time units in nice state
+			 -- different from user */
+  uint64_t iowait;    /* the number of time units in wait state
+			 for I/O completion */
+  uint64_t softirq;   /* the number of time units spent processing
+			 softirqs */
+			 
   uint64_t other;     /* the number of time units in other states
                          and/or any slop we have */
+
+  /* PN: 07/12/2007 */
+  uint64_t total_intr; /* the total number of interrupts (all kinds) 
+			  serviced by the CPU. On linux, this value
+			  is collected from /proc/interrupts */
+  
 } cpu_time_counters_t;
 
 typedef struct netsysstat_data {

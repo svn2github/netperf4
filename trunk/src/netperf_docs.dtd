@@ -73,6 +73,8 @@
   (snap) |
   (stats) |
   (sys_stats) |
+  (tcp_stats) |
+  (netdev_stats) |
   (test) |
   (test_stats) |
   (version) 
@@ -367,7 +369,9 @@
 <!-- confidence is the desired confidence level which measured results
      fall within the interval around the reported measured mean. 
      The default value for confidence is 99% -->
-
+<!-- Value 'PRINT_CSV' for report_flags will enable Comma Separated stat Values
+     (CSV) output. Values are written into different files, one for each stat
+     test -- filename 'test_name'.csv -->
 
 <!ELEMENT snap EMPTY >
 <!ATTLIST snap tid  IDREF  "t_all" >
@@ -377,6 +381,32 @@
 
 <!ELEMENT received_stats ((test_stats)+) >
 
+<!ELEMENT netdev_stats ( #PCDATA | per_interface_stats)* >
+<!ATTLIST netdev_stats
+  tid                   ID      #REQUIRED
+  number_interfaces     CDATA   #IMPLIED
+>
+
+<!ELEMENT per_interface_stats ( #PCDATA ) >
+<!ATTLIST per_interface_stats
+  interface_name        CDATA   #REQUIRED
+  rcv_packets           CDATA   #IMPLIED
+  rcv_errors            CDATA   #IMPLIED
+  rcv_drops             CDATA   #IMPLIED
+  trx_packets           CDATA   #IMPLIED
+  trx_errors            CDATA   #IMPLIED
+  trx_drops             CDATA   #IMPLIED
+  trx_collisions        CDATA   #IMPLIED
+>
+
+<!ELEMENT tcp_stats EMPTY >
+<!ATTLIST tcp_stats
+  tid                   ID      #REQUIRED
+  tcp_loss              CDATA   #IMPLIED
+  tcp_lost_rtxmts       CDATA   #IMPLIED
+  tcp_fast_rtxmts       CDATA   #IMPLIED
+  tcp_timeouts          CDATA   #IMPLIED
+>
 
 <!ELEMENT sys_stats ( #PCDATA | per_cpu_stats )* >
 <!ATTLIST sys_stats 
@@ -392,7 +422,11 @@
   user_count     CDATA   #IMPLIED
   sys_count      CDATA   #IMPLIED
   int_count      CDATA   #IMPLIED
+  nice_count     CDATA   #IMPLIED
+  iowait_count   CDATA   #IMPLIED
+  softirq_count  CDATA   #IMPLIED
   other_count    CDATA   #IMPLIED
+  total_interrutps    CDATA   #IMPLIED
 >
 
 <!ELEMENT per_cpu_stats ( #PCDATA ) >
@@ -403,7 +437,11 @@
   user_count     CDATA   #IMPLIED
   sys_count      CDATA   #IMPLIED
   int_count      CDATA   #IMPLIED
+  nice_count     CDATA   #IMPLIED
+  iowait_count   CDATA   #IMPLIED
+  softirq_count  CDATA   #IMPLIED
   other_count    CDATA   #IMPLIED
+  total_interrutps    CDATA   #IMPLIED
 >
 
 

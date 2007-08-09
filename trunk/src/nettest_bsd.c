@@ -4507,6 +4507,15 @@ bsd_test_results_init(tset_t *test_set, char *report_flags, char *output)
 	rd->print_test    = 1;
 	rd->print_per_cpu = 1;
       }
+      /* PN: Should do CSV (comma separated values) reporting? */
+      if (!strcmp(report_flags,"PRINT_CSV")) {
+        rd->print_csv    = 1;
+        /* Timestamp for all tests in this set, helps to group
+         * related tests in the CSV file
+         */
+        time(&rd->timestamp);
+      }
+      memset(&(rd->csv_files), 0, sizeof(csv_files_t));
     }
     if (test_set->debug) {
       rd->print_run     = 1;
@@ -4532,6 +4541,7 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
   int            count;
   int            index;
   FILE          *outfd;
+  FILE		*csvfd;
   bsd_results_t *rd;
 
   double         elapsed_seconds;
@@ -4661,6 +4671,90 @@ process_test_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fflush(outfd);
   }
   /* end of printing bsd per test instance results */
+
+  if(rd->print_csv) {
+    /* CSV output */
+    csvfd = rd->csv_files.test_stats;
+    fprintf(csvfd, "%ld,%s,%s", rd->timestamp, (char *)test_set->id,
+        (char *)tid);
+    fprintf(csvfd, ",%10.2f,%10.2f,%10.2f,%10.2f\n",
+        xmit_rate, xmit_trans_rate, recv_rate, recv_trans_rate);
+    fflush(csvfd);
+  }
+}
+
+/* PN: 06/27/2007
+ * Function prints sys_stat counters as comma separated values (CSV)
+ */
+static void
+print_csv_sys_stats(xmlNodePtr stats, double elapsed_sec, char *cpuid,
+  time_t timestamp, const char *test_set_id, const char *test_id, FILE *outfd)
+{
+
+#define NUM_CPU_CNTRS           9
+#define CPU_CNTR_CALIBRATE      0
+#define CPU_CNTR_USER           1
+#define CPU_CNTR_NICE           2
+#define CPU_CNTR_KERN           3
+#define CPU_CNTR_IDLE           4
+#define CPU_CNTR_IOWAIT         5
+#define CPU_CNTR_INTR           6
+#define CPU_CNTR_SIRQ           7
+#define CPU_CNTR_INTRATE        8
+
+  const char *cpu_cntr_names[] = {
+    "calibration",
+    "user_count",
+    "nice_count",
+    "sys_count",
+    "idle_count",
+    "iowait_count",
+    "int_count",
+    "softirq_count",
+    "total_interrupts"
+  };
+
+  double        calibration;
+  double        metric;
+  char          *value_str;
+  uint64_t      x;
+  int           i;
+
+  value_str = (char *)xmlGetProp(stats, (const xmlChar *)"calibration");
+  if (value_str) {
+    calibration = strtod(value_str,NULL);
+    if (calibration == 0.0) {      
+        sscanf(value_str,"%"PRIx64,&x);
+        calibration = (double)x;
+    }
+  }
+  else {
+    calibration = 0.0;
+  }
+
+  /* CSV: Print this CPU's information */
+  fprintf(outfd, "%ld,%s,%s", timestamp, test_set_id, test_id);
+
+  fprintf(outfd, ",%s", cpuid);
+  for (i=1; i<NUM_CPU_CNTRS; i++) {
+    value_str = (char *)xmlGetProp(stats, (const xmlChar *)cpu_cntr_names[i]);
+    if (value_str) {
+      metric = strtod(value_str,NULL);
+      if (metric == 0.0) {        
+        sscanf(value_str,"%"PRIx64,&x);
+        metric = (double)x;
+      }
+    }
+    else {
+      metric = 0.0;
+    }
+    if (i == CPU_CNTR_INTRATE )
+      fprintf(outfd, ",%10.2f", metric / elapsed_sec);
+    else
+      fprintf(outfd, ",%6.2f", metric * 100.00 / calibration);
+  }
+  fprintf(outfd, "\n");
+  fflush(outfd);
 }
 
 static double
@@ -4768,8 +4862,23 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
         fprintf(outfd,"%s ", value_str);
         value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"int_count");
         fprintf(outfd,"%s ", value_str);
+
+        /* PN: 06/27/2007
+         * Other cpu stats we are interested in
+         */
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"nice_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"iowait_count");
+        fprintf(outfd,"%s ", value_str);
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"softirq_count");
+        fprintf(outfd,"%s ", value_str);
         value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"other_count");
         fprintf(outfd,"%s\n", value_str);
+
+        /* PN: Total interrupts serviced by this cpu */
+        value_str = (char *)xmlGetProp(cpu, (const xmlChar *)"total_interrupts");
+        fprintf(outfd,"%s\n", value_str);
+        
         fflush(outfd);
       }
       cpu = cpu->next;
@@ -4793,9 +4902,252 @@ process_sys_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
     fprintf(outfd,"\n");                              /* 79,1 */
     fflush(outfd);
   }
+
+  if (rd->print_csv) {
+     /* CSV output */
+     print_csv_sys_stats(stats, elapsed_seconds, "ALL",
+                     rd->timestamp, (char *)test_set->id,
+                     (char *)tid, rd->csv_files.sys_stats);
+     /* Print per cpu stats */
+     cpu = stats->xmlChildrenNode;
+     while (cpu != NULL) {
+       print_csv_sys_stats(cpu, elapsed_seconds,
+                (char *)xmlGetProp(cpu, (const xmlChar *)"cpu_id"),
+                rd->timestamp, (char *)test_set->id, (char *)tid,
+                rd->csv_files.sys_stats);
+       cpu = cpu->next;
+     }
+   }
   /* end of printing sys stats instance results */
   return(local_cpus);
 }
+
+/* PN: 07/05/2007.
+ * Network device statistics processing
+ */
+static void
+process_netdev_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
+{
+  int            i;
+  bsd_results_t *rd;
+  xmlNodePtr    interface;
+  FILE          *csvfd;
+  FILE          *outfd;
+  unsigned char* value_str;
+  int            count;
+
+#define NUM_NETDEV_CNTRS        8
+#define NETDEV_DEVNAME          0
+#define NETDEV_RCVPKTS          1
+#define NETDEV_RCVERRS          2
+#define NETDEV_RCVDRPS          3
+#define NETDEV_TRXPKTS          4
+#define NETDEV_TRXERRS          5
+#define NETDEV_TRXDRPS          6
+#define NETDEV_TRXCOLLS         7
+
+  /* Netdev stats counter names.
+   * These names should be identical to definitions in DTD.
+   */
+  const char *netdev_cntr_name[] = {
+    "interface_name",
+    "rcv_packets",
+    "rcv_errors",
+    "rcv_drops",
+    "trx_packets",
+    "trx_errors",
+    "trx_drops",
+    "trx_collisions"
+  };
+
+  rd     = test_set->report_data;
+  count  = test_set->confidence.count;
+  outfd  = rd->outfd;
+
+  NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
+
+  if (test_set->debug) {
+    fprintf(test_set->where,"\tprocessing netdev_stats\n");
+    fflush(test_set->where);
+  }
+
+  if (rd->print_test) {
+    /* Display per test results */
+    fprintf(outfd,"%3d  ", count);
+    fprintf(outfd,"%-6s ",  tid);
+    interface = stats->xmlChildrenNode;
+    while (interface != NULL) {
+      if (!xmlStrcmp(interface->name, (const xmlChar *)"per_interface_stats")) {
+        for ( i = 0 ; i < NUM_NETDEV_CNTRS; i++) {
+          value_str = xmlGetProp(interface, (const xmlChar *)netdev_cntr_name[i]);
+          fprintf(outfd, "%s  ", value_str ? (char *)value_str : "Nan  ");
+        }
+      }
+
+      interface = interface->next;
+      if (interface)
+        fprintf(outfd,"\n            ");
+      else
+        fprintf(outfd,"\n");
+      fflush(outfd);
+    }
+  }
+
+  if (rd->print_csv) {
+    csvfd = rd->csv_files.netdev_stats;
+
+    /* CSV output */
+    interface = stats->xmlChildrenNode;
+    while (interface != NULL) {
+      if (!xmlStrcmp(interface->name, (const xmlChar *)"per_interface_stats")) {
+        fprintf(csvfd, "%ld,%s,%s", rd->timestamp, (char *)test_set->id,
+                                        (char *)tid);
+        for ( i = 0 ; i < NUM_NETDEV_CNTRS; i++) {
+          value_str = xmlGetProp(interface, (const xmlChar *)netdev_cntr_name[i]);
+          if (test_set->debug) {
+            fprintf(test_set->where,
+              "\t%15s = %6s\n", netdev_cntr_name[i],
+                                value_str ? (char *) value_str : "Nan");
+          }
+          fprintf(csvfd, ",%s", value_str ? (char *)value_str : "Nan");
+        }
+        fprintf(csvfd,"\n");
+        fflush(csvfd);
+      }
+      interface = interface->next;
+    }
+  }
+
+  NETPERF_DEBUG_EXIT(test_set->debug,test_set->where);
+}
+
+/* PN: 06/29/2007.
+ * TCP statistics processing
+ */
+static void
+process_tcp_stats(tset_t *test_set, xmlNodePtr stats, xmlChar *tid)
+{
+  int            i;
+  bsd_results_t *rd;
+  FILE          *csvfd;
+  FILE          *outfd;
+  unsigned char* value_str;
+  int            count;
+
+#define NUM_TCP_CNTRS           4
+#define TCP_LOSS                0
+#define TCP_LOST_RTXMTS         1
+#define TCP_FAST_RTXMTS         2
+#define TCP_TIMEOUTS            3
+
+  /* Tcp stats counter names.
+   * These names should be identical to definitions in DTD.
+   */
+  const char *tcp_cntr_name[] = {
+    "tcp_loss",
+    "tcp_lost_rtxmts",
+    "tcp_fast_rtxmts",
+    "tcp_timeouts"
+  };
+
+  rd     = test_set->report_data;
+  count  = test_set->confidence.count;
+  outfd  = rd->outfd;
+
+  NETPERF_DEBUG_ENTRY(test_set->debug,test_set->where);
+
+  if (test_set->debug) {
+    fprintf(test_set->where,"\tprocessing tcp_stats\n");
+    fflush(test_set->where);
+  }
+
+  if (rd->print_test) {
+    /* Display per test results */
+    fprintf(outfd,"%3d  ", count);
+    fprintf(outfd,"%-6s ",  tid);
+    for (i=0; i<NUM_TCP_CNTRS; i++) {
+      value_str = xmlGetProp(stats, (const xmlChar *)tcp_cntr_name[i]);
+      fprintf(outfd, "%s  ", value_str ? (char *) value_str : "Nan  ");
+    }
+    fprintf(outfd,"\n");
+    fflush(outfd);
+  }
+
+ if (rd->print_csv) {
+    csvfd = rd->csv_files.tcp_stats;
+
+    /* CSV output */
+    fprintf(csvfd, "%ld,%s,%s", rd->timestamp, (char *)test_set->id, (char *)tid);
+
+    for (i=0; i<NUM_TCP_CNTRS; i++) {
+      value_str = xmlGetProp(stats, (const xmlChar *)tcp_cntr_name[i]);
+      if (test_set->debug) {
+        fprintf(test_set->where,
+              "\t%15s = %6s\n", tcp_cntr_name[i],
+                                  value_str ? (char *) value_str : "Nan");
+      }
+      fprintf(csvfd, ",%6s", value_str ? (char *) value_str : "Nan");
+    }
+    fprintf(csvfd,"\n");
+    fflush(csvfd);
+  }
+
+  NETPERF_DEBUG_EXIT(test_set->debug,test_set->where);
+}
+
+/* PN: Necessary preprocessing for CSV reports */
+static void
+open_csv_file(FILE **fp, const char* test_type, test_t *test)
+{
+    char fname[50];
+    strcpy(fname, test_type);
+    strcat(fname, ".csv");
+
+    if (!(*fp)) {
+        *fp = fopen(fname,"a");
+        if (!(*fp)) {
+          report_test_failure(test, (char *)__func__,
+                BSDE_CSV_FILE_OPEN_ERROR, "CSV file open failed");
+          exit (-1);
+        }
+    }
+
+    if (strcmp ((char *)test_type, "test_stats") == 0) {
+        fprintf(*fp, "Timestamp,TestSetId,TestId,DataXmitRate,TransXmitRate,DataRcvRate,TransRcvRate\n");
+    }
+
+    if (strcmp ((char *)test_type, "sys_stats") == 0) {
+        fprintf(*fp, "Timestamp,TestSetId,TestId,Cpuid,User,Nice,Sys,Idle,Iowait,Hirq,Sirq,IntrRate\n");
+    }
+
+    if (strcmp ((char *)test_type, "tcp_stats") == 0) {
+        fprintf(*fp, "Timestamp,TestSetId,TestId,Loss,LostRtx,FastRtx,Timeouts\n");
+      }
+
+    if (strcmp ((char *)test_type, "netdev_stats") == 0) {
+        fprintf(*fp,
+          "Timestamp,TestSetId,TestId,Interface,RcvPkts,RcvErrs,RcvDrops,TrxPkts,TrxErrs,TrxDrops,Collisions\n");
+    }
+}
+
+/* PN: Close CSV output files */
+static void
+close_csv_files(bsd_results_t *rd)
+{
+
+  if (rd->csv_files.test_stats)
+    fclose(rd->csv_files.test_stats);
+  if (rd->csv_files.sys_stats)
+    fclose(rd->csv_files.sys_stats);
+  if (rd->csv_files.tcp_stats)
+    fclose(rd->csv_files.tcp_stats);
+  if (rd->csv_files.netdev_stats)
+    fclose(rd->csv_files.netdev_stats);
+
+  memset(&(rd->csv_files), 0, sizeof(csv_files_t));
+
+}
+
 
 static void
 process_stats_for_run(tset_t *test_set)
@@ -4834,6 +5186,12 @@ process_stats_for_run(tset_t *test_set)
   rd->servdemand[index]    =  0.0;
   rd->run_time[index]      =  0.0;
 
+  /* PN: Timestamp helps to identify test runs across CSV files.
+   */
+  if(rd->print_csv) {
+    time(&(rd->timestamp));
+  }
+
   num_of_tests  = 0;
   num_of_cpus   = 0.0;
   while (set_elt != NULL) {
@@ -4862,11 +5220,25 @@ process_stats_for_run(tset_t *test_set)
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"sys_stats")) {
         /* process system statistics */
+	if (rd->print_csv) open_csv_file(&(rd->csv_files.sys_stats), "sys_stats", test);
         num_of_cpus = process_sys_stats(test_set, stats, test->id);
+        stats_for_test++;
+      }
+      /* PN: 06/29/2007. Process Tcp statistics */
+      if(!xmlStrcmp(stats->name,(const xmlChar *)"tcp_stats")) {
+	if (rd->print_csv) open_csv_file(&(rd->csv_files.tcp_stats), "tcp_stats", test);
+        process_tcp_stats(test_set, stats, test->id);
+        stats_for_test++;
+      }
+      /* PN: 07/05/2007. Process network device statistics */
+      if(!xmlStrcmp(stats->name,(const xmlChar *)"netdev_stats")) { 
+	if (rd->print_csv) open_csv_file(&(rd->csv_files.netdev_stats), "netdev_stats", test);
+        process_netdev_stats(test_set, stats, test->id);
         stats_for_test++;
       }
       if(!xmlStrcmp(stats->name,(const xmlChar *)"test_stats")) {
         /* process test statistics */
+	if (rd->print_csv) open_csv_file(&(rd->csv_files.test_stats), "test_stats", test);
         process_test_stats(test_set, stats, test->id);
         stats_for_test++;
         num_of_tests++;
@@ -5242,6 +5614,15 @@ report_bsd_test_results(tset_t *test_set, char *report_flags, char *output)
     if ((test_set->confidence.value < 0) && (min_count > 1)) {
       print_did_not_meet_confidence(test_set);
     }
+    /* PN: Close CSV files.
+     */
+    if (rd->print_csv) {
+      if (test_set->debug)
+        fprintf(test_set->where, "%s: closing CSV files..\n",__func__);
+      close_csv_files(rd);
+    }
   }
+
+
 } /* end of report_bsd_test_results */
 

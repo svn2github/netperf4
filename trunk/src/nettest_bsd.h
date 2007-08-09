@@ -132,6 +132,15 @@ typedef struct  bsd_test_data {
   HIST time_hist;
 } bsd_data_t;
 
+/* PN: Each stat test gets its
+ * own CSV file */
+typedef struct csv_file_pointers {
+    FILE *test_stats;
+    FILE *sys_stats;
+    FILE *tcp_stats;
+    FILE *netdev_stats;
+} csv_files_t;
+
 typedef struct  bsd_results_data {
   int     max_count;
   int     print_test;
@@ -159,6 +168,16 @@ typedef struct  bsd_results_data {
   double service_demand_confidence;
   double confidence;
   double sd_denominator;
+
+  /* PN: CSV output */
+  csv_files_t csv_files;
+  int    print_csv;  /* Flag to enable CSV output. User can
+                      * turn this on using report_flags attribute
+                      * (value = "PRINT_CSV") of report_stats.
+                      * Refer netperf_docs.dtd.
+                      */
+  time_t  timestamp; /* To group related test runs across CSV files */
+
   double results_start;  /* must be the last field in structure */
 } bsd_results_t;
 
@@ -181,6 +200,8 @@ enum {
   BSDE_TEST_STATE_CORRUPTED,
   BSDE_CONNECT_FAILED,
   BSDE_DATA_CONNECTION_CLOSED_ERROR,
+  /* PN: CSV output */
+  BSDE_CSV_FILE_OPEN_ERROR,
   BSDE_DATA_SEND_ERROR=-1,
   BSDE_SUCCESS = 0
 };

@@ -164,31 +164,75 @@ update_sys_stats(test_t *test)
     delta[i].kernel    = ending[i].kernel    - starting[i].kernel;
     delta[i].interrupt = ending[i].interrupt - starting[i].interrupt;
 
+    /* PN: 06/27/2007
+     * Other cpu stats we are interested in
+     */
+    delta[i].nice      = ending[i].nice      - starting[i].nice;
+    delta[i].iowait    = ending[i].iowait    - starting[i].iowait;
+    delta[i].softirq   = ending[i].softirq   - starting[i].softirq;
+
+    /* Total interrupt count. 
+     */
+    delta[i].total_intr = ending[i].total_intr - starting[i].total_intr;
+
     subtotal  = delta[i].idle;
     subtotal += delta[i].user;
     subtotal += delta[i].kernel;
     subtotal += delta[i].interrupt;
 
+    /* PN: 06/27/2007
+     * Other cpu stats we are interested in
+     */
+    subtotal += delta[i].nice;
+    subtotal += delta[i].iowait;
+    subtotal += delta[i].softirq;
+
+    /* PN: 06/27/2007
+     * If procstat accounts for all possible cpu expenses, 
+     * delta[i].other should be 0
+     */
     delta[i].other = delta[i].calibrate - subtotal;
 
     if(test->debug) {
       fprintf(test->where, 
-	      "%s delta calibrate[%d] = %"PRIx64,
-	      __func__, i, delta[i].calibrate);
+	      "%s: subtotal[%d] = %"PRIu64,
+	      __func__, i, subtotal);
       fprintf(test->where, 
-	      "\n\tdelta idle[%d] = %"PRIx64,
+	      /* "%s delta calibrate[%d] = %"PRIx64, */
+	      "\n\tdelta calibrate[%d] = %" PRIu64,
+	      i, delta[i].calibrate);
+      fprintf(test->where, 
+	      "\n\tdelta idle[%d] = %"PRIu64, 
 	      i, delta[i].idle);
       fprintf(test->where,
-	      "\n\tdelta user[%d] = %"PRIx64,
+	      "\n\tdelta user[%d] = %"PRIu64,
 	      i, delta[i].user);
       fprintf(test->where,
-	      "\n\tdelta kern[%d] = %"PRIx64,
+	      "\n\tdelta kern[%d] = %"PRIu64,
 	      i, delta[i].kernel);
       fprintf(test->where,
-	      "\n\tdelta intr[%d] = %"PRIx64,
+	      "\n\tdelta intr[%d] = %"PRIu64,
 	      i, delta[i].interrupt);
+
+     /* PN: 06/27/2007
+      * Other cpu stats we are interested in
+      */
       fprintf(test->where,
-	      "\n\tdelta othr[%d] = %"PRIx64,
+	      "\n\tdelta nice[%d] = %"PRIu64,
+	      i, delta[i].nice);
+      fprintf(test->where,
+	      "\n\tdelta iowt[%d] = %"PRIu64,
+	      i, delta[i].iowait);
+      fprintf(test->where,
+	      "\n\tdelta sirq[%d] = %"PRIu64,
+	      i, delta[i].softirq);
+      fprintf(test->where,
+	      "\n\tdelta totintr[%d] = %"PRIu64,
+	      i, delta[i].total_intr);
+      
+      
+      fprintf(test->where,
+	      "\n\tdelta othr[%d] = %"PRIu64,
 	      i, delta[i].other);
       fprintf(test->where, "\n");
       fflush(test->where);
@@ -211,13 +255,34 @@ update_sys_stats(test_t *test)
     total[i].interrupt += delta[i].interrupt;
     total[i].other     += delta[i].other;
 
+    /* PN: 06/27/2007
+     * Other cpu stats we are interested in
+     */
+    total[i].nice      += delta[i].nice;
+    total[i].iowait    += delta[i].iowait;
+    total[i].softirq   += delta[i].softirq;
+
+    /* PN: Set this CPU's total interrupt count */
+    total[i].total_intr += delta[i].total_intr;
+
     sys_total->calibrate += delta[i].calibrate;
     sys_total->idle      += delta[i].idle;
     sys_total->user      += delta[i].user;
     sys_total->kernel    += delta[i].kernel;
     sys_total->interrupt += delta[i].interrupt;
     sys_total->other     += delta[i].other;
+
+    /* PN: 06/27/2007
+     * Other cpu stats we are interested in
+     */
+    sys_total->nice      += delta[i].nice;
+    sys_total->iowait    += delta[i].iowait;
+    sys_total->softirq   += delta[i].softirq;
+
+    /* PN: Set the total interrupt count */
+    sys_total->total_intr += delta[i].total_intr;
   }
+
   NETPERF_DEBUG_EXIT(test->debug,test->where);
 }
   
@@ -256,6 +321,14 @@ clear_cpu_time_counters(cpu_time_counters_t *counters, int count) {
       counters[i].kernel = 0;
       counters[i].interrupt = 0;
       counters[i].other = 0;
+      
+      /* PN: 06/27/2007
+       * Other cpu stats we are interested in
+       */
+      counters[i].nice = 0;
+      counters[i].iowait = 0;
+      counters[i].softirq = 0;
+      counters[i].total_intr = 0;
     }
   }
   else {
@@ -311,7 +384,12 @@ set_counter_attribute(test_t *test, xmlNodePtr stats,char *name, uint64_t value)
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
-  sprintf(value_str,"%#"PRIx64,value);
+  /* PN: Why use PRIx64i -- converts to hex? 
+   * Netperf client does not seem to convert 
+   * from hex to uint64. Is this a bug?
+   */
+  /* sprintf(value_str,"%#"PRIx64,value); */
+  sprintf(value_str,"%" PRIu64,value); 
   ap = xmlSetProp(stats,(xmlChar *)name,(xmlChar *)value_str);
   if (test->debug) {
     fprintf(test->where,"%s=%s from %"PRIx64"\n",name,value_str,value);
@@ -360,6 +438,25 @@ add_per_cpu_attributes(test_t *test,
       if (ap != NULL) {
         ap = set_counter_attribute(test, cpu_stats, "other_count", cpu[i].other);
       }
+
+     /* PN: 06/27/2007
+      * Other cpu stats we are interested in
+      */
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, cpu_stats, "nice_count", cpu[i].nice);
+      }
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, cpu_stats, "iowait_count", cpu[i].iowait);
+      }
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, cpu_stats, "softirq_count", cpu[i].softirq);
+      }
+
+      /* PN: Total interrupts serviced */
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, cpu_stats, "total_interrupts", cpu[i].total_intr);
+      }
+
       xmlAddChild(stats,cpu_stats);
     } else {
       /* error xmlNewNode failed to allocate a new node for the next cpu */
@@ -440,6 +537,24 @@ sys_stats_get_stats(test_t *test)
       }
       if (ap != NULL) {
         ap = set_counter_attribute(test, stats, "other_count", total_sys->other);
+      }
+
+     /* PN: 06/27/2007
+      * Other cpu stats we are interested in
+      */
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, stats, "nice_count", total_sys->nice);
+      }
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, stats, "iowait_count", total_sys->iowait);
+      }
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, stats, "softirq_count", total_sys->softirq);
+      }
+      
+      /* PN: Total number of interrupts serviced */
+      if (ap != NULL) {
+        ap = set_counter_attribute(test, stats, "total_interrupts", total_sys->total_intr);
       }
       ap = add_per_cpu_attributes(test,stats,total_cpu, tsd->num_cpus);
     }
@@ -560,6 +675,7 @@ sys_stats(test_t *test)
 			      err,
 			      "call to sys_cpu_util_init failed");
 	}
+
 	break;
       case TEST_INIT:
 	if (test->debug) {

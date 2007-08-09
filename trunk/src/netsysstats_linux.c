@@ -78,6 +78,8 @@ delete this exception statement from your version.
 #define PROC_STAT_FILE_NAME "/proc/stat"
 #define N_CPU_LINES(nr) (nr == 1 ? 1 : 1 + nr)
 
+#define PROC_INTR_FILE_NAME "/proc/interrupts"
+
 static int proc_stat_fd = -1;
 static char* proc_stat_buf = NULL;
 static int proc_stat_buflen = 0;
@@ -155,6 +157,8 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   uint64_t nicetime;
   netsysstat_data_t *tsd = GET_TEST_DATA(test);
   double elapsed;                   /* well, it isn't really "elapsed" */
+  FILE *proc_intr_file = NULL;
+  uint64_t irq;
 
   NETPERF_DEBUG_ENTRY(test->debug,test->where);
 
@@ -163,7 +167,8 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     ((double)timestamp->tv_usec / (double)1000000);
   if (test->debug) {
     fprintf(test->where,
-	    "__func__ res %p timeptr %p test %p tsd %p\n",
+	    "func: %s res %p timeptr %p test %p tsd %p\n",
+	    __func__,
 	    res,
 	    timestamp,
 	    test,
@@ -186,18 +191,32 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   p++; 
   
   for (i = 0; i < tsd->num_cpus; i++) {
-    /* PN:
-     * p points to the right record, not proc_stat_buf
+
+    /* PN: 
+     * p points to a '\n'. Move to the next char for cpu info
      */
+    p = p + 1;
+    
     /* records = sscanf(proc_stat_buf, */
-    records = sscanf(p,
-		     "%s %lld %lld %lld %lld",
+    /* PN: Scanning a few more cpu counters. 
+     */
+    records = sscanf(p, 
+		     "%s %lld %lld %lld %lld %lld %lld %lld",
 		     cpunam,
 		     &(res[i].user),
-		     &nicetime,
+		     &(res[i].nice),
 		     &(res[i].kernel),
-		     &(res[i].idle));
+		     &(res[i].idle),
+		     &(res[i].iowait),
+		     &(res[i].interrupt),
+		     &(res[i].softirq)
+		     );
+
     res[i].calibrate = (uint64_t)(elapsed * (double)sysconf(_SC_CLK_TCK));
+
+    /* PN: Nothing goes into other stats. 
+     */
+    /*
     res[i].user += nicetime;
     res[i].interrupt = 0;
     res[i].other     = res[i].calibrate;
@@ -205,34 +224,76 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     res[i].other    -= res[i].user;
     res[i].other    -= res[i].kernel;
     res[i].other    -= res[i].interrupt;
+    */
 
+    /* PN */
     if (test->debug) {
       fprintf(test->where,
-	      "\tcalibrate[%d] = 0x%"PRIx64" ",
+ 	      "\tcalibrate[%d] = %"PRIu64" ", 
 	      i,
 	      res[i].calibrate);
       fprintf(test->where,
-	      "\tidle[%d] = 0x%"PRIx64" ",
+	      "\tidle[%d] = 0x%"PRIu64" ",
 	      i,
 	      res[i].idle);
       fprintf(test->where,
-	      "user[%d] = 0x%"PRIx64" ",
+	      "user[%d] = 0x%"PRIu64" ",
 	      i,
 	      res[i].user);
       fprintf(test->where,
-	      "kern[%d] = 0x%"PRIx64" ",
+	      "kern[%d] = 0x%"PRIu64" ",
 	      i,
 	      res[i].kernel);
       fflush(test->where);
       fprintf(test->where,
-	      "intr[%d] = 0x%"PRIx64"\n",
+	      "intr[%d] = 0x%"PRIu64"\n",
 	      i,
 	      res[i].interrupt);
+      fprintf(test->where,
+ 	      "nice[%d] = %"PRIu64" ",
+ 	      i,
+ 	      res[i].nice);
+      fprintf(test->where,
+ 	      "iowait[%d] = %"PRIu64" ",
+ 	      i,
+ 	      res[i].iowait);
+      fprintf(test->where,
+ 	      "softirq[%d] = %"PRIu64"\n",
+ 	      i,
+ 	      res[i].softirq);
+      fflush(test->where);
     }
+
     p = strchr(p, '\n');
-    /* PN:
-     * p points to the right record, not proc_stat_buf
-     */
-    p++;
+
   }
+  /* PN: 07/11/2007.
+   * Get the total interrupts serviced so far.
+   */
+  if (!proc_intr_file) {
+    proc_intr_file = fopen(PROC_INTR_FILE_NAME, "r");
+    if (!proc_intr_file) {
+      fprintf (stderr, "Cannot open %s!\n", PROC_INTR_FILE_NAME);
+      exit(-1);
+    }
+  }
+  
+  /* PN: Read /proc/interrupts */
+  memset(proc_stat_buf, 0, proc_stat_buflen);
+  while (fgets(proc_stat_buf, proc_stat_buflen, proc_intr_file) != NULL) {
+    
+    if (isdigit(proc_stat_buf[2])) {
+      for (i = 0; i < tsd->num_cpus; i++) {
+	sscanf(proc_stat_buf + 4 + 11 * i, " %lld", &irq);
+	res[i].total_intr += irq;
+	if (test->debug) {
+	  fprintf(test->where, "cpu: %d, irq: %"PRIu64", total_intr: %"PRIu64"\n",
+		  i, irq, res[i].total_intr);
+	  fflush(test->where);
+	}
+      }
+    }
+  }
+  
+  fclose(proc_intr_file);
 }
