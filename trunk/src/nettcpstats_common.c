@@ -1,8 +1,6 @@
 /*
- * PN: New source file to process TCP statistics
- */
 
-/*
+$Id$
 
 This file is part of netperf4.
 

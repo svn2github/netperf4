@@ -9,8 +9,8 @@ AM_CPPFLAGS = -I$(top_srcdir)/include -DLIBDIR="\"$(libdir)\"" -DNETPERFDIR="\"$
 # netlib platform-specific stuff
 USE_CPU_SOURCE=netsysstats_@NETSYS_SOURCE@.c
 USE_NETLIB_SOURCE=netlib_@NETSYS_SOURCE@.c
-USE_TCPSTATS_SOURCE=nettcpstats_@NETSYS_SOURCE@.c
-USE_NETDEV_STATS_SOURCE=netdevstats_@NETSYS_SOURCE@.c
+USE_TCPSTATS_SOURCE=nettcpstats_@NETTCPSTATS_SOURCE@.c
+USE_NETDEV_STATS_SOURCE=netdevstats_@NETDEVSTATS_SOURCE@.c
 
 # anything that might be platform-specific and thus not covered
 # directly in COMMON_SRC or *_SOURCES should be in EXTRA_DIST

@@ -371,7 +371,7 @@
      The default value for confidence is 99% -->
 <!-- Value 'PRINT_CSV' for report_flags will enable Comma Separated stat Values
      (CSV) output. Values are written into different files, one for each stat
-     test -- filename 'test_name'.csv -->
+     test: filename 'test_name'.csv -->
 
 <!ELEMENT snap EMPTY >
 <!ATTLIST snap tid  IDREF  "t_all" >

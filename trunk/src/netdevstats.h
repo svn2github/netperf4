@@ -1,8 +1,6 @@
 /*
- * PN: New header file to process network device statistics
- */
 
-/*
+$Id$
 
 This file is part of netperf4.
 

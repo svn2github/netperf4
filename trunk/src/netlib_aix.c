@@ -1,5 +1,5 @@
 static char netlib_specific_id[]="\
-@(#)(c) Copyright 2006, Hewlett-Packard Company, $Id: netlib_none.c 133 2006-04-06 21:06:23Z raj $";
+@(#)(c) Copyright 2006, Hewlett-Packard Company, $Id$";
 
 /*
 

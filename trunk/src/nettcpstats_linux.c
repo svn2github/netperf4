@@ -1,8 +1,6 @@
-/* 
- * PN: New source file to gather TCP statistics on linux
- */
-
 /*
+
+$Id$
 
 This file is part of netperf4.
 

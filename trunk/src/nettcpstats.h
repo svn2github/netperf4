@@ -1,8 +1,5 @@
 /* 
- * PN: New header file for processing TCP statistics
- */
-
-/* 
+$Id$
 
 This file is part of netperf4.
 

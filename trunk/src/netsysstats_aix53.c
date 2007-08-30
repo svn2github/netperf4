@@ -1,5 +1,5 @@
 char netsysstats_specific_id[]="\
-@(#)(c) Copyright 2005, Hewlett-Packard Company, $Id: netsysstats_hpux.c 133 2006-04-06 21:06:23Z raj $";
+@(#)(c) Copyright 2005, Hewlett-Packard Company, $Id$";
 
 /*
 

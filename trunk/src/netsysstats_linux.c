@@ -184,11 +184,6 @@ get_cpu_time_counters(cpu_time_counters_t *res,
   }
   /* Skip first line (total) on SMP */
   if (tsd->num_cpus > 1) p = strchr (p, '\n');
-
-  /* PN:
-   * p points to '\n'. Move to next char for per cpu info 
-   */
-  p++; 
   
   for (i = 0; i < tsd->num_cpus; i++) {
 
@@ -225,40 +220,38 @@ get_cpu_time_counters(cpu_time_counters_t *res,
     res[i].other    -= res[i].kernel;
     res[i].other    -= res[i].interrupt;
     */
-
-    /* PN */
     if (test->debug) {
       fprintf(test->where,
- 	      "\tcalibrate[%d] = %"PRIu64" ", 
-	      i,
-	      res[i].calibrate);
+              "\tcalibrate[%d] = 0x%"PRIx64" ",
+              i,
+              res[i].calibrate);
       fprintf(test->where,
-	      "\tidle[%d] = 0x%"PRIu64" ",
-	      i,
-	      res[i].idle);
+              "\tidle[%d] = 0x%"PRIx64" ",
+              i,
+              res[i].idle);
       fprintf(test->where,
-	      "user[%d] = 0x%"PRIu64" ",
-	      i,
-	      res[i].user);
+              "user[%d] = 0x%"PRIx64" ",
+              i,
+              res[i].user);
       fprintf(test->where,
-	      "kern[%d] = 0x%"PRIu64" ",
-	      i,
-	      res[i].kernel);
+              "kern[%d] = 0x%"PRIx64" ",
+              i,
+              res[i].kernel);
       fflush(test->where);
       fprintf(test->where,
-	      "intr[%d] = 0x%"PRIu64"\n",
-	      i,
-	      res[i].interrupt);
+              "intr[%d] = 0x%"PRIx64"\n",
+              i,
+              res[i].interrupt);
       fprintf(test->where,
- 	      "nice[%d] = %"PRIu64" ",
+ 	      "nice[%d] = %x"PRIx64" ",
  	      i,
  	      res[i].nice);
       fprintf(test->where,
- 	      "iowait[%d] = %"PRIu64" ",
+ 	      "iowait[%d] = %x"PRIx64" ",
  	      i,
  	      res[i].iowait);
       fprintf(test->where,
- 	      "softirq[%d] = %"PRIu64"\n",
+ 	      "softirq[%d] = %x"PRIx64"\n",
  	      i,
  	      res[i].softirq);
       fflush(test->where);

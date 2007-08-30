@@ -507,6 +507,11 @@ case "$enable_cpuutil" in
 		AC_HAVE_LIBRARY(kstat)
 		;;
 	'')
+
+# PN: 08/16/2007
+# NETDEVSTATS_SOURCE and NETTCPSTATS_SOURCE will be used by 
+# Makefile.am to decide which netdevstats_*.c and nettcpstats_*.c
+# source file to compile based on platform.
 # ia64-hp-hpux11.23
 # i386-pc-solaris2.10
 # guess it automagically in a nice big case statement
@@ -517,6 +522,8 @@ case "$enable_cpuutil" in
 		      [Use Linux's procstat interface to measure CPU util.])
 		      enable_cpuutil="procstat - auto"
 		      NETSYS_SOURCE="linux"
+		      NETDEVSTATS_SOURCE="linux"
+		      NETTCPSTATS_SOURCE="linux"
 		      ;;
 		   *-*-hpux11.23 | *-*-hpux11.31)
 		     use_cpuutil=true
@@ -524,6 +531,8 @@ case "$enable_cpuutil" in
 		     [Use HP-UX's pstat interface to measure CPU util.])
 		     enable_cpuutil="pstatnew - auto"
 		     NETSYS_SOURCE="hpux"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     ;;
 		   *-*-hpux11.11)
 		     use_cpuutil=true
@@ -531,6 +540,8 @@ case "$enable_cpuutil" in
 		     [Use HP-UX's pstat interface to measure CPU util.])
 		     enable_cpuutil="pstat - auto"
 		     NETSYS_SOURCE="hpux"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     ;;
 		   *-*-hpux11* | *-*-hpux10*)
 		     use_cpuutil=true
@@ -538,6 +549,8 @@ case "$enable_cpuutil" in
 		     [Use HP-UX's pstat interface to measure CPU util.])
 		     enable_cpuutil="pstat - auto"
 		     NETSYS_SOURCE="pstat"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     ;;
 		   *-*-aix5.*)
 		     use_cpuutil=true
@@ -546,6 +559,8 @@ case "$enable_cpuutil" in
 		     AC_HAVE_LIBRARY(perfstat)
 		     enable_cpuutil="perfstat - auto"
 		     NETSYS_SOURCE="aix"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     ;;
 		   *-*-solaris2.10 | *-*-solaris2.11)
 		     use_cpuutil=true
@@ -554,6 +569,8 @@ case "$enable_cpuutil" in
 		     AC_HAVE_LIBRARY(kstat)
 		     enable_cpuutil="kstat10 - auto"
 		     NETSYS_SOURCE="kstat10"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     ;;
 		   *-*-solaris2.*)
 		     use_cpuutil=true
@@ -562,6 +579,8 @@ case "$enable_cpuutil" in
 		     AC_HAVE_LIBRARY(kstat)
 		     enable_cpuutil="kstat - auto"
 		     NETSYS_SOURCE="kstat"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     ;;
                    *-*-freebsd4.* | *-*-freebsd5.* | *-*-freebsd6.*)
 		     use_cpuutil=true
@@ -569,10 +588,14 @@ case "$enable_cpuutil" in
 		     [Use FreeBSD's sysctl interface to measure CPU util.])
 		     enable_cpuutil="sysctl - auto"
 		     NETSYS_SOURCE="sysctl"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     ;;
 		   *)
 		     use_cpuutil=false
 		     NETSYS_SOURCE="none"
+		     NETDEVSTATS_SOURCE="none"
+		     NETTCPSTATS_SOURCE="none"
 		     enable_cpuutil="none. Consider teaching configure about your platform."
 		     ;;
 		esac
@@ -613,6 +636,10 @@ esac
 
 AC_SUBST(CFLAGS)
 AC_SUBST(LIBS)
+
+# PN: 08/16/2007
+AC_SUBST(NETDEVSTATS_SOURCE)
+AC_SUBST(NETTCPSTATS_SOURCE)
 
 AC_SUBST(NETSYS_SOURCE)
 AC_SUBST(LIBOJBS)
