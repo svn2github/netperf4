@@ -56,6 +56,8 @@ char    nettest_id[]="\
 /*      recv_udp_stream()       catch a udp stream test         */
 /*      send_udp_rr()           perform a udp req/rsp test      */
 /*      recv_udp_rr()           catch a udp req/rsp test        */
+/*      recv_tcp_rr_multi()     catch concurrent tcp req/rsp    */
+/*                                tests                         */
 /*                                                              */
 /****************************************************************/
 
@@ -455,7 +457,7 @@ get_dependency_data(test_t *test, int type, int protocol)
       g_usleep(1000000);
     }
   } while ((error == EAI_AGAIN) && (count <= 5));
-    
+
   if (test->debug) {
     dump_addrinfo(test->where, remote_ai, remotehost, remoteport, remotefam);
   }
@@ -892,6 +894,7 @@ bsd_test_init(test_t *test, int type, int protocol)
   bsd_data_t *new_data;
   xmlNodePtr  args;
   xmlChar    *string;
+  xmlChar    *test_name;
   xmlChar    *units;
   xmlChar    *localhost;
   xmlChar    *localport;
@@ -953,6 +956,35 @@ bsd_test_init(test_t *test, int type, int protocol)
 
     string =  xmlGetProp(args,(const xmlChar *)"rsp_size");
     new_data->rsp_size = atoi((char *)string);
+
+    /* PN: 07/31/2007
+     * Number of concurrent connections this test should handle
+     * (such as number of send_tcp_rr tests in case of a recv_tcp_rr_multi
+     * test). This number makes sense (or should make sense) only for
+     * multi tests.
+     *
+     * We need some kind of validation to ensure "num_concurrent_conns"
+     * is not > 0 for non-multi tests, since, a lot memory allocation
+     * depends on the value of "num_concurrent_conns". Right now, we use
+     * the test name for validation.
+     */
+    string =  xmlGetProp(args,(const xmlChar *)"num_concurrent_conns");
+    test_name = xmlGetProp(test->node,(const xmlChar *)"test_name");
+    if (!xmlStrcmp(test_name, (const xmlChar *)"recv_tcp_rr_multi")) {
+      new_data->num_concurrent_conns = atoi((char *)string);
+
+      /* num_concurrent_conns should be > 0 */
+      if (!(new_data->num_concurrent_conns))
+              new_data->num_concurrent_conns = 1;
+    }
+    else {
+      new_data->num_concurrent_conns = 0;
+    }
+    if (test->debug) {
+      fprintf(test->where, "Test: %s, num_concurrent_conns: %d\n",
+                (char *)test_name, new_data->num_concurrent_conns);
+      fflush(test->where);
+    }
 
     /* relying on the DTD to give us defaults isn't always the most
        robust way to go about doing things. */
@@ -1076,6 +1108,18 @@ bsd_test_init(test_t *test, int type, int protocol)
                         (char *)__func__,
                         BSDE_NO_SOCKET_ARGS,
                         "no socket_arg element was found");
+  }
+
+  /* PN: 07/31/2007
+   * If this test should handle concurrent connections, allocate memory
+   * for helper threads' data.  Helper threads are used by multi tests
+   * such as recv_tcp_rr_multi.
+   */
+  if (new_data->num_concurrent_conns) {
+    new_data->helper_data = (generic_helper_data_t *)
+        malloc(sizeof(generic_helper_data_t) * new_data->num_concurrent_conns);
+    memset(new_data->helper_data, 0,
+         sizeof(generic_helper_data_t) * new_data->num_concurrent_conns);
   }
 
   SET_TEST_DATA(test,new_data);
@@ -2131,6 +2175,440 @@ recv_tcp_rr_load(test_t *test)
   return(new_state);
 }
 
+/* PN: 07/31/2007
+ * 'Multi' tests such as recv_tcp_rr_multi spawn helper threads
+ * to handle concurrent senders.
+ * This function handles load/meas for recv_tcp_rr_multi's helper threads
+ */
+static uint32_t
+recv_tcp_rr_multi_helper_run(generic_helper_data_t *my_data)
+{
+  int               len=-1;
+  int               bytes_left;
+  char             *req_ptr;
+  int               rsp_size, req_size, err;
+
+  test_t           *test = my_data->test_being_helped;
+
+  /* recv the request for the test */
+  req_ptr    = my_data->recv_ring->buffer_ptr;
+  req_size   = bytes_left = ((bsd_data_t *)
+        GET_TEST_DATA(my_data->test_being_helped))->req_size;
+
+  while (bytes_left > 0) {
+    if ((len=recv(my_data->s_data,
+                  req_ptr,
+                  bytes_left,
+                  0)) != 0) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_RECV_ERROR(len)) {
+        report_test_failure(my_data->test_being_helped,
+                            (char *)__func__,
+                            BSDE_DATA_RECV_ERROR,
+                            "data_recv_error");
+        break;
+      }
+      req_ptr    += len;
+      bytes_left -= len;
+    }
+    else {
+      /* just got a data connection close break out of while loop */
+      break;
+    }
+  }
+
+  /* check for recv len and state transition */
+  if ((len == 0) ||
+      (my_data->state_req == TEST_IDLE)) {
+    /* just got a data connection close or
+       a request to transition to the idle state */
+    /* shut down the socket and set it to -1 */
+    if (test->debug) {
+      if (len == 0)
+        fprintf(test->where,
+          "%s: Attempting socket shutdown: socket=%d recv len=0 of bytes_left=%d\n",
+                __func__, my_data->s_data, bytes_left);
+      if (my_data->state_req == TEST_IDLE)
+        fprintf(test->where,
+          "%s: Attempting socket shutdown: socket=%dtransition to IDLE state\n",
+                __func__, my_data->s_data);
+      fflush(test->where);
+    }
+
+    if (shutdown(my_data->s_data,SHUT_WR) == -1) {
+      report_test_failure(test,
+                          (char *)__func__,
+                          BSDE_SOCKET_SHUTDOWN_FAILED,
+                          "data_recv_error");
+
+
+    }
+    else {
+      while (len > 0) {
+        len=recv(my_data->s_data,
+                 my_data->recv_ring->buffer_ptr,
+                 req_size, 0);
+      }
+      CLOSE_SOCKET(my_data->s_data);
+      my_data->s_data = -1;
+    }
+
+  }
+  else {
+
+    /* Increment counter if we are in measuring state */
+    if (my_data->new_state == TEST_MEASURE) my_data->stats_counter++;
+
+    /* Send the response */
+    rsp_size = ((bsd_data_t *)GET_TEST_DATA(my_data->test_being_helped))->rsp_size;
+    if ((len=send(my_data->s_data,
+                  my_data->send_ring->buffer_ptr,
+                  rsp_size,
+                  0)) != rsp_size) {
+      /* this macro hides windows differences */
+      if (CHECK_FOR_SEND_ERROR(len)) {
+        report_test_failure(my_data->test_being_helped,
+                            (char *)__func__,
+                            BSDE_DATA_SEND_ERROR,
+                            "data_send_error");
+      }
+    }
+    my_data->recv_ring = my_data->recv_ring->next;
+    my_data->send_ring = my_data->send_ring->next;
+
+  }
+
+  return (my_data->state_req);
+
+}
+
+/* PN: 07/31/2007
+ * 'Multi' tests such as recv_tcp_rr_multi spawn helper threads
+ * to handle concurrent senders.
+ * This function handles state transitions, and is the starting point
+ * for recv_tcp_rr_multi's helper threads.
+ */
+static void *
+recv_tcp_rr_multi_helper(void *helper_data)
+{
+  uint32_t state, new_state;
+  generic_helper_data_t *my_data = (generic_helper_data_t *)helper_data;
+  test_t *test = my_data->test_being_helped;
+
+  state = my_data->new_state;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+
+    switch(state) {
+    case TEST_IDLE:
+      new_state = my_data->state_req;
+      if (new_state == TEST_IDLE) {
+        g_usleep(1000000);
+      }
+      break;
+    case TEST_LOADED:
+      new_state = recv_tcp_rr_multi_helper_run(my_data);
+      if (new_state == TEST_IDLE) {
+        /* Transition from load to idle.
+         * Ensure helper_run shutdowns/closes the socket
+         */
+        while (my_data->s_data > 0)
+          new_state = recv_tcp_rr_multi_helper_run(my_data);
+      }
+      else if (my_data->s_data < 0) {
+        /* Did not recv() any data in the previous
+         * recv_tcp_rr_multi_helper_run. Most likely the peer closed
+         * its socket. Sleep until the test_being_helped changes my
+         * state to TEST_IDLE (that is when test_being_helped creates
+         * me a new socket.
+         */
+        while ((new_state = my_data->state_req) != TEST_IDLE)
+          g_usleep(100000);
+      }
+      break;
+    case TEST_MEASURE:
+      new_state = recv_tcp_rr_multi_helper_run(my_data);
+      break;
+    default:
+        /* TODO. Do not know to handle this state!!!! */
+      break;
+    } /* end of switch */
+    /* Not necessary to check if state transitions are correct,
+     * that will be taken care by the recv_tcp_rr_multi test
+     */
+    state = my_data->new_state = new_state;
+  } /* end of while */
+
+  if (test->debug) {
+    fprintf(test->where, "%s: thread: %p (helper for test: %s) will exit now\n",
+        __func__, my_data->tid, (char *)test->id);
+    fflush(test->where);
+  }
+
+  /* This thread is all set to exit */
+  g_thread_exit(NULL);
+
+} /* end of recv_tcp_rr_multi_helper */
+
+/* PN: 07/31/2007
+ * 'Multi' tests such as recv_tcp_rr_multi spawn helper threads
+ * to handle concurrent senders.
+ * This function handles launching helper threads for recv_tcp_rr_multi test.
+ */
+static uint32_t
+recv_tcp_rr_multi_init(test_t *test)
+{
+  SOCKET                 s_data;
+  bsd_data_t            *my_data;
+  struct sockaddr        peeraddr;
+  netperf_socklen_t      peerlen;
+  int                    num_accepted = 0;
+  generic_helper_data_t *temp = NULL;
+  uint32_t               ret_val = TEST_IDLE;
+  int                    rc;
+
+  my_data   = GET_TEST_DATA(test);
+
+  peerlen   = sizeof(peeraddr);
+
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+
+  /* Accept num_concurrent_conns senders */
+  while (num_accepted < my_data->num_concurrent_conns) {
+    if (test->debug) {
+      fprintf(test->where, "%s: waiting to accept sender: %d\n",
+        __func__, num_accepted);
+      fflush(test->where);
+    }
+
+    temp                        = (generic_helper_data_t *)
+                                        &(my_data->helper_data[num_accepted]);
+
+    /* All helper threads send and recv from the same buffer.
+     * This can be changed if needed.
+     */
+    temp->send_ring             = my_data->send_ring;
+    temp->recv_ring             = my_data->recv_ring;
+    temp->state_req             = TEST_IDLE;
+    temp->new_state             = TEST_IDLE;
+    temp->test_being_helped     = test;
+
+    if ((temp->s_data = accept(my_data->s_listen,
+                      &peeraddr,
+                      &peerlen)) == -1) {
+      report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_ACCEPT_FAILED,
+                        "listen socket accept failed");
+      ret_val = TEST_ERROR;
+      break;
+    }
+    else {
+      if (test->debug) {
+        fprintf(test->where,
+              "%s: accept returned successfully %d\n",
+              __func__, temp->s_data);
+        fflush(test->where);
+      }
+    }
+
+    rc = launch_joinable_thread(&(temp->tid), recv_tcp_rr_multi_helper,
+                    (void *)temp);
+
+    if (rc != NPE_SUCCESS) {
+        test->state = TEST_ERROR;
+        test->err_rc = rc;
+        test->err_fn = (char *)__func__;
+        ret_val = TEST_ERROR;
+        if (test->debug) {
+          fprintf(test->where,
+              "%s: launch_joinable_thread failed for sender: %d\n",
+              __func__, num_accepted);
+          fflush(test->where);
+        }
+        break;
+    }
+    else {
+        if (test->debug) {
+          fprintf(test->where,
+              "%s: launch_joinable_thread successful. new thread: %p\n",
+              __func__, temp->tid);
+          fflush(test->where);
+        }
+    }
+    num_accepted++;
+  }
+
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
+  return(ret_val);
+}
+
+/* PN: 07/31/2007
+ * 'Multi' tests such as recv_tcp_rr_multi spawn helper threads
+ * to handle concurrent senders.
+ * This function handles load to idle state transition for recv_tcp_rr_multi.
+ */
+static void
+recv_tcp_rr_multi_idle_link(uint32_t from_state, uint32_t to_state, test_t *test)
+{
+
+  int                    num_accepted = 0;
+  generic_helper_data_t *temp = NULL;
+  uint32_t               ret_val = TEST_IDLE;
+  int                    rc;
+  bsd_data_t            *my_data;
+  int                    num_helpers, i;
+  struct sockaddr        peeraddr;
+  netperf_socklen_t      peerlen;
+
+  my_data               = GET_TEST_DATA(test);
+  num_helpers           = my_data->num_concurrent_conns;
+  peerlen               = sizeof(peeraddr);
+
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+
+  if (from_state == TEST_LOADED && to_state == TEST_IDLE) {
+    /* transitioning from load to idle. */
+
+    /* All helper threads should shutdown/close their socket
+     * and set sock fd to -1. Wail until this happens
+     */
+    for (i=0; i<num_helpers; i++) {
+      while (my_data->helper_data[i].s_data > 0)
+        g_usleep(1000000);
+    }
+
+    /* Wait on accept */
+    if (test->debug) {
+      fprintf(test->where, "%s:waiting in accept\n", __func__);
+      fflush(test->where);
+    }
+    while (num_accepted < my_data->num_concurrent_conns) {
+
+      temp                      = (generic_helper_data_t *)
+                                        &(my_data->helper_data[num_accepted]);
+
+      temp->state_req           = TEST_IDLE;
+      temp->new_state           = TEST_IDLE;
+
+      if ((temp->s_data = accept(my_data->s_listen,
+                      &peeraddr,
+                      &peerlen)) == -1) {
+        report_test_failure(test,
+                        (char *)__func__,
+                        BSDE_ACCEPT_FAILED,
+                        "listen socket accept failed");
+        ret_val = TEST_ERROR;
+        break;
+      }
+      else {
+        if (test->debug) {
+          fprintf(test->where,
+              "%s:accept returned successfully %d\n",
+              __func__, temp->s_data);
+          fflush(test->where);
+        }
+      }
+      num_accepted++;
+
+    } /* end while */
+
+  } /* End of state transition load->idle */
+
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
+
+}
+
+/* PN: 07/31/2007
+ * 'Multi' tests such as recv_tcp_rr_multi spawn helper threads
+ * to handle concurrent senders.
+ * This function has been designed to be a "generic" multi test
+ * transition helper. I.e., the transition logic is not tied to any specific
+ * multi test. The transition helper assists a multi test as follows:
+ * 1. Set requested state for all helper threads to to_state
+ * 2. Take appropriate action based on state transtion:
+ *   - LOAD to IDLE => call the multi test's idle_link_fn, which is an
+ *     input parameter.
+ *   - LOAD to MEAS => set multi test's prev timestamp.
+ *   - MEAS to LOAD => set multi test's curr timestamp, update elapsed time.
+ *   - DEAD => wait for all helper threads to join (exit)
+ */
+static void
+transition_helper_threads(test_t *test, uint32_t to_state,
+        void (*idle_link_fn)(uint32_t, uint32_t, test_t *))
+{
+
+  bsd_data_t    *my_data;
+  int            num_helpers, i;
+  uint32_t       from_state, new_state;
+  my_data       = GET_TEST_DATA(test);
+
+  num_helpers   = my_data->num_concurrent_conns;
+
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+
+  /* Get the current state of the helpers */
+  from_state = my_data->helper_data[0].new_state;
+
+  if (test->debug) {
+    fprintf(test->where, "%s: test: %s state %d to state %d\n",
+        __func__, (char *)test->id,from_state, to_state);
+    fflush(stdout);
+  }
+
+  for (i=0; i<num_helpers; i++) {
+    my_data->helper_data[i].state_req = to_state;
+  }
+
+  if (to_state == TEST_DEAD) {
+    /* Wait until all helpers exit */
+    for (i=0; i<num_helpers; i++) {
+        if (test->debug) {
+          fprintf(test->where, "%s: test: %s waiting on thread %p to join\n",
+                __func__, (char *)test->id, my_data->helper_data[i]);
+        }
+        g_thread_join(my_data->helper_data[i].tid);
+    }
+  }
+  else {
+    /* Wait until all helpers transition state */
+    for (i=0; i<num_helpers; i++) {
+       while (my_data->helper_data[i].new_state != to_state) {
+         if (test->debug) {
+           fprintf(test->where, "%s: test: %s waiting for thread %p to change state\n",
+                     __func__, (char *)test->id, my_data->helper_data[i]);
+           fflush(test->where);
+          }
+         g_usleep(500000);
+       }
+     }
+  }
+
+  if (from_state == TEST_LOADED && to_state == TEST_IDLE) {
+    /* transitioning to load to idle. */
+    idle_link_fn(from_state, to_state, test);
+    /* At this point, all helpers's sock fds should be closed
+     * and everyone is idle
+     */
+  }
+
+  if (from_state == TEST_LOADED && to_state == TEST_MEASURE) {
+    /* transitioning to measure from load. set previous timestamp */
+    gettimeofday(&(my_data->prev_time), NULL);
+  }
+
+  if (from_state == TEST_MEASURE && to_state == TEST_LOADED) {
+   /* transitioning to load from measure. set current timestamp
+    * and upadte elapsed time
+    */
+    gettimeofday(&(my_data->curr_time), NULL);
+    update_elapsed_time(my_data);
+  }
+
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
+
+}
+
 static void
 send_tcp_rr_preinit(test_t *test)
 {
@@ -2418,6 +2896,44 @@ recv_tcp_rr_decode_stats(xmlNodePtr stats,test_t *test)
   bsd_test_decode_stats(stats,test);
 }
 
+int
+recv_tcp_rr_multi_clear_stats(test_t *test)
+{
+
+  /* Clear helper threads' stats_counter */
+  int i, num_helpers;
+  generic_helper_data_t *helper_data =
+        ((bsd_data_t *)GET_TEST_DATA(test))->helper_data;
+  num_helpers = ((bsd_data_t *)GET_TEST_DATA(test))->num_concurrent_conns;
+
+  for (i=0; i<num_helpers; i++)
+    helper_data[i].stats_counter = 0;
+
+  return(bsd_test_clear_stats(GET_TEST_DATA(test)));
+}
+
+xmlNodePtr
+recv_tcp_rr_multi_get_stats(test_t *test)
+{
+
+  /* Gather stats from all helper threads. */
+  int i, num_helpers;
+  bsd_data_t *my_data = (bsd_data_t *)GET_TEST_DATA(test);
+  generic_helper_data_t *helper_data = my_data->helper_data;
+  num_helpers = my_data->num_concurrent_conns;
+
+  /* recv_tcp_rr_multi helpers track trans_received. */
+  for (i=0; i<num_helpers; i++)
+    my_data->stats.named.trans_received += helper_data[i].stats_counter;
+
+  return( bsd_test_get_stats(test));
+}
+
+void
+recv_tcp_rr_multi_decode_stats(xmlNodePtr stats,test_t *test)
+{
+  bsd_test_decode_stats(stats,test);
+}
 
 int
 send_tcp_rr_clear_stats(test_t *test)
@@ -2482,6 +2998,107 @@ recv_tcp_rr(test_t *test)
   } /* end of while */
   wait_to_die(test);
 } /* end of recv_tcp_rr */
+
+
+/* PN: 07/31/2007
+ * A 'multi' test such as recv_tcp_rr_multi handles multiple concurrent
+ * concurrent send_tcp_rr tests. The number of senders to handle is determined
+ * by "num_concurrent_conns" of socket_args.
+ *
+ * The test does the following:
+ *   - Accepts() num_concurrent_conns senders.
+ *   - For each accepted connection, spawn a new "helper" thread to handle
+ *     the data transfer.
+ *   - The netperf client talks only to the main recv_tcp_rr_multi thread.
+ *   - Based on state transition requests from the netperf client, the main
+ *     thread transitions the helper threads.
+ *   - Each helper thread has an associated generic_helper_data structure, and
+ *     the helper thread writes/reads members of this structure.
+ *   - Helper threads increment the stats_counter member of generic_helper_data
+ *     in MEAS state.
+ *   - recv_tcp_rr_multi_get_stats sums up all helper threads' stats_counter
+ *     before calling bsd_get_stats.
+ */
+void
+recv_tcp_rr_multi(test_t *test)
+{
+  uint32_t state, new_state;
+  int transition_done = 0;
+
+  /* Define recv_tcp_rr_multi's idle link function to be used in
+   * transtion_helper_threads(). */
+  void (*my_idle_link_fn)(uint32_t, uint32_t, test_t *)
+         = recv_tcp_rr_multi_idle_link;
+
+  NETPERF_DEBUG_ENTRY(test->debug, test->where);
+
+  bsd_test_init(test, SOCK_STREAM, IPPROTO_TCP);
+
+  state = GET_TEST_STATE;
+  while ((state != TEST_ERROR) &&
+         (state != TEST_DEAD )) {
+    switch(state) {
+    case TEST_PREINIT:
+      /* recv_tcp_rr_multi preinit is identical to recv_tcp_rr_preinit,
+       * so why dont we just call recv_tcp_rr_preinit..
+       */
+      recv_tcp_rr_preinit(test);
+      new_state = TEST_INIT;
+      break;
+    case TEST_INIT:
+      new_state = CHECK_REQ_STATE;
+      if (new_state == TEST_IDLE) {
+        new_state = recv_tcp_rr_multi_init(test);
+      }
+      break;
+    case TEST_IDLE:
+     if (!transition_done) {
+        transition_helper_threads(test, TEST_IDLE, my_idle_link_fn);
+        transition_done = 1;
+     }
+     new_state = CHECK_REQ_STATE;
+     if (new_state != state) transition_done = 0;
+     if (new_state == TEST_IDLE) {
+        g_usleep(1000000);
+     }
+     break;
+    case TEST_MEASURE:
+      if (!transition_done) {
+        transition_helper_threads(test, TEST_MEASURE, my_idle_link_fn);
+        transition_done = 1;
+     }
+     new_state = CHECK_REQ_STATE;
+     if (new_state != state) transition_done = 0;
+      break;
+    case TEST_LOADED:
+      if (!transition_done) {
+        transition_helper_threads(test, TEST_LOADED, my_idle_link_fn);
+        transition_done = 1;
+     }
+     new_state = CHECK_REQ_STATE;
+     if (new_state != state) transition_done = 0;
+      break;
+    default:
+      break;
+    } /* end of switch */
+    set_test_state(test, new_state);
+    state = GET_TEST_STATE;
+  } /* end of while */
+
+  if (state == TEST_DEAD || state == TEST_ERROR) {
+    /* Transition all helpers to the dead state, and wait
+     * until all helpers exit */
+    transition_helper_threads(test, TEST_DEAD, my_idle_link_fn);
+  }
+
+  /* All helper threads have joined. Free helper data */
+  free(((bsd_data_t *)GET_TEST_DATA(test))->helper_data);
+
+  wait_to_die(test);
+
+  NETPERF_DEBUG_EXIT(test->debug, test->where);
+
+} /* end of recv_tcp_rr_multi */
 
 
 /* This routine implements the TCP request/response test */

@@ -26,6 +26,7 @@
 <!ENTITY % default.disk_io_units           '"KB"' >
 <!ENTITY % default.disk_test_size          '"4"' >
 <!ENTITY % default.disk_test_units         '"MB"' >
+<!ENTITY % default.num_concurrent_conns    '"0"' >
 
 
 <!-- Changeing the definition of any configuration file entity or element
@@ -530,6 +531,7 @@
   recv_offset       CDATA    %default.offset;
   burst_count       CDATA    #IMPLIED
   interval_time     CDATA    #IMPLIED
+  num_concurrent_conns CDATA %default.num_concurrent_conns;
 >
 
 <!-- burst_count

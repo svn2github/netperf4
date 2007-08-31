@@ -782,7 +782,11 @@ report_test_status(test_t *test)
   test_state_to_string(test->new_state, current  );
   test_state_to_string(test->state_req, requested);
 
-  fprintf(where,"%4s %4s %15s  %4s %4s %4s\n",
+  /* PN: 08/31/2007
+   * Change print format to accommodate longer test_names such
+   * as 'recv_tcp_rr_multi'
+   */
+  fprintf(where,"%4s %4s %20s  %4s %4s %4s\n",
           test->server_id,test->id,test->test_name,
           reported, current, requested);
   fflush(where);
@@ -796,7 +800,11 @@ report_servers_test_status(server_t *server)
   test_t      *test;
   int          i;
 
-  fprintf(where,"\n\n%4s %4s %15s  %4s %4s %4s\n",
+  /* PN: 08/31/2007
+   * Change print format to accommodate longer test_names such
+   * as 'recv_tcp_rr_multi'
+   */
+  fprintf(where,"\n\n%4s %4s %20s  %4s %4s %4s\n",
           "srvr","tst","test_name","CURR","TEST","RQST");
   for (i = 0; i < TEST_HASH_BUCKETS; i ++) {
     h = &test_hash[i];
@@ -1713,6 +1721,37 @@ launch_thread(GThread **tid, void *(*start_routine)(void *), void *data)
 }
 
 
+/* PN: 08/01/2007
+ * Need joinable threads for 'multi' tests.
+ * Why?: A multi test spawns multiple helper threads to handle
+ * concurrent connections. When the test is done, the multi test
+ * should free helper data after the helper threads exit (or are done).
+ * This is achieved when the helper threads are joinable.
+ */
+int
+launch_joinable_thread(GThread **tid, void *(*start_routine)(void *), void *data)
+{
+  int rc;
+
+  NETPERF_THREAD_T temp_tid;
+
+  temp_tid = g_thread_create_full(start_routine,   /* what to run */
+                                  data, /* what it should use */
+                                  0,    /* default stack size */
+                                  TRUE, /* joinable */
+                                  TRUE,  /* bound - make it system scope */
+                                  G_THREAD_PRIORITY_NORMAL,
+                                  NULL);
+
+  if (NULL != temp_tid) {
+    rc = 0;
+    *tid = temp_tid;
+  }
+  else {
+    rc = -1;
+  }
+  return(rc);
+}
 
 int
 strtofam(xmlChar *familystr)

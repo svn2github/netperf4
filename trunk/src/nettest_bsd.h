@@ -55,6 +55,47 @@ enum {
   BSD_MAX_COUNTERS
 };
 
+/* PN: 07/31/2007
+ * Test specific data for helper (child) threads. I.e., tests such as
+ * recv_tcp_rr_multi test will support concurrent send_tcp_rr
+ * tests. After accept()ing each sender, a new helper thread is spawned
+ * to handle the sender. This helper thread is launched with the following
+ * data.
+ */
+typedef struct generic_helper_data {
+
+  NETPERF_THREAD_T tid;        /* Thread id */
+
+  SOCKET           s_data;     /* data connection to a sender */
+
+  struct ring_elt *send_ring;  /* address of the send_ring */
+  struct ring_elt *recv_ring;  /* address of the recv_ring */
+
+  uint32_t         state_req;  /* the state to which this helper
+                                * has been requested to transition.
+                                * This field is monitored by the helper
+                                * thread and takes action accordingly.
+                                * The recv_tcp_rr_multi test thread
+                                * requests for state changes. */
+
+  uint32_t   new_state;        /* the state the helper is currently in.
+                                * this field is modified by the helper when
+                                * it has transitioned to a new state. */
+
+  uint64_t  stats_counter;     /* Whatever stats that should be collected
+                                * For recv_tcp_rr_multi_helper_data, this will
+                                * be number of trans received. */
+
+  test_t   *test_being_helped; /* Pointer to the test data who is being helped
+                                * The helping threads will read test specific
+                                * parameters using this pointer. The helper
+                                * threads cannot (rather should not, due to
+                                * possible race conditions) write anything
+                                * to this test data.
+                                */
+
+} generic_helper_data_t;
+
 typedef struct  bsd_test_data {
   /* address information */
   struct addrinfo *locaddr;        /* local address informtion */
@@ -103,6 +144,20 @@ typedef struct  bsd_test_data {
   int   req_size;
   int   rsp_size;
   int   multi_queue;
+
+  /* PN: 07/31/2007
+   * A test such as recv_tcp_rr_multi spawns helper threads to
+   * handle concurrent senders. This is an array
+   * (one for each helper thread) of helper data.
+   */  
+  generic_helper_data_t *helper_data;
+
+  /* PN: 07/31/2007
+   * Number of concurrent connections/sockets to handle.
+   * (that many helper threads will be spawned
+   */
+  int   num_concurrent_conns;
+
 
   /* data structures for UDP RR packet loss detection and retransmission. */
   int    retry_index;
